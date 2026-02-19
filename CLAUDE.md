@@ -1,12 +1,13 @@
 # i3-screen-manager
 
-Bash scripts for managing external displays on i3/X11 with hybrid graphics.
+Bash scripts for managing external displays on i3/X11 with hybrid graphics, plus keyboard layout toggling.
 
 ## Architecture
 
-Two scripts, no build step:
+Scripts, no build step:
 - `i3-screen-manager` — CLI that wraps `xrandr` and `i3-msg` for display management
 - `i3-screen-rofi` — Rofi menu frontend that calls `i3-screen-manager`
+- `~/.local/bin/i3-keyboard-rofi` — Standalone rofi toggle for laptop vs external keyboard layout
 
 ## Key Design Decisions
 

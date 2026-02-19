@@ -1,8 +1,6 @@
 # i3-screen-manager
 
-External display management for i3/X11 on laptops with hybrid graphics (Intel + Nvidia).
-
-Provides a rofi menu and CLI for switching between display modes without manually wrangling `xrandr`.
+Quality-of-life scripts for i3/X11 on laptops — display management and keyboard layout toggling, all accessible via rofi menus.
 
 ## Modes
 
@@ -57,6 +55,19 @@ Tested with Intel (modesetting) + Nvidia (proprietary) using PRIME display offlo
 ## Clamshell Safety
 
 When in clamshell mode with the lid closed, `disconnect` refuses to run and tells you to open the lid first. This prevents the "both screens go dark" scenario where `eDP-1` can't activate because the lid is physically closed.
+
+## Keyboard Layout Toggle
+
+`i3-keyboard-rofi` switches between laptop and external keyboard layouts:
+
+| Mode | Layout |
+|------|--------|
+| Laptop | Caps Lock → Ctrl, both Shifts → Caps Lock |
+| External | Default US layout |
+
+The rofi menu shows the current mode and lets you switch. Bound to `Super+Ctrl+Backspace`.
+
+**Note:** `i3-keyboard-rofi` lives in `~/.local/bin/` directly (not symlinked from this repo) since it's a standalone single-file utility.
 
 ## License
 
