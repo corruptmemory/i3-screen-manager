@@ -17,6 +17,7 @@ Scripts, no build step:
 - **Safe defaults** — if lid state can't be detected, assume closed (refuse disconnect rather than risk black screen)
 - **Clamshell uses `systemd-inhibit`** — holds a `handle-lid-switch` block lock via a background `sleep infinity` process, PID tracked in `/tmp/i3-screen-manager-inhibit.pid`
 - **Disconnect enables internal BEFORE disabling external** — no window where zero displays are active
+- **DPI adjustment via `Xft.dpi`** — clamshell sets 96 (external), disconnect restores 120 (laptop). Custom DPI via CLI arg or rofi picker. Only affects new windows; `Xft.dpi` is overridden in the live X resource DB, `.Xresources` is never modified
 
 ## Testing
 
@@ -26,6 +27,8 @@ No automated tests. Test manually with an external monitor:
 3. `i3-screen-manager clamshell` — laptop off, external only, close lid safely
 4. `i3-screen-manager disconnect` (lid closed) — should refuse
 5. Open lid, `i3-screen-manager disconnect` — should restore laptop screen
+6. `i3-screen-manager dpi` — rofi picker should appear, selecting a value changes `Xft.dpi`
+7. `i3-screen-manager clamshell 108` — clamshell with custom DPI
 
 ## Common Issues
 

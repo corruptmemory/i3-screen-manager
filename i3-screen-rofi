@@ -23,10 +23,13 @@ build_menu() {
         echo "Extend Above"
         echo "Extend Below"
         echo "Clamshell (external only)"
+        echo "Clamshell (custom DPI)"
         echo "Mirror (presentation)"
+        echo "Adjust DPI"
         echo "Disconnect"
     else
         echo "No external display detected"
+        echo "Adjust DPI"
         echo "Disconnect (restore internal)"
     fi
 }
@@ -39,7 +42,18 @@ run_selection() {
         "Extend Above")               "$MANAGER" extend-above ;;
         "Extend Below")               "$MANAGER" extend-below ;;
         "Clamshell (external only)")   "$MANAGER" clamshell ;;
+        "Clamshell (custom DPI)")
+            local current dpi
+            current=$(xrdb -query 2>/dev/null | awk '/Xft\.dpi/ {print $2}')
+            dpi=$(printf "72\n84\n96\n108\n120\n144" \
+                | rofi -dmenu -i -p "DPI (current: ${current:-unknown})" \
+                    -theme-str 'window {width: 300px;}')
+            if [[ -n "$dpi" && "$dpi" =~ ^[0-9]+$ ]]; then
+                "$MANAGER" clamshell "$dpi"
+            fi
+            ;;
         "Mirror (presentation)")       "$MANAGER" mirror ;;
+        "Adjust DPI")                  "$MANAGER" dpi ;;
         "Disconnect")                  "$MANAGER" disconnect ;;
         "Disconnect (restore internal)") "$MANAGER" disconnect ;;
         *)                            exit 0 ;;

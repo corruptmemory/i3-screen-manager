@@ -13,6 +13,7 @@
 #   clamshell       External monitor only, laptop screen off, lid-close safe
 #   mirror          Mirror displays at best common resolution
 #   disconnect      Revert to laptop screen only
+#   dpi [VALUE]     Set Xft.dpi on the fly (shows rofi picker if no value given)
 #   status          Show current display state
 #
 
@@ -20,6 +21,8 @@ set -euo pipefail
 
 INTERNAL="eDP-1"
 PIDFILE="/tmp/i3-screen-manager-inhibit.pid"
+INTERNAL_DPI=120
+EXTERNAL_DPI=96
 # --- Detection ---
 
 find_lid_state() {
@@ -169,6 +172,7 @@ cmd_extend() {
 }
 
 cmd_clamshell() {
+    local dpi="${1:-$EXTERNAL_DPI}"
     local ext
     ext=$(find_external)
     if [[ -z "$ext" ]]; then
@@ -188,7 +192,10 @@ cmd_clamshell() {
     # Prevent suspend on lid close
     start_inhibitor
 
-    echo "Clamshell mode: $ext ($ext_mode) — lid close safe"
+    # Adjust DPI for external monitor
+    echo "Xft.dpi: $dpi" | xrdb -merge
+
+    echo "Clamshell mode: $ext ($ext_mode), DPI $dpi — lid close safe"
 }
 
 cmd_mirror() {
@@ -225,15 +232,36 @@ cmd_disconnect() {
 
     stop_inhibitor
 
+    # Restore laptop DPI
+    echo "Xft.dpi: $INTERNAL_DPI" | xrdb -merge
+
     if [[ -n "$ext" ]]; then
         # Enable internal FIRST, then move workspaces, then disable external
         xrandr --output "$INTERNAL" --auto --primary
         move_workspaces_from "$ext" "$INTERNAL"
         xrandr --output "$ext" --off
-        echo "Disconnected: $ext off, $INTERNAL restored"
+        echo "Disconnected: $ext off, $INTERNAL restored, DPI $INTERNAL_DPI"
     else
         xrandr --output "$INTERNAL" --auto --primary
         echo "Internal display restored (no external was connected)"
+    fi
+}
+
+cmd_dpi() {
+    local dpi="${1:-}"
+    if [[ -z "$dpi" ]]; then
+        local current
+        current=$(xrdb -query 2>/dev/null | awk '/Xft\.dpi/ {print $2}')
+        dpi=$(printf "72\n84\n96\n108\n120\n144" \
+            | rofi -dmenu -i -p "DPI (current: ${current:-unknown})" \
+                -theme-str 'window {width: 300px;}')
+    fi
+    if [[ -n "$dpi" && "$dpi" =~ ^[0-9]+$ ]]; then
+        echo "Xft.dpi: $dpi" | xrdb -merge
+        echo "DPI set to $dpi"
+    else
+        echo "Invalid DPI value: $dpi" >&2
+        return 1
     fi
 }
 
@@ -272,9 +300,10 @@ case "${1:-}" in
     extend-right) cmd_extend right ;;
     extend-above) cmd_extend above ;;
     extend-below) cmd_extend below ;;
-    clamshell)    cmd_clamshell ;;
+    clamshell)    cmd_clamshell "${2:-$EXTERNAL_DPI}" ;;
     mirror)       cmd_mirror ;;
     disconnect)   cmd_disconnect ;;
+    dpi)          cmd_dpi "${2:-}" ;;
     status)       cmd_status ;;
     *)            usage ;;
 esac
