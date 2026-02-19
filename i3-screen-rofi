@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+#
+# i3-screen-rofi — rofi menu for i3-screen-manager
+#
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+MANAGER="$SCRIPT_DIR/i3-screen-manager"
+
+# Check if an external display is connected
+has_external() {
+    local ext
+    ext=$("$MANAGER" status 2>/dev/null | awk '/^External:/ { print $2 }')
+    [[ "$ext" != "none" ]]
+}
+
+# Build menu based on current state
+build_menu() {
+    if has_external; then
+        echo "Extend Left"
+        echo "Extend Right"
+        echo "Extend Above"
+        echo "Extend Below"
+        echo "Clamshell (external only)"
+        echo "Mirror (presentation)"
+        echo "Disconnect"
+    else
+        echo "No external display detected"
+        echo "Disconnect (restore internal)"
+    fi
+}
+
+# Map selection to command
+run_selection() {
+    case "$1" in
+        "Extend Left")                "$MANAGER" extend-left ;;
+        "Extend Right")               "$MANAGER" extend-right ;;
+        "Extend Above")               "$MANAGER" extend-above ;;
+        "Extend Below")               "$MANAGER" extend-below ;;
+        "Clamshell (external only)")   "$MANAGER" clamshell ;;
+        "Mirror (presentation)")       "$MANAGER" mirror ;;
+        "Disconnect")                  "$MANAGER" disconnect ;;
+        "Disconnect (restore internal)") "$MANAGER" disconnect ;;
+        *)                            exit 0 ;;
+    esac
+}
+
+choice=$(build_menu | rofi -dmenu -i -p "Display" -theme-str 'window {width: 300px;}')
+
+if [[ -n "$choice" ]]; then
+    run_selection "$choice"
+fi

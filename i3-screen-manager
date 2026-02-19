@@ -1,0 +1,280 @@
+#!/usr/bin/env bash
+#
+# i3-screen-manager — manage external displays on i3/X11 with hybrid graphics
+#
+# Usage:
+#   i3-screen-manager <command>
+#
+# Commands:
+#   extend-left     External monitor to the left of laptop
+#   extend-right    External monitor to the right of laptop
+#   extend-above    External monitor above laptop
+#   extend-below    External monitor below laptop
+#   clamshell       External monitor only, laptop screen off, lid-close safe
+#   mirror          Mirror displays at best common resolution
+#   disconnect      Revert to laptop screen only
+#   status          Show current display state
+#
+
+set -euo pipefail
+
+INTERNAL="eDP-1"
+PIDFILE="/tmp/i3-screen-manager-inhibit.pid"
+# --- Detection ---
+
+find_lid_state() {
+    local f
+    for f in /proc/acpi/button/lid/*/state; do
+        if [[ -f "$f" ]]; then
+            echo "$f"
+            return
+        fi
+    done
+}
+
+lid_is_open() {
+    local lid_state
+    lid_state=$(find_lid_state)
+    if [[ -n "$lid_state" ]]; then
+        grep -q "open" "$lid_state"
+    else
+        # Can't detect lid state — assume CLOSED (safe default)
+        return 1
+    fi
+}
+
+inhibitor_is_active() {
+    [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+}
+
+find_external() {
+    # Find the first connected output that isn't the internal display
+    xrandr | awk -v internal="$INTERNAL" \
+        '$2 == "connected" && $1 != internal { print $1; exit }'
+}
+
+get_preferred_mode() {
+    # Get the preferred (native) resolution for an output (marked with +)
+    local output="$1"
+    xrandr | awk -v out="$output" '
+        found && /^[^ ]/ { exit }
+        $1 == out { found=1; next }
+        found && /\+/ { print $1; exit }
+    '
+}
+
+get_common_modes() {
+    # Find resolutions supported by both displays, sorted by pixel count descending
+    local ext="$1"
+    comm -12 \
+        <(xrandr | awk -v out="$INTERNAL" '
+            found && /^[^ ]/ { exit }
+            $1 == out { found=1; next }
+            found { print $1 }
+        ' | sort -u) \
+        <(xrandr | awk -v out="$ext" '
+            found && /^[^ ]/ { exit }
+            $1 == out { found=1; next }
+            found { print $1 }
+        ' | sort -u) \
+    | awk -Fx '{print ($1 * $2), $0}' | sort -rn | awk '{print $2}'
+}
+
+best_mirror_mode() {
+    local ext="$1"
+    get_common_modes "$ext" | head -1
+}
+
+# --- Inhibitor Management ---
+
+start_inhibitor() {
+    stop_inhibitor  # clean up any existing one
+    systemd-inhibit --what=handle-lid-switch \
+        --who="i3-screen-manager" \
+        --why="Clamshell mode - lid close safe" \
+        --mode=block sleep infinity &
+    echo $! > "$PIDFILE"
+}
+
+stop_inhibitor() {
+    if [[ -f "$PIDFILE" ]]; then
+        local pid
+        pid=$(cat "$PIDFILE")
+        if kill -0 "$pid" 2>/dev/null; then
+            kill "$pid" 2>/dev/null || true
+        fi
+        rm -f "$PIDFILE"
+    fi
+}
+
+# --- i3 Workspace Management ---
+
+move_workspaces_to() {
+    local target="$1"
+    # Focus each workspace then move it to the target output
+    i3-msg -t get_workspaces | jq -r '.[] | .name' | while read -r ws; do
+        i3-msg "workspace $ws; move workspace to output $target" 2>/dev/null || true
+    done
+}
+
+move_workspaces_from() {
+    local source="$1"
+    local target="$2"
+    i3-msg -t get_workspaces | jq -r \
+        --arg src "$source" '.[] | select(.output == $src) | .name' | \
+    while read -r ws; do
+        i3-msg "workspace $ws; move workspace to output $target" 2>/dev/null || true
+    done
+}
+
+ensure_workspace_on() {
+    # Make sure at least one workspace is visible on the target output
+    local target="$1"
+    local has_ws
+    has_ws=$(i3-msg -t get_workspaces | jq -r --arg out "$target" \
+        '[.[] | select(.output == $out)] | length')
+    if [[ "$has_ws" == "0" ]]; then
+        # Create a new workspace on the target
+        local next_ws
+        next_ws=$(i3-msg -t get_workspaces | jq '[.[] | .num] | max + 1')
+        i3-msg workspace number "$next_ws", move workspace to output "$target" 2>/dev/null || true
+    fi
+}
+
+# --- Commands ---
+
+cmd_extend() {
+    local direction="$1"  # left, right, above, below
+    local ext
+    ext=$(find_external)
+    if [[ -z "$ext" ]]; then
+        echo "No external display found." >&2
+        exit 1
+    fi
+
+    stop_inhibitor
+
+    local ext_mode
+    ext_mode=$(get_preferred_mode "$ext")
+
+    case "$direction" in
+        left)  xrandr --output "$ext" --mode "$ext_mode" --left-of "$INTERNAL" --output "$INTERNAL" --auto ;;
+        right) xrandr --output "$ext" --mode "$ext_mode" --right-of "$INTERNAL" --output "$INTERNAL" --auto ;;
+        above) xrandr --output "$ext" --mode "$ext_mode" --above "$INTERNAL" --output "$INTERNAL" --auto ;;
+        below) xrandr --output "$ext" --mode "$ext_mode" --below "$INTERNAL" --output "$INTERNAL" --auto ;;
+    esac
+
+    ensure_workspace_on "$ext"
+    echo "Extended $direction: $INTERNAL + $ext ($ext_mode)"
+}
+
+cmd_clamshell() {
+    local ext
+    ext=$(find_external)
+    if [[ -z "$ext" ]]; then
+        echo "No external display found. Cannot enter clamshell mode." >&2
+        exit 1
+    fi
+
+    local ext_mode
+    ext_mode=$(get_preferred_mode "$ext")
+
+    # Move all workspaces to external before disabling internal
+    move_workspaces_to "$ext"
+
+    # Enable external, disable internal
+    xrandr --output "$ext" --mode "$ext_mode" --primary --output "$INTERNAL" --off
+
+    # Prevent suspend on lid close
+    start_inhibitor
+
+    echo "Clamshell mode: $ext ($ext_mode) — lid close safe"
+}
+
+cmd_mirror() {
+    local ext
+    ext=$(find_external)
+    if [[ -z "$ext" ]]; then
+        echo "No external display found." >&2
+        exit 1
+    fi
+
+    stop_inhibitor
+
+    local mode
+    mode=$(best_mirror_mode "$ext")
+    if [[ -z "$mode" ]]; then
+        echo "No common resolution found between $INTERNAL and $ext." >&2
+        exit 1
+    fi
+
+    xrandr --output "$INTERNAL" --mode "$mode" --output "$ext" --mode "$mode" --same-as "$INTERNAL"
+
+    echo "Mirror mode: $INTERNAL + $ext ($mode)"
+}
+
+cmd_disconnect() {
+    local ext
+    ext=$(find_external)
+
+    # Safety: if lid is closed, don't touch anything — eDP-1 can't activate
+    if ! lid_is_open; then
+        echo "Lid is closed. Open the lid first, then run disconnect again." >&2
+        return 1
+    fi
+
+    stop_inhibitor
+
+    if [[ -n "$ext" ]]; then
+        # Enable internal FIRST, then move workspaces, then disable external
+        xrandr --output "$INTERNAL" --auto --primary
+        move_workspaces_from "$ext" "$INTERNAL"
+        xrandr --output "$ext" --off
+        echo "Disconnected: $ext off, $INTERNAL restored"
+    else
+        xrandr --output "$INTERNAL" --auto --primary
+        echo "Internal display restored (no external was connected)"
+    fi
+}
+
+cmd_status() {
+    local ext
+    ext=$(find_external)
+
+    echo "Internal: $INTERNAL"
+    if [[ -n "$ext" ]]; then
+        echo "External: $ext"
+        echo "External mode: $(get_preferred_mode "$ext")"
+    else
+        echo "External: none detected"
+    fi
+
+    if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "Clamshell inhibitor: active"
+    else
+        echo "Clamshell inhibitor: inactive"
+    fi
+
+    echo ""
+    echo "Active outputs:"
+    xrandr | grep ' connected' | sed 's/^/  /'
+}
+
+# --- Main ---
+
+usage() {
+    sed -n '3,/^$/s/^# \?//p' "$0"
+    exit 1
+}
+
+case "${1:-}" in
+    extend-left)  cmd_extend left ;;
+    extend-right) cmd_extend right ;;
+    extend-above) cmd_extend above ;;
+    extend-below) cmd_extend below ;;
+    clamshell)    cmd_clamshell ;;
+    mirror)       cmd_mirror ;;
+    disconnect)   cmd_disconnect ;;
+    status)       cmd_status ;;
+    *)            usage ;;
+esac
