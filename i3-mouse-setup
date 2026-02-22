@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+#
+# i3-mouse-setup — apply saved mouse settings via solaar on login
+#
+# Called from ~/.xinitrc before i3 starts. Exits silently if no
+# solaar-compatible device is found or solaar isn't installed.
+#
+
+set -euo pipefail
+
+CONFIG_DIR="$HOME/.config/i3-mouse-manager"
+DPI_FILE="$CONFIG_DIR/dpi"
+MOUSE_FILE="$CONFIG_DIR/mouse"
+DEFAULT_DPI=1200
+
+# --- Helpers ---
+
+has_solaar() {
+    command -v solaar &>/dev/null
+}
+
+# Get the name of the first paired solaar mouse, or empty string.
+# In solaar output, Codename appears before Kind for each device,
+# so we stash the codename and print it when we confirm it's a mouse.
+find_mouse() {
+    solaar show 2>/dev/null \
+        | awk '/Codename *:/ { sub(/.*: */, ""); name=$0 }
+               /Kind *: *mouse/ { print name; exit }' \
+        || true
+}
+
+get_saved_dpi() {
+    if [[ -f "$DPI_FILE" ]]; then
+        cat "$DPI_FILE"
+    else
+        echo "$DEFAULT_DPI"
+    fi
+}
+
+# --- Main ---
+
+if ! has_solaar; then
+    exit 0
+fi
+
+mouse=$(find_mouse)
+if [[ -z "$mouse" ]]; then
+    exit 0
+fi
+
+dpi=$(get_saved_dpi)
+
+# Cache mouse name so i3-mouse-rofi can skip the slow solaar show
+mkdir -p "$CONFIG_DIR"
+echo "$mouse" > "$MOUSE_FILE"
+
+# solaar needs the daemon/listener running; give it a moment after boot
+sleep 1
+
+solaar config "$mouse" dpi "$dpi" &>/dev/null && \
+    echo "i3-mouse-setup: $mouse DPI set to $dpi" || true

@@ -1,12 +1,21 @@
 # i3-screen-manager
 
-Bash scripts for managing external displays on i3/X11 with hybrid graphics, plus keyboard layout toggling.
+Bash scripts for managing external displays and mouse settings on i3/X11, plus keyboard layout toggling.
+
+## Environment
+
+- **Distro:** Arch Linux
+- **Package manager:** `yay` (AUR-enabled wrapper around pacman)
+- **Privileges:** `sudo` is available from the user account
+- **Machines:** Laptop and desktop, both running i3/X11 on Arch
 
 ## Architecture
 
 Scripts, no build step:
 - `i3-screen-manager` — CLI that wraps `xrandr` and `i3-msg` for display management
 - `i3-screen-rofi` — Rofi menu frontend that calls `i3-screen-manager`
+- `i3-mouse-setup` — Login-time script that applies saved mouse DPI via `solaar`
+- `i3-mouse-rofi` — Rofi menu for mouse DPI adjustment (saves choice for persistence)
 - `~/.local/bin/i3-keyboard-rofi` — Standalone rofi toggle for laptop vs external keyboard layout
 
 ## Key Design Decisions
@@ -18,6 +27,7 @@ Scripts, no build step:
 - **Clamshell uses `systemd-inhibit`** — holds a `handle-lid-switch` block lock via a background `sleep infinity` process, PID tracked in `/tmp/i3-screen-manager-inhibit.pid`
 - **Disconnect enables internal BEFORE disabling external** — no window where zero displays are active
 - **DPI adjustment via `Xft.dpi`** — clamshell sets 96 (external), disconnect restores 120 (laptop). Custom DPI via CLI arg or rofi picker. Only affects new windows; `Xft.dpi` is overridden in the live X resource DB, `.Xresources` is never modified
+- **Mouse DPI via solaar** — `i3-mouse-setup` auto-detects Logitech mice at login and applies saved DPI from `~/.config/i3-mouse-manager/dpi`. `i3-mouse-rofi` provides on-the-fly adjustment that persists across reboots
 
 ## Testing
 

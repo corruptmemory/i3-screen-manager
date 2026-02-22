@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+#
+# i3-mouse-rofi — rofi menu for mouse DPI adjustment via solaar
+#
+
+set -euo pipefail
+
+CONFIG_DIR="$HOME/.config/i3-mouse-manager"
+DPI_FILE="$CONFIG_DIR/dpi"
+MOUSE_FILE="$CONFIG_DIR/mouse"
+DEFAULT_DPI=1200
+
+# --- Helpers ---
+
+get_saved_dpi() {
+    if [[ -f "$DPI_FILE" ]]; then
+        cat "$DPI_FILE"
+    else
+        echo "$DEFAULT_DPI"
+    fi
+}
+
+get_saved_mouse() {
+    if [[ -f "$MOUSE_FILE" ]]; then
+        cat "$MOUSE_FILE"
+    fi
+}
+
+save_config() {
+    mkdir -p "$CONFIG_DIR"
+    echo "$1" > "$MOUSE_FILE"
+    echo "$2" > "$DPI_FILE"
+}
+
+# Discover mouse name via solaar show (slow — only used as fallback)
+discover_mouse() {
+    solaar show 2>/dev/null \
+        | awk '/Codename *:/ { sub(/.*: */, ""); name=$0 }
+               /Kind *: *mouse/ { print name; exit }' \
+        || true
+}
+
+# --- Main ---
+
+if ! command -v solaar &>/dev/null; then
+    rofi -e "solaar is not installed"
+    exit 1
+fi
+
+# Use saved mouse name if available; discover only on first run
+mouse=$(get_saved_mouse)
+if [[ -z "$mouse" ]]; then
+    mouse=$(discover_mouse)
+    if [[ -z "$mouse" ]]; then
+        rofi -e "No solaar-compatible mouse found"
+        exit 1
+    fi
+fi
+
+saved=$(get_saved_dpi)
+
+dpi_options="800\n1000\n1200\n1400\n1600\n1800\n2000"
+
+choice=$(echo -e "$dpi_options" \
+    | rofi -dmenu -i \
+        -p "Mouse DPI (now: $saved)" \
+        -theme-str 'window {width: 300px;}' \
+        -mesg "$mouse") || exit 0
+
+if [[ -n "$choice" && "$choice" =~ ^[0-9]+$ ]]; then
+    solaar config "$mouse" dpi "$choice" &>/dev/null
+    save_config "$mouse" "$choice"
+    notify-send -t 2000 "Mouse DPI" "$mouse → $choice DPI" 2>/dev/null || true
+fi
