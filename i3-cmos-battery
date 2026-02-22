@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+#
+# i3-cmos-battery — report CMOS battery health for polybar/CLI
+#
+# Reads Vbat from the it87 Super I/O hwmon chip. Exits silently
+# if the sensor isn't available (e.g., on laptops without it87).
+#
+# Voltage thresholds for CR2032:
+#   >= 2.8V  OK
+#   2.5-2.8V WARNING (replace soon)
+#   < 2.5V   CRITICAL (replace now)
+#
+
+set -euo pipefail
+
+# Find Vbat sensor — look for it87/it8792 hwmon chip
+find_vbat() {
+    local chip dir
+    for dir in /sys/class/hwmon/hwmon*; do
+        chip=$(cat "$dir/name" 2>/dev/null) || continue
+        case "$chip" in
+            it87*|it87|it8792)
+                # Search for a label matching Vbat
+                for label_file in "$dir"/in*_label; do
+                    [[ -f "$label_file" ]] || continue
+                    if [[ "$(cat "$label_file" 2>/dev/null)" == "Vbat" ]]; then
+                        local input="${label_file/_label/_input}"
+                        if [[ -f "$input" ]]; then
+                            echo "$input"
+                            return 0
+                        fi
+                    fi
+                done
+                ;;
+        esac
+    done
+    return 1
+}
+
+vbat_path=$(find_vbat) || exit 0
+
+# Read millivolts, convert to volts
+mv=$(cat "$vbat_path")
+volts=$(awk "BEGIN { printf \"%.2f\", $mv / 1000 }")
+
+# Determine health
+if awk "BEGIN { exit !($mv >= 2800) }"; then
+    status="OK"
+    icon=""
+    color=""
+elif awk "BEGIN { exit !($mv >= 2500) }"; then
+    status="LOW"
+    icon=""
+    color="#F0C674"
+else
+    status="DEAD"
+    icon=""
+    color="#A54242"
+fi
+
+# Output mode
+case "${1:-polybar}" in
+    polybar)
+        if [[ -n "$color" ]]; then
+            echo "%{F$color}$icon ${volts}V%{F-}"
+        else
+            echo "$icon ${volts}V"
+        fi
+        ;;
+    cli|--cli)
+        echo "CMOS Battery: ${volts}V ($status)"
+        if [[ "$status" == "LOW" ]]; then
+            echo "  ⚠ Battery is getting weak — consider replacing the CR2032"
+        elif [[ "$status" == "DEAD" ]]; then
+            echo "  🚨 Battery is critically low — replace the CR2032 NOW"
+            echo "     (This causes BIOS corruption, boot failures, and PCIe instability)"
+        fi
+        ;;
+esac

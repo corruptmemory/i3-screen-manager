@@ -16,6 +16,7 @@ Scripts, no build step:
 - `i3-screen-rofi` — Rofi menu frontend that calls `i3-screen-manager`
 - `i3-mouse-setup` — Login-time script that applies saved mouse DPI via `solaar`
 - `i3-mouse-rofi` — Rofi menu for mouse DPI adjustment (saves choice for persistence)
+- `i3-cmos-battery` — CMOS battery voltage monitor (CLI + Polybar output)
 - `~/.local/bin/i3-keyboard-rofi` — Standalone rofi toggle for laptop vs external keyboard layout
 
 ## Key Design Decisions
@@ -28,6 +29,7 @@ Scripts, no build step:
 - **Disconnect enables internal BEFORE disabling external** — no window where zero displays are active
 - **DPI adjustment via `Xft.dpi`** — clamshell sets 96 (external), disconnect restores 120 (laptop). Custom DPI via CLI arg or rofi picker. Only affects new windows; `Xft.dpi` is overridden in the live X resource DB, `.Xresources` is never modified
 - **Mouse DPI via solaar** — `i3-mouse-setup` auto-detects Logitech mice at login and applies saved DPI from `~/.config/i3-mouse-manager/dpi`. `i3-mouse-rofi` provides on-the-fly adjustment that persists across reboots
+- **CMOS battery monitoring** — `i3-cmos-battery` reads Vbat from the it87 Super I/O chip. Requires `it87` kernel module (auto-loaded via `/etc/modules-load.d/it87.conf`). Polybar module refreshes every 6 hours. Exits silently on machines without the sensor (laptops)
 
 ## Testing
 

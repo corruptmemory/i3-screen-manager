@@ -1,6 +1,6 @@
 # i3-screen-manager
 
-Quality-of-life scripts for i3/X11 — display management, mouse DPI control, and keyboard layout toggling, all accessible via rofi menus.
+Quality-of-life scripts for i3/X11 — display management, mouse DPI control, hardware monitoring, and keyboard layout toggling, all accessible via rofi menus and Polybar.
 
 ## Modes
 
@@ -30,6 +30,7 @@ ln -sf "$(pwd)/i3-screen-manager" ~/.local/bin/i3-screen-manager
 ln -sf "$(pwd)/i3-screen-rofi" ~/.local/bin/i3-screen-rofi
 ln -sf "$(pwd)/i3-mouse-setup" ~/.local/bin/i3-mouse-setup
 ln -sf "$(pwd)/i3-mouse-rofi" ~/.local/bin/i3-mouse-rofi
+ln -sf "$(pwd)/i3-cmos-battery" ~/.local/bin/i3-cmos-battery
 ```
 
 Add to your i3 config:
@@ -98,6 +99,22 @@ For Logitech mice connected via Bolt or Unifying receivers, `solaar` is used to 
 - **Persistence:** Selected DPI is saved to `~/.config/i3-mouse-manager/dpi` and reapplied on boot
 
 If no solaar-compatible mouse is detected, both scripts exit silently.
+
+## CMOS Battery Monitoring
+
+`i3-cmos-battery` reads the motherboard CMOS battery voltage via the it87 Super I/O chip and reports health status.
+
+- **Polybar:** Displays `CMOS 3.29V` in the bar, refreshes every 6 hours
+- **CLI:** `i3-cmos-battery cli` for a human-readable report with warnings
+- **Thresholds:** OK (>= 2.8V), LOW/yellow (2.5–2.8V), DEAD/red (< 2.5V)
+
+Requires the `it87` kernel module:
+
+```bash
+echo "it87" | sudo tee /etc/modules-load.d/it87.conf
+```
+
+On machines without the sensor (e.g., laptops), the script and Polybar module silently produce no output.
 
 ## Clamshell Safety
 
