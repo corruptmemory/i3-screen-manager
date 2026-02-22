@@ -45,3 +45,5 @@ No automated tests. Test manually with an external monitor:
 - **Black screen on disconnect**: Usually means lid was closed and eDP-1 couldn't activate. The lid guard should prevent this now.
 - **Workspace move errors**: `"No output matched"` from i3-msg is usually harmless — workspace was already on the target output.
 - **External not detected**: Check `xrandr` — the output might use a different name than expected. Nvidia outputs follow `*-N-N` naming pattern (e.g., `HDMI-1-0`, `DP-1-0`).
+- **Mouse poll rate config ignored**: On Arch's stock kernel, `usbhid` is built-in (not a module), so `/etc/modprobe.d/` has no effect. Use `usbhid.mousepoll=1` in GRUB's `GRUB_CMDLINE_LINUX_DEFAULT` instead, then `grub-mkconfig -o /boot/grub/grub.cfg`.
+- **xorg.conf.d TargetRefresh ignored**: The `TargetRefresh` monitor option doesn't work reliably with all drivers (e.g., amdgpu). Use an explicit `xrandr --rate` call in `~/.xinitrc` instead.
