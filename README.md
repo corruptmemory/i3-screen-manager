@@ -116,6 +116,32 @@ echo "it87" | sudo tee /etc/modules-load.d/it87.conf
 
 On machines without the sensor (e.g., laptops), the script and Polybar module silently produce no output.
 
+## GTK File Dialog Fix
+
+GTK open/save dialogs hang for ~25 seconds on i3 because `gvfsd-trash` (the GNOME virtual filesystem trash backend) times out on a D-Bus call every time a FileChooserDialog builds its sidebar.
+
+**Symptom:** Clicking "Open File" or "Save As" in any GTK app (Brave, Firefox, etc.) takes 25 seconds before the dialog appears.
+
+**Diagnosis:**
+
+```bash
+# This will hang ~25 seconds if you have the bug:
+time gio info trash:///
+
+# This should be instant:
+time GIO_USE_VFS=local gio info trash:///
+```
+
+**Fix:** Add to `~/.xinitrc` before `exec i3`:
+
+```bash
+export GIO_USE_VFS=local
+```
+
+This tells GLib to use direct POSIX file access instead of the gvfs D-Bus backend. The only loss is `trash://` and `network://` URIs in GTK apps — irrelevant on i3 where you use the terminal for file management.
+
+**Applies to both desktop and laptop.**
+
 ## Clamshell Safety
 
 When in clamshell mode with the lid closed, `disconnect` refuses to run and tells you to open the lid first. This prevents the "both screens go dark" scenario where `eDP-1` can't activate because the lid is physically closed.
