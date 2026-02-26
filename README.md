@@ -132,13 +132,26 @@ time gio info trash:///
 time GIO_USE_VFS=local gio info trash:///
 ```
 
-**Fix:** Add to `~/.xinitrc` before `exec i3`:
+**Fix (root cause removal):**
+
+```bash
+# Install xreader (evince fork from Linux Mint — same UI, no gvfs dependency)
+sudo pacman -S xreader
+
+# Remove gvfs and evince (evince is the only hard dep on gvfs)
+sudo pacman -R evince gvfs
+
+# Set xreader as default PDF viewer
+xdg-mime default xreader.desktop application/pdf
+```
+
+Also add to `~/.xinitrc` before `exec i3` as a safety net (in case a future package pulls gvfs back in):
 
 ```bash
 export GIO_USE_VFS=local
 ```
 
-This tells GLib to use direct POSIX file access instead of the gvfs D-Bus backend. The only loss is `trash://` and `network://` URIs in GTK apps — irrelevant on i3 where you use the terminal for file management.
+The `gvfs` package provides GNOME virtual filesystem backends (`trash://`, `network://`, etc.) over D-Bus — useful on GNOME, dead weight on i3. Removing it eliminates the D-Bus timeout entirely. The only packages that optionally use gvfs (gimp, inkscape, pcmanfm) lose features like trash support and HTTP URI schemes, which are unused on i3.
 
 **Applies to both desktop and laptop.**
 
