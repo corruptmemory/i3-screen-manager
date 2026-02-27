@@ -21,6 +21,7 @@ Quality-of-life scripts for i3/X11 — display management, mouse DPI control, ha
 - `xrandr`, `jq`, `rofi`
 - `systemd-inhibit` (for clamshell lid-close prevention)
 - `solaar` (for Logitech mouse DPI management — install with `yay -S solaar`)
+- `rbw`, `rofi-rbw` (for Bitwarden password lookup via rofi)
 
 ## Installation
 
@@ -47,6 +48,9 @@ bindsym $mod+$alt+BackSpace exec --no-startup-id i3-screen-manager dpi
 
 # Mouse DPI
 bindsym $mod+Mod1+m exec --no-startup-id i3-mouse-rofi
+
+# Bitwarden password lookup
+bindsym $mod+Shift+b exec --no-startup-id rofi-rbw
 ```
 
 Add to your `~/.xinitrc` (before `exec i3`):
@@ -67,6 +71,7 @@ Via rofi menus:
 | `Super+Ctrl+Backspace` | Keyboard layout toggle |
 | `Super+Alt+Backspace` | DPI adjustment |
 | `Super+Alt+M` | Mouse DPI |
+| `Super+Shift+B` | Bitwarden password lookup |
 
 Via CLI:
 
@@ -152,6 +157,44 @@ export GIO_USE_VFS=local
 ```
 
 The `gvfs` package provides GNOME virtual filesystem backends (`trash://`, `network://`, etc.) over D-Bus — useful on GNOME, dead weight on i3. Removing it eliminates the D-Bus timeout entirely. The only packages that optionally use gvfs (gimp, inkscape, pcmanfm) lose features like trash support and HTTP URI schemes, which are unused on i3.
+
+**Applies to both desktop and laptop.**
+
+## Bitwarden via Rofi (rbw + rofi-rbw)
+
+Quick password lookup from any window via rofi, powered by `rbw` (unofficial Bitwarden CLI with a persistent agent).
+
+**Install:**
+
+```bash
+sudo pacman -S rbw rofi-rbw
+```
+
+**Configure:**
+
+```bash
+rbw config set email you@example.com
+rbw config set pinentry pinentry-gtk    # GTK dialog for master password
+rbw register                            # pinentry pops up — enter master password
+rbw unlock                              # unlocks the agent, syncs vault
+```
+
+**i3 keybind:**
+
+```
+bindsym $mod+Shift+b exec --no-startup-id rofi-rbw
+```
+
+**How it works:**
+
+- `Super+Shift+B` opens a rofi menu with your entire vault — type to filter, Enter to copy password
+- The `rbw-agent` starts on demand (no xinitrc entry needed) and caches your unlock for 1 hour (configurable via `rbw config set lock_timeout <seconds>`)
+- When the agent lock expires, the next invocation pops a `pinentry-gtk` dialog for your master password
+- For fields that don't support paste (e.g., OAuth popups in Grayjay), use `rofi-rbw --action type` to type credentials via `xdotool`
+
+**Why rbw over bitwarden-desktop:**
+
+The desktop app is an Electron wrapper that's slow to start and awkward on a tiling WM. `rbw` + `rofi-rbw` gives you sub-second vault access from any window. For vault management (creating entries, folders, attachments), use the Bitwarden browser extension or web vault at `vault.bitwarden.com`.
 
 **Applies to both desktop and laptop.**
 
