@@ -241,6 +241,54 @@ That said, Hyprland is arguably the best tiling WM on Wayland — if the transit
 
 **Bottom line:** If staying on X11/i3 is the priority, Artix is the cleaner path. If you're willing to make the Wayland jump (and rewrite display management scripts), Omarchy is simpler at the system level since it keeps systemd.
 
+## Phoenix: The Display Server That Should Exist
+
+**Repo (mirror):** [external-mirrors/phoenix](https://github.com/external-mirrors/phoenix) | **Primary:** [repo.dec05eba.com/phoenix](https://repo.dec05eba.com/phoenix)
+**Author:** dec05eba (also the gpu-screen-recorder author)
+**Language:** Zig | **License:** GPL-3.0-only | **Status:** Early development (nested mode only, simple GLX/EGL/Vulkan apps)
+
+Phoenix is a **from-scratch X11 server** — not a fork of Xorg, not a Wayland compositor. It reimplements a practical subset of the X11 protocol with modern design choices that address the legitimate criticisms of both X11 and Wayland.
+
+### Design philosophy
+
+| X11 problem | Wayland problem | Phoenix approach |
+|---|---|---|
+| No app isolation | Apps can't talk to each other at all | Apps isolated by default, but with **permission prompts** (like macOS) and an option to disable isolation entirely |
+| Single framebuffer for all monitors | Per-compositor implementation differences | Per-monitor refresh rates, VRR, HDR via DRM/GBM |
+| Tearing, no built-in compositor | Compositor is mandatory and complex | Built-in compositor, disables automatically for fullscreen/external compositors |
+| Legacy protocol cruft | Broke all existing apps | Only implements the X11 features modern apps actually use (~20 years of software works) |
+| xf86 driver interface complexity | Each compositor reimplements display | DRM/GBM kernel interfaces (same as Wayland compositors) |
+| No modern features (HDR, VRR) | Has them, but per-compositor | Planned as X11 protocol extensions |
+| Global hotkeys: security hole | Global hotkeys: broken/impossible | Global hotkeys work with modifier keys; unmodified hotkeys require explicit permission |
+| Clipboard: any app reads anytime | Clipboard: varies by compositor | Only focused app can read clipboard (more secure than both X11 *and* most Wayland compositors) |
+
+### Key features
+
+- **Wayland app compatibility** planned via native support or 12to11 bridge
+- **Nested mode** under X11 or Wayland (useful for development and as Xwayland alternative)
+- **Zig with ReleaseSafe** — memory-safe without C legacy baggage
+- **Per-monitor DPI** as randr properties (new standard, documented)
+- **No GrabServer** — the X11 call that lets one app freeze the entire display is a no-op
+
+### Why it matters
+
+From the Phoenix FAQ: *"writing a simple X server that works in practice for a wide range of applications is easier to do than writing a Wayland compositor (+ related software)."*
+
+This is the project that says "keep X11's model where apps can just work, add sensible security with user-controlled permissions instead of architecting functionality out of existence, and use modern kernel display infrastructure." It's the hybrid approach nobody else is attempting.
+
+### Current status (as of 2026-03)
+
+Early. Runs nested only, renders simple GLX/EGL/Vulkan apps. DRM backend (standalone mode) and Wayland nested mode not yet supported. Development is private (contributions not yet accepted publicly). The GitHub repo is a mirror of the primary repo at dec05eba's personal git server — the private development model is a deliberate choice to keep the project insulated from ideological pressure that routinely targets X11-related work.
+
+### What to watch for
+
+- DRM backend landing (standalone mode without a host X/Wayland server)
+- Real-world app compatibility (GTK, Qt, Firefox, etc.)
+- i3 or other tiling WM running on Phoenix
+- 12to11 bridge or native Wayland client support
+
+If Phoenix matures, it could obsolete the Artix-vs-Omarchy question entirely — run i3 on Phoenix on whatever base distro has the right policy stance, with both X11 and Wayland app support.
+
 ## References
 
 - [Artix Linux](https://artixlinux.org/)
