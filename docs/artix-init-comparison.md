@@ -1,12 +1,89 @@
-# Artix Linux Init System Comparison
+# Arch Linux Alternatives: Artix & Omarchy
 
-Research for potential migration from Arch Linux (systemd) to Artix Linux (systemd-free).
+Research for potential migration from Arch Linux to a distro that won't implement OS-level age verification.
 
-## Why Artix?
+## Context
 
-- Artix has [publicly stated](https://x.com/lundukejournal/status/2034776326901555488) they will **not** implement OS-level age verification
-- Artix is Arch-compatible (same packages minus systemd), so migration path exists
-- Multiple init system choices: runit, OpenRC, dinit, s6
+OS-level age verification laws have passed in Brazil and California, with Colorado, Illinois, New York, and Michigan proposing similar. Ubuntu, Fedora, Pop!_OS, and elementary OS are planning to comply. Arch Linux's stance is unknown but concerning — discussion is being censored on their forums and subreddit, and Valve's financial investment (SteamOS is Arch-based) creates compliance pressure. See [age verification tracker](https://github.com/BryanLunduke/DoesItAgeVerify).
+
+Two Arch-based alternatives have publicly stated they will **not** comply:
+- **Artix Linux** — Arch without systemd, multiple init system choices
+- **Omarchy** — Opinionated Arch + Hyprland/Wayland distribution by DHH (37signals/Basecamp)
+
+---
+
+## Omarchy
+
+- **Website:** [omarchy.org](https://omarchy.org/) | **Repo:** [basecamp/omarchy](https://github.com/basecamp/omarchy) (21k+ stars, 2k+ forks)
+- **Creator:** DHH (David Heinemeier Hansson), 37signals/Basecamp
+- **Base:** Arch Linux (keeps systemd, keeps pacman, keeps AUR via yay)
+- **Age verification:** [Will not implement](https://x.com/lundukejournal/status/2029580164498108846)
+- **License:** MIT
+
+### Stack
+
+| Component | Choice |
+|---|---|
+| **Display protocol** | Wayland |
+| **Window manager** | Hyprland (+ hypridle, hyprlock, hyprpicker, hyprsunset) |
+| **Status bar** | Waybar |
+| **Terminal** | Alacritty (+ Ghostty available) |
+| **Shell** | Bash (+ starship prompt) |
+| **Editor** | Neovim (custom omarchy-nvim config) |
+| **Browser** | Chromium |
+| **File manager** | Nautilus |
+| **Launcher** | Walker (custom omarchy-walker) |
+| **Notifications** | Mako |
+| **Screen capture** | grim + slurp + satty, gpu-screen-recorder, OBS |
+| **Display manager** | SDDM |
+| **Boot** | Limine + Plymouth |
+| **Audio** | PipeWire (+ WirePlumber, WireMix) |
+| **Containers** | Docker + docker-compose + lazydocker |
+| **Password manager** | 1Password |
+| **Fonts** | iA Writer, JetBrains Mono Nerd |
+| **Git** | gh CLI + lazygit |
+| **AI** | Claude Code (ships in base packages!) |
+
+### Pros (for our use case)
+
+- **Still Arch under the hood** — pacman, AUR, same packages, same kernel. Simplest migration path.
+- **Keeps systemd** — no init system change, all existing scripts/services work as-is
+- **Active development** — DHH and 37signals backing, large community, pushed to daily
+- **Strong anti-verification stance** — DHH is vocal about it
+- **Good hardware support** — includes NVIDIA, Intel, Surface, T2 MacBook, ASUS, Tuxedo drivers
+
+### Cons (for our use case)
+
+- **Wayland-only** — Hyprland is a Wayland compositor. No X11 support. This is the big one.
+  - i3 configs don't carry over (Hyprland has its own config format, though conceptually similar)
+  - `xrandr`-based display management (i3-screen-manager) needs complete rewrite for `hyprctl`/wlr-randr
+  - X11-specific tools (xdotool, xprop, etc.) don't work
+  - Screen sharing requires xdg-desktop-portal-hyprland (included, but the Wayland "technology stack" problem)
+- **Very opinionated** — ships 1Password, Obsidian, Spotify, Chromium, Docker, etc. Subtraction needed.
+- **SDDM + Plymouth + Limine** — different boot chain than a typical Arch install (GRUB)
+- **No gvfs** workaround needed — ships `gvfs-mtp`, `gvfs-nfs`, `gvfs-smb` (but not `gvfs` itself, so the trash D-Bus hang may not apply)
+
+### Migration effort: Medium-High
+
+The init/package layer is trivial (it's just Arch). The real work is the X11→Wayland transition: rewriting display management scripts, learning Hyprland config, replacing X11-specific tooling. The "subtract what you don't want" approach works for applications (remove Obsidian, swap Chromium for Brave, etc.) but the Wayland foundation is non-negotiable.
+
+---
+
+## Artix Linux
+
+- **Website:** [artixlinux.org](https://artixlinux.org/)
+- **Base:** Arch Linux without systemd
+- **Age verification:** [Will not implement](https://x.com/lundukejournal/status/2034776326901555488)
+- **Init systems:** OpenRC, runit, dinit, s6
+
+### Why Artix?
+
+- Arch-compatible (same packages minus systemd), migration path exists
+- Multiple init system choices
+- Already maintains its own package delta from Arch (systemd removal) — has infrastructure to strip out future compliance packages
+- Can run i3/X11 unchanged (no forced Wayland transition)
+
+## Init System Comparison Chart
 
 ## Comparison Chart
 
@@ -143,9 +220,31 @@ logfile = /var/log/dinit/sshd.log
 - **Runit**: Simplest but no dependency management is painful on a desktop
 - **s6**: Most sophisticated but steep learning curve and administrative overhead
 
+## Side-by-Side: Artix vs Omarchy
+
+| Aspect | **Artix** | **Omarchy** |
+|---|---|---|
+| **Base** | Arch minus systemd | Arch with systemd |
+| **Init** | OpenRC/runit/dinit/s6 | systemd |
+| **Display** | Your choice (X11 or Wayland) | Wayland (Hyprland) |
+| **Migration effort** | Medium (init system change) | Medium-High (X11→Wayland) |
+| **i3 scripts work?** | Yes (with systemd-inhibit replacement) | No (complete rewrite for Hyprland/Wayland) |
+| **Package delta from Arch** | Maintained (systemd removal) | Minimal (overlay, not fork) |
+| **Age verification resilience** | Strong (already forks packages) | Depends on DHH's commitment |
+| **Community size** | Established, multi-year | Large but new (since June 2025) |
+
+## The Wayland Question
+
+Omarchy forces the Wayland transition. The fundamental frustration with Wayland: many things that "just work" in X11 require a technology stack in Wayland (screen sharing, global hotkeys, clipboard management, window positioning). Every other desktop OS handles these out of the box. Wayland's "security-first" design made these intentionally hard, and the ecosystem is still catching up.
+
+That said, Hyprland is arguably the best tiling WM on Wayland — if the transition ever makes sense, it's the one to target. The dream would be a display server that is simultaneously X11 and Wayland compatible without the security-theater restrictions, but that project doesn't exist yet.
+
+**Bottom line:** If staying on X11/i3 is the priority, Artix is the cleaner path. If you're willing to make the Wayland jump (and rewrite display management scripts), Omarchy is simpler at the system level since it keeps systemd.
+
 ## References
 
 - [Artix Linux](https://artixlinux.org/)
+- [Omarchy](https://omarchy.org/) | [GitHub](https://github.com/basecamp/omarchy)
 - [Artix Wiki - OpenRC](https://wiki.artixlinux.org/Main/OpenRC)
 - [Artix Wiki - Runit](https://wiki.artixlinux.org/Main/Runit)
 - [Artix Wiki - s6](https://wiki.artixlinux.org/Main/S6)
