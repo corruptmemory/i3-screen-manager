@@ -165,12 +165,30 @@ sudo rc-service NetworkManager start
 
 Then add `exec --no-startup-id nm-applet` back to the i3 config. Provides `nmcli`/`nmtui` CLI tools and the system tray applet.
 
+## Audio: PipeWire
+
+```bash
+sudo pacman -S pipewire pipewire-audio pipewire-pulse pipewire-alsa \
+  pipewire-openrc pipewire-pulse-openrc wireplumber pavucontrol
+
+# Enable as user services (start automatically on login via elogind)
+rc-update add pipewire default --user
+rc-update add pipewire-pulse default --user
+
+# WirePlumber is auto-launched by PipeWire as session manager — no separate service needed
+
+# For polybar volume control module:
+yay -S pulseaudio-control
+```
+
+PipeWire-Pulse provides full PulseAudio compatibility — `pactl`, `pavucontrol`, and polybar's `pulseaudio` and `pulseaudio-control-input` modules all work transparently.
+
 ## TODO
 
-- [ ] Test `startx` — verify X11, i3, NVIDIA PRIME all work
+- [x] Test `startx` — verify X11, i3, NVIDIA PRIME all work
 - [ ] Install and configure `rbw` + `rofi-rbw` (Bitwarden)
 - [ ] Install Brave browser
-- [ ] Install PipeWire/WirePlumber for audio
+- [x] Install PipeWire/WirePlumber for audio
 - [ ] Replace `systemd-inhibit` in `i3-screen-manager` for clamshell mode
 - [ ] Try iwd swap (on-device)
 - [ ] Install solaar for mouse DPI (if Logitech mouse used with laptop)
