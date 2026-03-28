@@ -92,7 +92,7 @@ best_mirror_mode() {
 
 start_inhibitor() {
     stop_inhibitor  # clean up any existing one
-    systemd-inhibit --what=handle-lid-switch \
+    elogind-inhibit --what=handle-lid-switch \
         --who="i3-screen-manager" \
         --why="Clamshell mode - lid close safe" \
         --mode=block sleep infinity &

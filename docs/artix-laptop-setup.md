@@ -75,7 +75,7 @@ All configs sourced from the old Arch backup at `/mnt/jim/`:
 | `systemctl status <service>` | `rc-service <service> status` |
 | `systemctl --user import-environment` | Not needed — `.xinitrc` env vars inherited naturally |
 | `dbus-update-activation-environment --systemd` | Not needed on elogind |
-| `systemd-inhibit` | Needs replacement (used by `i3-screen-manager` for clamshell lid-switch blocking) |
+| `systemd-inhibit` | `elogind-inhibit` (same flags, drop-in replacement) |
 | `journalctl` | Check `/var/log/` or init-specific logs |
 
 ## Networking: NetworkManager + iwd
@@ -155,8 +155,8 @@ PipeWire-Pulse provides full PulseAudio compatibility — `pactl`, `pavucontrol`
 ## TODO
 
 - [x] Test `startx` — verify X11, i3, NVIDIA PRIME all work
-- [ ] Install and configure `rbw` + `rofi-rbw` (Bitwarden)
-- [ ] Install Brave browser
+- [x] Install and configure `rbw` + `rofi-rbw` (Bitwarden)
+- [x] Install Brave browser
 - [x] Install PipeWire/WirePlumber for audio
 - [x] Install sof-firmware for Intel HDA audio
 - [x] Install wireplumber-openrc (WirePlumber user service)
@@ -167,6 +167,6 @@ PipeWire-Pulse provides full PulseAudio compatibility — `pactl`, `pavucontrol`
 - [x] Install solaar for mouse DPI
 - [x] Add user to `video` group (brightnessctl backlight access)
 - [x] Add user to `input` group (solaar, direct input device access)
-- [ ] Set up `i3-screen-manager` and `i3-screen-rofi` symlinks
-- [ ] Replace `systemd-inhibit` in `i3-screen-manager` for clamshell mode
+- [x] Set up `i3-screen-manager` and `i3-screen-rofi` symlinks
+- [x] Replace `systemd-inhibit` with `elogind-inhibit` in `i3-screen-manager`
 - [ ] Restore projects from backup
