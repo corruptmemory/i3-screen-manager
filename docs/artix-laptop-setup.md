@@ -36,11 +36,20 @@ sudo pacman -S xdotool xclip xsel jq brightnessctl playerctl libglvnd
 
 ### Fonts
 
+```bash
+# Nerd Font (polybar icons, rofi button glyphs)
+sudo pacman -S ttf-jetbrains-mono-nerd
+
+# Emoji (polybar uses emoji for battery, volume, etc.)
+yay -S ttf-joypixels
+```
+
 - **TX-02 (Berkeley Mono)** — copied from `/mnt/fonts/TX-02` to `/usr/share/fonts/`
-- **JetBrains Mono Nerd** — `sudo pacman -S ttf-jetbrains-mono-nerd`
 - **User fonts** — copied from `/mnt/jim/.local/share/fonts/` to `~/.local/share/fonts/`
 
 After installing fonts: `fc-cache -f`
+
+**Rofi font:** The global rofi config (`~/.config/rofi/global/rofi.rasi`) should use `TX-02` not `Inter Regular`.
 
 ## Config Files Ported
 
@@ -69,117 +78,77 @@ All configs sourced from the old Arch backup at `/mnt/jim/`:
 | `systemd-inhibit` | Needs replacement (used by `i3-screen-manager` for clamshell lid-switch blocking) |
 | `journalctl` | Check `/var/log/` or init-specific logs |
 
-## Networking: ConnMan
+## Networking: NetworkManager + iwd
 
-Currently using ConnMan with `wpa_supplicant` for wifi.
+Using NetworkManager with iwd backend for wifi. Replaced ConnMan+wpa_supplicant — NM is far better for a laptop that roams between networks (nm-applet tray icon, `nmcli`/`nmtui` CLI tools).
+
+### Setup
+
+```bash
+# Install
+sudo pacman -S networkmanager networkmanager-openrc iwd iwd-openrc network-manager-applet
+
+# Configure NM to use iwd backend (/etc/NetworkManager/NetworkManager.conf):
+#   [device]
+#   wifi.backend=iwd
+
+# Enable services, remove old connman
+sudo rc-update add iwd default
+sudo rc-update add NetworkManager default
+sudo rc-update del connmand sysinit
+
+# i3 config autostart:
+#   exec --no-startup-id nm-applet
+```
 
 ### USB-C Ethernet
 
-Works automatically — connman's `DefaultAutoConnectTechnologies` includes `ethernet` by default. Kernel modules for common USB adapters (`cdc_ether`, `r8152`, `ax88179_178a`, `cdc_ncm`) are all present. Plug in a USB-C Ethernet adapter and it gets DHCP automatically.
+Works automatically — NetworkManager auto-connects wired interfaces. Kernel modules for common USB adapters (`cdc_ether`, `r8152`, `ax88179_178a`, `cdc_ncm`) are all present.
 
-### Switching to iwd (from wpa_supplicant)
-
-**Why:** iwd is faster to connect, lighter, cleaner config, better roaming. The only downside is weaker WPA2-Enterprise support (corporate/eduroam networks).
-
-**IMPORTANT: Do this on-device, not over SSH.** If the swap fails you lose wifi and your only connection.
-
-**Steps:**
+### Quick reference
 
 ```bash
-# 1. Install iwd
-sudo pacman -S iwd iwd-openrc
-
-# 2. Note your current wifi network name and password
-#    (you'll need to reconnect after the swap)
-connmanctl services    # shows connected network
-
-# 3. Tell connman to use iwd instead of wpa_supplicant
-#    Edit /etc/connman/main.conf, add under [General]:
-#    Wifi = iwd
-
-# 4. Stop wpa_supplicant, start iwd
-sudo rc-service wpa_supplicant stop
-sudo rc-update del wpa_supplicant default
-sudo rc-service iwd start
-sudo rc-update add iwd default
-
-# 5. Restart connman so it picks up iwd
-sudo rc-service connmand restart
-
-# 6. Reconnect to wifi
-#    iwd has its own interactive tool:
-iwctl
-#    > station wlan0 scan
-#    > station wlan0 get-networks
-#    > station wlan0 connect "YourNetworkName"
-#    > exit
-
-#    Or let connman handle it:
-connmanctl scan wifi
-connmanctl services
-connmanctl connect wifi_<hash>_managed_psk
-
-# 7. Verify connectivity
-ping -c 3 archlinux.org
-
-# 8. If everything works, optionally remove wpa_supplicant:
-sudo pacman -R wpa_supplicant
+nmcli device wifi list                                    # scan networks
+nmcli device wifi connect "Name" password "pass"          # connect
+nmcli connection show                                     # saved connections
+nmtui                                                     # interactive TUI
 ```
 
-**Rollback (if wifi breaks):**
-
-```bash
-# Undo the connman config change
-sudo sed -i '/^Wifi = iwd/d' /etc/connman/main.conf
-
-# Stop iwd, restart wpa_supplicant
-sudo rc-service iwd stop
-sudo rc-update del iwd default
-sudo rc-service wpa_supplicant start
-sudo rc-update add wpa_supplicant default
-sudo rc-service connmand restart
-```
-
-**Config comparison:**
+### Why iwd over wpa_supplicant
 
 | | wpa_supplicant | iwd |
 |---|---|---|
 | Config location | `/etc/wpa_supplicant/` | `/var/lib/iwd/` |
-| Saved networks | `wpa_supplicant.conf` (one big file) | One file per network (`NetworkName.psk`) |
+| Saved networks | One big conf file | One file per network |
 | Connect speed | Slower | Noticeably faster |
 | Memory | Heavier | Lighter |
 | Enterprise (802.1X) | Mature | Still catching up |
 | Roaming | Basic | Better (queries neighbor APs) |
 
-### Alternative: NetworkManager
-
-If connman becomes annoying, NetworkManager is available on Artix:
-
-```bash
-sudo rc-service connmand stop
-sudo rc-update del connmand default
-sudo pacman -S networkmanager networkmanager-openrc network-manager-applet
-sudo rc-update add NetworkManager default
-sudo rc-service NetworkManager start
-```
-
-Then add `exec --no-startup-id nm-applet` back to the i3 config. Provides `nmcli`/`nmtui` CLI tools and the system tray applet.
+Only downside: weaker WPA2-Enterprise support (corporate/eduroam networks).
 
 ## Audio: PipeWire
 
 ```bash
+# Core PipeWire + OpenRC user services
 sudo pacman -S pipewire pipewire-audio pipewire-pulse pipewire-alsa \
-  pipewire-openrc pipewire-pulse-openrc wireplumber pavucontrol
+  pipewire-openrc pipewire-pulse-openrc wireplumber wireplumber-openrc pavucontrol
+
+# SOF firmware (required for Intel HDA on 12th gen+ ThinkPads)
+sudo pacman -S sof-firmware
 
 # Enable as user services (start automatically on login via elogind)
 rc-update add pipewire default --user
 rc-update add pipewire-pulse default --user
-
-# WirePlumber is auto-launched by PipeWire as session manager — no separate service needed
+rc-update add wireplumber default --user
 
 # For polybar volume control module:
 yay -S pulseaudio-control
 ```
+
+**IMPORTANT:** `wireplumber-openrc` is a separate package from `wireplumber`. Without it, WirePlumber has no OpenRC user service and never starts — PipeWire will only show a "Dummy Output" sink with no real audio devices. Verify with `wpctl status` after login; if you only see "Dummy Output", WirePlumber isn't running.
+
+**SOF firmware:** Intel laptops with Alder Lake (12th gen) and newer use SOF (Sound Open Firmware) for the HDA audio controller. Without `sof-firmware`, the kernel can't initialize the audio device at all. Reboot after installing.
 
 PipeWire-Pulse provides full PulseAudio compatibility — `pactl`, `pavucontrol`, and polybar's `pulseaudio` and `pulseaudio-control-input` modules all work transparently.
 
@@ -189,8 +158,15 @@ PipeWire-Pulse provides full PulseAudio compatibility — `pactl`, `pavucontrol`
 - [ ] Install and configure `rbw` + `rofi-rbw` (Bitwarden)
 - [ ] Install Brave browser
 - [x] Install PipeWire/WirePlumber for audio
-- [ ] Replace `systemd-inhibit` in `i3-screen-manager` for clamshell mode
-- [ ] Try iwd swap (on-device)
-- [ ] Install solaar for mouse DPI (if Logitech mouse used with laptop)
+- [x] Install sof-firmware for Intel HDA audio
+- [x] Install wireplumber-openrc (WirePlumber user service)
+- [x] Install ttf-joypixels for polybar emoji icons
+- [x] Fix rofi font (TX-02 instead of Inter Regular)
+- [x] Copy volumecontrol.sh to ~/.local/bin/
+- [x] Replace ConnMan+wpa_supplicant with NetworkManager+iwd
+- [x] Install solaar for mouse DPI
+- [x] Add user to `video` group (brightnessctl backlight access)
+- [x] Add user to `input` group (solaar, direct input device access)
 - [ ] Set up `i3-screen-manager` and `i3-screen-rofi` symlinks
+- [ ] Replace `systemd-inhibit` in `i3-screen-manager` for clamshell mode
 - [ ] Restore projects from backup
