@@ -286,6 +286,6 @@ sudo pacman -S npm
 - [x] Create Grayjay .desktop entry
 - [x] Install eza, yt-dlp, bat, mpv
 - [x] Restore projects from backup (`~/projects`, `~/ae`, `~/bhf`, `~/idpair`)
-- [ ] `rbw register` + `rbw sync` (if not restored from backup)
-- [ ] Install remaining CLI tools: `sshpass`, `calcurse`, `nsxiv`, `aws-cli-v2`
+- [x] `rbw` + `rofi-rbw` working (config restored from backup)
+- [x] Install remaining CLI tools: `sshpass`, `calcurse`, `nsxiv`, `aws-cli-v2`
 - [ ] Azure CLI (deferred — install via `pipx install azure-cli` when needed)
