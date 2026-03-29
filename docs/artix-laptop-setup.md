@@ -32,6 +32,19 @@ sudo pacman -S i3-wm i3status i3lock rofi polybar picom dunst feh flameshot kitt
 
 ```bash
 sudo pacman -S xdotool xclip xsel jq brightnessctl playerctl libglvnd
+sudo pacman -S eza bat yt-dlp mpv ffmpeg
+sudo pacman -S postgresql postgresql-openrc
+sudo pacman -S npm  # for npx / MCP servers
+```
+
+### Password Manager
+
+```bash
+# rbw (Bitwarden CLI) — install via cargo or AUR
+yay -S rbw
+# rofi-rbw — AUR often broken (upstream 503s); use pipx instead
+pipx install rofi-rbw
+# Then: rbw register && rbw sync
 ```
 
 ### Fonts
@@ -65,6 +78,68 @@ All configs sourced from the old Arch backup at `/mnt/jim/`:
 | `~/.config/dunst/dunstrc` | Direct copy | None |
 | `~/.config/rofi/` | Direct copy (full directory) | None |
 | `~/.config/picom/picom.conf` | New (old Arch had no picom config) | `backend = "glx"; vsync = true; unredir-if-possible = false;` |
+
+## Hardware Video Decoding (VA-API)
+
+Intel Iris Xe uses the iHD driver (from `intel-media-driver`). Without explicitly setting the driver, VA-API falls back to the older i965 driver which may not work.
+
+```bash
+# ~/.xinitrc — add before startx
+export LIBVA_DRIVER_NAME=iHD
+```
+
+**mpv config** (`~/.config/mpv/mpv.conf`):
+```
+hwdec=vaapi
+hwdec-codecs=all
+vo=gpu
+gpu-api=opengl
+gpu-context=x11
+scale=ewa_lanczossharp
+cscale=ewa_lanczossharp
+```
+
+Verify: `mpv --hwdec=vaapi <video>` — check OSD shows `VO: [gpu] ... (vaapi)`.
+
+**ffmpeg** does not need extra config — it auto-detects VA-API when `LIBVA_DRIVER_NAME` is set. Use `-hwaccel vaapi` flag explicitly if needed for one-off encodes.
+
+## Pacman Mirror Optimization
+
+```bash
+sudo pacman -S pacman-contrib
+
+# Rank top 10 fastest Artix mirrors (takes ~30s)
+sudo rankmirrors -n 10 /etc/pacman.d/mirrorlist | sudo tee /etc/pacman.d/mirrorlist.new
+sudo mv /etc/pacman.d/mirrorlist.new /etc/pacman.d/mirrorlist
+```
+
+Note: `artix-mlg` is a developer tool for maintaining the official Artix mirror list — not for users. Use `rankmirrors` from `pacman-contrib` instead.
+
+## Windows Dual Boot (os-prober)
+
+os-prober 1.84+ no longer performs temporary mounts. The Windows EFI partition must be mounted before running `grub-mkconfig`.
+
+```bash
+# Add to /etc/fstab (noauto — only mount when needed):
+# UUID=<windows-efi-uuid>  /mnt/win-efi  vfat  ro,noauto  0  0
+
+# Then before grub-mkconfig:
+sudo mkdir -p /mnt/win-efi
+sudo mount /mnt/win-efi
+sudo grub-mkconfig -o /boot/grub/grub.cfg
+```
+
+Find the UUID with `lsblk -o NAME,UUID | grep nvme`.
+
+## Gnome-keyring / Brave Password Prompt
+
+The "correct" fix (PAM integration in `/etc/pam.d/system-login`) does not work cleanly with `startx` because PAM starts before the X/D-Bus session exists. Two keyring daemon instances end up running.
+
+**Pragmatic fix:** Open `seahorse` (GNOME Passwords & Keys), change the "Login" keyring password to blank. Brave stops prompting.
+
+```bash
+yay -S seahorse
+```
 
 ## Systemd → OpenRC Differences
 
@@ -152,10 +227,42 @@ yay -S pulseaudio-control
 
 PipeWire-Pulse provides full PulseAudio compatibility — `pactl`, `pavucontrol`, and polybar's `pulseaudio` and `pulseaudio-control-input` modules all work transparently.
 
+## Claude Code / MCP Setup
+
+```bash
+# npm required for npx (MCP servers use npx to run)
+sudo pacman -S npm
+
+# Playwright MCP — configure for Brave (NOT chromium/chrome):
+# Edit ~/.claude/plugins/marketplaces/.../playwright/.mcp.json:
+# {
+#   "playwright": {
+#     "command": "npx",
+#     "args": ["@playwright/mcp@latest", "--executable-path", "/usr/bin/brave"]
+#   }
+# }
+
+# playwright-cli (microsoft/playwright-cli) — for browser automation via extension bridge
+# Config at ~/.playwright/cli.config.json:
+# {
+#   "browser": {
+#     "browserName": "chromium",
+#     "launchOptions": {
+#       "executablePath": "/usr/bin/brave",
+#       "headless": false
+#     }
+#   }
+# }
+# Connect: playwright-cli --config ~/.playwright/cli.config.json open --extension
+# (Requires Playwright MCP Bridge extension installed in Brave)
+```
+
+**MCP tool permissions** must be enumerated explicitly in `.claude/settings.local.json` — the `mcp__*` wildcard in global settings does NOT suppress prompts. See global `~/.claude/CLAUDE.md` for the full list.
+
 ## TODO
 
 - [x] Test `startx` — verify X11, i3, NVIDIA PRIME all work
-- [x] Install and configure `rbw` + `rofi-rbw` (Bitwarden)
+- [x] Install and configure `rbw` + `rofi-rbw` (Bitwarden via pipx)
 - [x] Install Brave browser
 - [x] Install PipeWire/WirePlumber for audio
 - [x] Install sof-firmware for Intel HDA audio
@@ -169,4 +276,16 @@ PipeWire-Pulse provides full PulseAudio compatibility — `pactl`, `pavucontrol`
 - [x] Add user to `input` group (solaar, direct input device access)
 - [x] Set up `i3-screen-manager` and `i3-screen-rofi` symlinks
 - [x] Replace `systemd-inhibit` with `elogind-inhibit` in `i3-screen-manager`
+- [x] Configure VA-API hardware video decoding (iHD driver)
+- [x] Optimize pacman mirrors with rankmirrors
+- [x] Windows dual boot via os-prober (manual EFI mount required)
+- [x] Fix gnome-keyring/Brave keyring prompt (blank password via seahorse)
+- [x] Install postgresql + postgresql-openrc
+- [x] Install npm (for npx/MCP servers)
+- [x] Configure playwright-cli + Playwright MCP with Brave
+- [x] Create Grayjay .desktop entry
+- [x] Install eza, yt-dlp, bat, mpv
 - [ ] Restore projects from backup
+- [ ] `rbw register` + `rbw sync` (if not restored from backup)
+- [ ] Install remaining CLI tools: `sshpass`, `calcurse`, `nsxiv`, `aws-cli-v2`
+- [ ] Azure CLI (deferred — install via `pipx install azure-cli` when needed)
