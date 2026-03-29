@@ -285,7 +285,7 @@ sudo pacman -S npm
 - [x] Configure playwright-cli + Playwright MCP with Brave
 - [x] Create Grayjay .desktop entry
 - [x] Install eza, yt-dlp, bat, mpv
-- [ ] Restore projects from backup
+- [x] Restore projects from backup (`~/projects`, `~/ae`, `~/bhf`, `~/idpair`)
 - [ ] `rbw register` + `rbw sync` (if not restored from backup)
 - [ ] Install remaining CLI tools: `sshpass`, `calcurse`, `nsxiv`, `aws-cli-v2`
 - [ ] Azure CLI (deferred — install via `pipx install azure-cli` when needed)
