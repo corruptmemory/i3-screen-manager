@@ -288,4 +288,36 @@ sudo pacman -S npm
 - [x] Restore projects from backup (`~/projects`, `~/ae`, `~/bhf`, `~/idpair`)
 - [x] `rbw` + `rofi-rbw` working (config restored from backup)
 - [x] Install remaining CLI tools: `sshpass`, `calcurse`, `nsxiv`, `aws-cli-v2`
-- [ ] Azure CLI (deferred — install via `pipx install azure-cli` when needed)
+- [ ] Azure CLI (see recipe below)
+
+## Azure CLI on Artix
+
+Arch's `extra/azure-cli` package is not available on Artix, and there's no AUR package. Two options:
+
+### Option A: Direct package download (recommended)
+
+Download the `.pkg.tar.zst` from an Arch mirror and install with `pacman -U`. No repo changes, no risk of pulling systemd. The only runtime deps are `glibc`, `libgcc`, `libsecret`, and `python` — all already installed on Artix.
+
+```bash
+# Download (check https://archlinux.org/packages/extra/x86_64/azure-cli/ for current version)
+curl -LO "https://archlinux.org/packages/extra/x86_64/azure-cli/download/"
+# The redirect downloads a file like azure-cli-2.84.0-2-x86_64.pkg.tar.zst
+# Install directly
+sudo pacman -U azure-cli-*.pkg.tar.zst
+```
+
+To update later, repeat the download with the newer version.
+
+**Why this is safe:** The package is a self-contained Python application with only 4 native deps, all of which Artix already provides. No systemd anywhere in the dependency chain.
+
+### Option B: pipx (isolated Python install)
+
+```bash
+pipx install azure-cli
+```
+
+Simpler, but no man pages or bash/fish completions. Updates via `pipx upgrade azure-cli`.
+
+### Do NOT add Arch's `extra` repo
+
+Adding `extra` to `/etc/pacman.conf` on Artix risks pulling in systemd-linked packages during a future `pacman -Syu`. Even with `IgnorePkg`, this is a footgun. Use one of the above approaches instead.
