@@ -288,7 +288,7 @@ sudo pacman -S npm
 - [x] Restore projects from backup (`~/projects`, `~/ae`, `~/bhf`, `~/idpair`)
 - [x] `rbw` + `rofi-rbw` working (config restored from backup)
 - [x] Install remaining CLI tools: `sshpass`, `calcurse`, `nsxiv`, `aws-cli-v2`
-- [ ] Azure CLI (see recipe below)
+- [x] Azure CLI (installed via direct .pkg.tar.zst download)
 
 ## Azure CLI on Artix
 
@@ -299,10 +299,9 @@ Arch's `extra/azure-cli` package is not available on Artix, and there's no AUR p
 Download the `.pkg.tar.zst` from an Arch mirror and install with `pacman -U`. No repo changes, no risk of pulling systemd. The only runtime deps are `glibc`, `libgcc`, `libsecret`, and `python` — all already installed on Artix.
 
 ```bash
-# Download (check https://archlinux.org/packages/extra/x86_64/azure-cli/ for current version)
-curl -LO "https://archlinux.org/packages/extra/x86_64/azure-cli/download/"
-# The redirect downloads a file like azure-cli-2.84.0-2-x86_64.pkg.tar.zst
-# Install directly
+# Package is architecture 'any' (not x86_64) — check an Arch mirror for current version:
+# https://mirrors.rit.edu/archlinux/extra/os/x86_64/ and search for azure-cli
+curl -LO "https://mirrors.rit.edu/archlinux/extra/os/x86_64/azure-cli-2.84.0-2-any.pkg.tar.zst"
 sudo pacman -U azure-cli-*.pkg.tar.zst
 ```
 
