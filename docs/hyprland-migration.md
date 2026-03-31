@@ -396,6 +396,101 @@ pkill xdg-desktop-portal; sleep 1; /usr/lib/xdg-desktop-portal-hyprland &
 
 ---
 
+## Steam Gaming on Hyprland
+
+Research date: 2026-03-31
+
+### What Works
+
+- **Steam client** launches fine via XWayland (not Wayland-native itself)
+- **Most Proton games** work through XWayland — "just works" for the majority of recent titles
+- **Gamescope** works on Hyprland (unlike Niri where it core dumps on NVIDIA) — reliable fallback for problematic games
+- **Native Wine Wayland** landing in Wine 10 / Proton 10 — games can talk directly to Wayland, bypassing XWayland entirely. Not default yet but opt-in via launch options
+
+### Known Gotchas
+
+| Issue | Severity | Workaround |
+|-------|----------|------------|
+| **Mouse cursor jumps / won't lock in XWayland games** | High for FPS/RTS | Set `cursor { no_hardware_cursors = true }`, or use Gamescope, or use native Wine Wayland (`PROTON_ADD_CONFIG=wayland %command%`) |
+| **Game launches on wrong monitor** | Moderate | Use `PROTON_WAYLAND_MONITOR=eDP-1 %command%` (GE-Proton), or Hyprland window rules |
+| **Direct scanout freezes game on notification** | Moderate | Disable `render:direct_scanout` for affected games via window rules |
+| **VRR not working despite being enabled** | Low | Remove animation rules with `loop` keyword — they break VRR timing |
+| **DX12 games slower than Windows on NVIDIA** | Low-Moderate | Driver-level issue with vkd3d-proton translation. NVIDIA 570+ improving but gap persists |
+| **Controller input bleeds to background windows** | Low | Wayland-wide issue — gamepad events still sent when window unfocused |
+| **Flickering in XWayland on NVIDIA** | Low (fixed) | NVIDIA 555+ has explicit sync. Set `explicit_sync = 2` in config |
+
+### Launch Options Cheat Sheet
+
+```bash
+# Native Wine Wayland (standard Proton)
+PROTON_ADD_CONFIG=wayland %command%
+
+# Native Wine Wayland (CachyOS/Proton-EM)
+PROTON_ENABLE_WAYLAND=1 %command%
+
+# Explicit monitor for Wine Wayland (GE-Proton)
+PROTON_ADD_CONFIG=wayland PROTON_WAYLAND_MONITOR=eDP-1 %command%
+
+# Gamescope wrapper (fallback for problematic games)
+gamescope -W 1920 -H 1080 -r 60 -- %command%
+
+# Gamescope with HDR
+gamescope --hdr-enabled -W 1920 -H 1080 -- %command%
+```
+
+### Hyprland Gaming Config Recommendations
+
+```
+cursor {
+    no_hardware_cursors = true
+}
+
+xwayland {
+    force_zero_scaling = true   # Games handle their own scaling
+}
+
+render {
+    explicit_sync = 2
+    explicit_sync_kms = 2
+}
+
+misc {
+    vfr = true                  # Reduce power when idle
+    vrr = 1                     # Variable refresh rate
+    allow_tearing = true        # For games that support tearing (reduces latency)
+}
+
+# Disable blur/shadow if you want max performance (Jim: you disable all bling anyway)
+decoration {
+    blur { enabled = false }
+    shadow { enabled = false }
+}
+```
+
+### Proton Native Wayland: The Future
+
+Wine 10 (early 2026) shipped with Wayland driver enabled in default config. Key improvements:
+- Direct Wayland protocol communication (no XWayland translation)
+- Better mouse capture (native pointer confinement)
+- Proper multi-monitor handling via `PROTON_WAYLAND_MONITOR`
+- OpenGL support in Wine Wayland driver
+
+Not yet the default in Proton (still falls back to XWayland when X11 available), but opt-in works for many games. Valve is invested — Steam Deck uses Gamescope (Wayland compositor), so the ecosystem will keep improving.
+
+### Zoom on Hyprland
+
+Zoom runs via XWayland on Hyprland (native XWayland support, unlike Niri's xwayland-satellite). The floating toolbar, mini-window, and participant thumbnails mostly work because Hyprland's XWayland handles window positioning.
+
+For screen sharing, configure `~/.config/zoomus.conf`:
+```ini
+enableWaylandShare=true
+```
+Then in Zoom: Settings → Share Screen → Advanced → Screen Capture Mode → **PipeWire** (not Automatic).
+
+Alternatively, set `xwayland=false` to force full Wayland mode (skips XWayland entirely), but this may break `ZoomWebviewHost`. Test both approaches.
+
+---
+
 ## Reference
 
 - Hyprland NVIDIA wiki: https://wiki.hyprland.org/Nvidia/
