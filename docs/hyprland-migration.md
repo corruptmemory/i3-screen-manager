@@ -76,9 +76,10 @@ sudo pacman -S hyprland hyprpaper hyprlock hypridle xdg-desktop-portal-hyprland 
 # Wayland utilities
 sudo pacman -S wl-clipboard wlr-randr wayland-protocols
 
-# Screenshot stack (replaces flameshot — DO NOT use flameshot on Hyprland)
-sudo pacman -S grim slurp
-yay -S hyprshot satty
+# Screenshot stack — flameshot v13+ is the primary tool
+# v13 added native Wayland support using grim as capture backend
+sudo pacman -S flameshot grim   # grim is required by flameshot's Wayland backend
+yay -S satty                    # backup annotator if flameshot has issues
 
 # Screen sharing / portal support
 sudo pacman -S wireplumber pipewire-pulse  # already installed from audio setup
@@ -218,10 +219,9 @@ bind = $mod, 2, workspace, 2
 bind = $mod SHIFT, 1, movetoworkspace, 1
 # ... etc.
 
-# Screenshots (replaces flameshot Print binding)
-bind = , Print, exec, hyprshot -m region
-bind = $mod, Print, exec, hyprshot -m window
-bind = $mod ALT, Print, exec, grim -g "$(slurp)" - | satty -f -
+# Screenshots — flameshot v13+ with native Wayland backend
+bind = , Print, exec, flameshot gui
+bind = $mod SHIFT, Print, exec, flameshot full
 
 # Audio (same as i3)
 bind = , XF86AudioRaiseVolume, exec, pactl set-sink-volume @DEFAULT_SINK@ +5%
@@ -245,6 +245,26 @@ bind = $mod, left, movefocus, l
 bind = $mod, right, movefocus, r
 bind = $mod, up, movefocus, u
 bind = $mod, down, movefocus, d
+```
+
+### Window rules (required for flameshot)
+
+flameshot's capture overlay can open as a regular window on Hyprland instead of a fullscreen overlay. These rules fix it:
+
+```
+# Force flameshot overlay to float and cover the full screen at 0,0
+windowrulev2 = float, class:^(flameshot)$
+windowrulev2 = move 0 0, class:^(flameshot)$
+windowrulev2 = pin, class:^(flameshot)$
+windowrulev2 = noanim, class:^(flameshot)$
+
+# Suppress idle inhibitor while flameshot is open
+windowrulev2 = idleinhibit always, class:^(flameshot)$
+```
+
+If multi-monitor capture is still broken (overlay on only one screen), try launching flameshot as a daemon in `exec-once` and triggering via `flameshot gui` rather than launching fresh each time:
+```
+exec-once = flameshot
 ```
 
 ---
@@ -372,7 +392,7 @@ pkill xdg-desktop-portal; sleep 1; /usr/lib/xdg-desktop-portal-hyprland &
 | Electron/Chromium 1-minute stall at boot | `i915` MUST be first in mkinitcpio MODULES |
 | Rofi font config | Same `configuration { font: "TX-02 12"; }` trick applies in Wayland mode |
 | `GBM_BACKEND=nvidia-drm` breaks Firefox | Remove that env var, Firefox uses EGL directly |
-| Flameshot | v13 added native Wayland via grim backend (Qt6, Aug 2025), but multi-monitor overlay and fractional scaling still rough on Hyprland. Try `hyprshot + satty` first; if you want flameshot, install `grim` as a dep, add window rule to force-float at 0,0. Do NOT use `QT_QPA_PLATFORM=xcb`. |
+| Flameshot overlay opens as regular window | Add window rules: `float`, `move 0 0`, `pin`, `noanim` for class `flameshot`. Run as daemon via `exec-once = flameshot` for multi-monitor. Do NOT use `QT_QPA_PLATFORM=xcb`. |
 
 ---
 
