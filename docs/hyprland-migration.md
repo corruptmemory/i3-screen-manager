@@ -372,7 +372,7 @@ pkill xdg-desktop-portal; sleep 1; /usr/lib/xdg-desktop-portal-hyprland &
 | Electron/Chromium 1-minute stall at boot | `i915` MUST be first in mkinitcpio MODULES |
 | Rofi font config | Same `configuration { font: "TX-02 12"; }` trick applies in Wayland mode |
 | `GBM_BACKEND=nvidia-drm` breaks Firefox | Remove that env var, Firefox uses EGL directly |
-| Flameshot | Do not use. Use `hyprshot` + `satty` instead. |
+| Flameshot | v13 added native Wayland via grim backend (Qt6, Aug 2025), but multi-monitor overlay and fractional scaling still rough on Hyprland. Try `hyprshot + satty` first; if you want flameshot, install `grim` as a dep, add window rule to force-float at 0,0. Do NOT use `QT_QPA_PLATFORM=xcb`. |
 
 ---
 
