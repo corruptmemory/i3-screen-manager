@@ -105,33 +105,11 @@ sudo pacman -S waybar
 
 ## Phase 4: Hyprland Startup (replaces startx)
 
-Hyprland launches directly from TTY — no xinit, no display manager.
+**Already done.** `~/.local/bin/start-hyprland` is written and executable. Fish auto-start is in `~/.config/fish/config.fish`. Both committed.
 
-- [ ] Create `~/.local/bin/start-hyprland`:
-  ```bash
-  #!/bin/sh
-  export XDG_CURRENT_DESKTOP=Hyprland
-  export XDG_SESSION_TYPE=wayland
-  export XDG_SESSION_DESKTOP=Hyprland
-  export XDG_RUNTIME_DIR=/run/user/$(id -u)
-  export XCURSOR_SIZE=24
-  export XCURSOR_THEME=Adwaita
-
-  # NVIDIA hybrid — use persistent DRI paths (not card0/card1 which shuffle on boot)
-  # Fill in actual paths from Phase 1:
-  export AQ_DRM_DEVICES=/dev/dri/by-path/pci-0000:00:02.0-card:/dev/dri/by-path/pci-0000:01:00.0-card
-
-  exec Hyprland
-  ```
-- [ ] Make executable: `chmod +x ~/.local/bin/start-hyprland`
-
-- [ ] Add auto-start to `~/.config/fish/config.fish` (replaces the `startx` equivalent):
-  ```fish
-  # Auto-start Hyprland on TTY1
-  if test (tty) = /dev/tty1; and not set -q WAYLAND_DISPLAY
-      exec start-hyprland
-  end
-  ```
+DRI paths confirmed:
+- Intel: `/dev/dri/by-path/pci-0000:00:02.0-card` ✓
+- NVIDIA: `/dev/dri/by-path/pci-0000:01:00.0-card` — **will only appear after Phase 2** (nvidia_drm modeset=1 + mkinitcpio -P + reboot). Script has correct path already.
 
 ---
 
