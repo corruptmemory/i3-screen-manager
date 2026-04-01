@@ -21,21 +21,21 @@ Driver 580 has a known regression (fails to load on some Arch systems). If hit, 
 
 ## Phase 1: Pre-Migration Prep
 
-- [ ] Back up current i3 config: `cp -r ~/.config/i3 ~/.config/i3.bak`
-- [ ] Back up polybar config: `cp -r ~/.config/polybar ~/.config/polybar.bak`
-- [ ] Back up picom config if any: `cp -r ~/.config/picom ~/.config/picom.bak`
-- [ ] Commit any outstanding changes in this repo
-- [ ] Verify `elogind` and `dbus` are already running (they should be from the Artix setup):
+- [x] Back up current i3 config (dotfiles repo serves as backup)
+- [x] Back up polybar config (dotfiles repo)
+- [x] Back up picom config (dotfiles repo)
+- [x] Commit any outstanding changes in this repo
+- [x] Verify `elogind` and `dbus` are already running
   ```bash
   rc-service elogind status
   rc-service dbus status
   ```
-- [ ] Note the PCI addresses of both GPUs (needed for `AQ_DRM_DEVICES`):
+- [x] Note the PCI addresses of both GPUs (Intel 00:02.0, NVIDIA 01:00.0)
   ```bash
   lspci -d ::03xx
   # Note the 0000:XX:XX.X addresses — Intel first, NVIDIA second
   ```
-- [ ] Note persistent DRI device paths:
+- [x] Note persistent DRI device paths (confirmed, used in start-hyprland)
   ```bash
   ls -la /dev/dri/by-path/
   # e.g. pci-0000:00:02.0-card (Intel), pci-0000:01:00.0-card (NVIDIA)
@@ -47,19 +47,19 @@ Driver 580 has a known regression (fails to load on some Arch systems). If hit, 
 
 **This must be done before attempting to start Hyprland.**
 
-- [ ] Create `/etc/modprobe.d/nvidia.conf`:
+- [x] Create `/etc/modprobe.d/nvidia.conf`
   ```
   options nvidia_drm modeset=1
   ```
-- [ ] Update `/etc/mkinitcpio.conf` MODULES — `i915` MUST come first (prevents 1-minute stall in Electron/Chromium apps):
+- [x] Update `/etc/mkinitcpio.conf` MODULES — `i915` MUST come first (prevents 1-minute stall in Electron/Chromium apps):
   ```
   MODULES=(i915 nvidia nvidia_modeset nvidia_uvm nvidia_drm)
   ```
-- [ ] Rebuild initramfs:
+- [x] Rebuild initramfs
   ```bash
   sudo mkinitcpio -P
   ```
-- [ ] Reboot and verify:
+- [x] Reboot and verify (modeset=Y confirmed)
   ```bash
   cat /sys/module/nvidia_drm/parameters/modeset
   # Must return: Y
@@ -281,9 +281,9 @@ Waybar modules mapping from current polybar setup:
 | `date` | `clock` |
 | `systray` | `tray` |
 
-- [ ] Create `~/.config/waybar/config.jsonc` and `~/.config/waybar/style.css`
-- [ ] Port TX-02 font from polybar config
-- [ ] Port color scheme from polybar to waybar CSS
+- [x] Waybar symlinked from dotfiles
+- [x] TX-02 font in waybar config
+- [x] Color scheme ported
 
 ---
 
@@ -320,7 +320,7 @@ The `dpi` subcommand becomes a `scale` subcommand, or accepts a DPI and converts
 - Safe-default logic (refuse disconnect if lid closed)
 
 ### Plan
-- [ ] Add new `hyprland` branch or gate in `i3-screen-manager` on `WAYLAND_DISPLAY` being set
+- [ ] Add new `hyprland` branch or gate in `i3-screen-manager` on `WAYLAND_DISPLAY` being set *(needs external monitor)*
 - [ ] Rewrite `detect_external()` using `hyprctl monitors -j | jq`
 - [ ] Rewrite `extend_right/left/above/below()` using `hyprctl keyword monitor`
 - [ ] Rewrite `mirror()` using Hyprland mirror syntax
@@ -333,18 +333,18 @@ The `dpi` subcommand becomes a `scale` subcommand, or accepts a DPI and converts
 
 ## Phase 8: Remaining Tool Replacements
 
-- [ ] **Wallpaper**: Replace `feh` with `hyprpaper`
+- [x] **Wallpaper**: swaybg (hyprpaper stable package was broken)
   - Config: `~/.config/hypr/hyprpaper.conf`
   ```
   preload = ~/wallpapers/current.jpg
   wallpaper = eDP-1,~/wallpapers/current.jpg
   ```
-- [ ] **Screen lock**: Replace `i3lock` with `hyprlock`
+- [x] **Screen lock**: hyprlock configured, SUPER+SHIFT+L
   - Config: `~/.config/hypr/hyprlock.conf`
-- [ ] **Idle management**: `hypridle` (replaces any xautolock/xidlehook)
+- [x] **Idle management**: hypridle — screen off 5min, suspend on battery 15min
   - Config: `~/.config/hypr/hypridle.conf`
-- [ ] **picom**: Remove/disable — Hyprland has blur/animations built in
-- [ ] **Keyboard layout toggle**: `~/.local/bin/i3-keyboard-rofi` uses `xkb-switch` or similar — verify it works under Wayland or replace with `hyprctl switchxkblayout`
+- [ ] **picom**: Remove/disable (defer to Phase 10 cleanup)
+- [x] **Keyboard layout toggle**: i3-keyboard-rofi ported to hyprctl, working
 
 ---
 
@@ -353,8 +353,8 @@ The `dpi` subcommand becomes a `scale` subcommand, or accepts a DPI and converts
 - [x] Verify portal is running: `ps aux | grep xdg-desktop-portal-hyprland`
 - [x] Test capture works: `grim /tmp/test.png` → should produce a screenshot
 - [x] Test Zoom screen share — **verified working 2026-04-01**
-- [ ] Test Brave tab share
-- [ ] If Discord: install `xwaylandvideobridge` (AUR), add to `exec-once`
+- [ ] Test Brave tab share (minor — portal working, likely fine)
+- [x] Discord: all apps running native Wayland, xwaylandvideobridge not needed
 
 **OpenRC gotcha**: Replace any `systemctl --user restart xdg-desktop-portal` calls with direct process restarts:
 ```bash
@@ -365,11 +365,11 @@ pkill xdg-desktop-portal; sleep 1; /usr/lib/xdg-desktop-portal-hyprland &
 
 ## Phase 10: Post-Migration Cleanup
 
-- [ ] Remove picom: `sudo pacman -R picom`
-- [ ] Remove polybar: `sudo pacman -R polybar` (after waybar is working)
-- [ ] Remove i3: `sudo pacman -R i3-wm i3status` (after Hyprland stable)
-- [ ] Update `~/.xinitrc` — no longer used; keep as backup but it won't be called
-- [ ] Remove `LIBVA_DRIVER_NAME=iHD` from `.xinitrc` — move to `start-hyprland` or `hyprland.conf` env block
+- [ ] Remove picom, polybar, i3 (defer — keep until fully stable on Hyprland)
+
+
+- [ ] Update `~/.xinitrc` (keep as backup, won't be called)
+- [x] `LIBVA_DRIVER_NAME=iHD` in start-hyprland
 - [ ] Update CLAUDE.md in this repo to reflect Hyprland architecture
 
 ---
