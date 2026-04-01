@@ -244,20 +244,24 @@ bind = $mod, down, movefocus, d
 
 ### Window rules (required for flameshot)
 
-flameshot's capture overlay can open as a regular window on Hyprland instead of a fullscreen overlay. These rules fix it:
+flameshot's capture overlay is placed inside the active window group on Hyprland unless forced to float and fullscreen. The working rule set (Hyprland 0.54.x, new `windowrule {}` syntax):
 
 ```
-# Force flameshot overlay to float and cover the full screen at 0,0
-windowrulev2 = float, class:^(flameshot)$
-windowrulev2 = move 0 0, class:^(flameshot)$
-windowrulev2 = pin, class:^(flameshot)$
-windowrulev2 = noanim, class:^(flameshot)$
-
-# Suppress idle inhibitor while flameshot is open
-windowrulev2 = idleinhibit always, class:^(flameshot)$
+windowrule {
+    name = flameshot
+    match:class = ^(flameshot)$
+    float = on
+    fullscreen = true
+    no_anim = true
+}
 ```
 
-If multi-monitor capture is still broken (overlay on only one screen), try launching flameshot as a daemon in `exec-once` and triggering via `flameshot gui` rather than launching fresh each time:
+`float = on` — pulls flameshot out of any group so the canvas isn't caged to the group area.
+`fullscreen = true` — Hyprland forces true fullscreen covering all layer shells (waybar, groupbar, etc.).
+`no_anim = true` — prevents the fullscreen animation flash.
+**No `suppress_event = fullscreen` needed** — that caused the returning window to be fullscreened after flameshot closed.
+
+Run as a daemon so the canvas is ready immediately:
 ```
 exec-once = flameshot
 ```
@@ -404,7 +408,7 @@ pkill xdg-desktop-portal; sleep 1; /usr/lib/xdg-desktop-portal-hyprland &
 | Electron/Chromium 1-minute stall at boot | `i915` MUST be first in mkinitcpio MODULES |
 | Rofi font config | Same `configuration { font: "TX-02 12"; }` trick applies in Wayland mode |
 | `GBM_BACKEND=nvidia-drm` breaks Firefox | Remove that env var, Firefox uses EGL directly |
-| Flameshot overlay opens as regular window | Add window rules: `float`, `move 0 0`, `pin`, `noanim` for class `flameshot`. Run as daemon via `exec-once = flameshot` for multi-monitor. Do NOT use `QT_QPA_PLATFORM=xcb`. Use `flameshot-git` (AUR), NOT stable `flameshot` — git builds with Wayland support and does NOT want `useGrimAdapter=true`. |
+| Flameshot canvas doesn't cover full screen (waybar/groupbar excluded) | Use `float = on` + `fullscreen = true` + `no_anim = true` in windowrule. `float` pulls it out of groups; `fullscreen` covers all layer shells. Do NOT add `suppress_event = fullscreen` — that makes the returning window fullscreen after flameshot closes. Use `flameshot-git` (AUR), NOT stable `flameshot`. Do NOT set `useGrimAdapter=true` — git version has native Wayland and breaks with it. |
 | `org.freedesktop.portal.Screenshot` missing | `xdg-desktop-portal` 1.18+ requires `org.freedesktop.impl.portal.Access` for Screenshot's confirmation dialog. Install `xdg-desktop-portal-gtk` to provide it. |
 | `DBUS_SESSION_BUS_ADDRESS` not set on OpenRC | Artix OpenRC puts session bus at `/run/user/$UID/bus` but doesn't export the env var. Set `DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus` in `start-hyprland`. Without it libsecret consumers report "no secret store". |
 
