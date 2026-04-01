@@ -350,9 +350,9 @@ The `dpi` subcommand becomes a `scale` subcommand, or accepts a DPI and converts
 
 ## Phase 9: Screen Sharing Verification
 
-- [ ] Verify portal is running: `ps aux | grep xdg-desktop-portal-hyprland`
-- [ ] Test capture works: `grim /tmp/test.png` → should produce a screenshot
-- [ ] Test Zoom screen share (window share, not whole screen first)
+- [x] Verify portal is running: `ps aux | grep xdg-desktop-portal-hyprland`
+- [x] Test capture works: `grim /tmp/test.png` → should produce a screenshot
+- [x] Test Zoom screen share — **verified working 2026-04-01**
 - [ ] Test Brave tab share
 - [ ] If Discord: install `xwaylandvideobridge` (AUR), add to `exec-once`
 
@@ -374,6 +374,23 @@ pkill xdg-desktop-portal; sleep 1; /usr/lib/xdg-desktop-portal-hyprland &
 
 ---
 
+## Verified Working (2026-04-01)
+
+| App / Feature | Status | Notes |
+|---|---|---|
+| Hyprland boot | ✅ | Via `~/.local/bin/start-hyprland` → `/usr/bin/start-hyprland` |
+| NVIDIA hybrid | ✅ | `AQ_DRM_DEVICES` resolved via `readlink` to avoid colon-splitting |
+| gnome-keyring / libsecret | ✅ | `DBUS_SESSION_BUS_ADDRESS` must be set explicitly on OpenRC |
+| Brave browser | ✅ | Wayland-native, keyring working |
+| Azure Storage Explorer | ✅ | libsecret working |
+| flameshot-git | ✅ | Annotation working. Required `xdg-desktop-portal-gtk` for Screenshot portal |
+| Zoom | ✅ | Stays in special workspace, screen sharing works |
+| Slack / Discord / Keybase | ✅ | Kinetic scrolling working |
+| JetBrains GoLand 2026.1 | ✅ | Wayland-native |
+| xdg-desktop-portal | ✅ | Screenshot portal requires `xdg-desktop-portal-gtk` for Access interface |
+
+---
+
 ## Known Gotchas Summary
 
 | Gotcha | Fix |
@@ -387,7 +404,9 @@ pkill xdg-desktop-portal; sleep 1; /usr/lib/xdg-desktop-portal-hyprland &
 | Electron/Chromium 1-minute stall at boot | `i915` MUST be first in mkinitcpio MODULES |
 | Rofi font config | Same `configuration { font: "TX-02 12"; }` trick applies in Wayland mode |
 | `GBM_BACKEND=nvidia-drm` breaks Firefox | Remove that env var, Firefox uses EGL directly |
-| Flameshot overlay opens as regular window | Add window rules: `float`, `move 0 0`, `pin`, `noanim` for class `flameshot`. Run as daemon via `exec-once = flameshot` for multi-monitor. Do NOT use `QT_QPA_PLATFORM=xcb`. |
+| Flameshot overlay opens as regular window | Add window rules: `float`, `move 0 0`, `pin`, `noanim` for class `flameshot`. Run as daemon via `exec-once = flameshot` for multi-monitor. Do NOT use `QT_QPA_PLATFORM=xcb`. Use `flameshot-git` (AUR), NOT stable `flameshot` — git builds with Wayland support and does NOT want `useGrimAdapter=true`. |
+| `org.freedesktop.portal.Screenshot` missing | `xdg-desktop-portal` 1.18+ requires `org.freedesktop.impl.portal.Access` for Screenshot's confirmation dialog. Install `xdg-desktop-portal-gtk` to provide it. |
+| `DBUS_SESSION_BUS_ADDRESS` not set on OpenRC | Artix OpenRC puts session bus at `/run/user/$UID/bus` but doesn't export the env var. Set `DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus` in `start-hyprland`. Without it libsecret consumers report "no secret store". |
 
 ---
 
