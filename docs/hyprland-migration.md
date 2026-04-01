@@ -87,7 +87,10 @@ sudo pacman -S wireplumber pipewire-pulse  # already installed from audio setup
 # Rofi: 2.0.0 merged Wayland support — just upgrade
 sudo pacman -S rofi  # or: yay -S rofi-wayland if 2.0 not in repos yet
 
-# Notification daemon — dunst already works on Wayland, keep it
+# Tools the laptop conf uses
+sudo pacman -S pamixer mako udiskie
+
+# Notification daemon: mako (simpler, Wayland-native) replaces dunst
 # nm-applet — already works on Wayland, keep it
 
 # Waybar (replaces polybar)
@@ -134,7 +137,21 @@ Hyprland launches directly from TTY — no xinit, no display manager.
 
 ## Phase 5: Hyprland Core Config
 
-Create `~/.config/hypr/hyprland.conf`. Start minimal, build up.
+**You have a working laptop config in dotfiles — use it, don't start from scratch.**
+
+```bash
+mkdir -p ~/.config/hypr
+ln -sf ~/projects/dotfiles/.config/hypr/hyprland-laptop.conf ~/.config/hypr/hyprland.conf
+```
+
+The laptop conf has been updated for Artix/OpenRC (dropped `--systemd`, removed `systemctl --user import-environment`, `foot` → `kitty`, `uwsm app --` wrapper removed). Key things already in it: TX-02 font, flameshot as daemon, master layout, groups, special workspaces (terminal/volume/claude/chatgpt/zoom), JetBrains window rules, lid switch bindings, scale 1.25 on eDP-1.
+
+**Things to verify/adjust before first boot:**
+- `monitor=DP-7,...` — check actual external output name with `hyprctl monitors` once running
+- `morgen` in exec-once — remove/comment if not installed
+- `mako` in exec-once — install (`sudo pacman -S mako`) or swap for dunst
+
+The rest of this section documents what's in the config for reference.
 
 ### Environment variables
 
