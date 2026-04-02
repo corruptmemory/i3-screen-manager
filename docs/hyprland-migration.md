@@ -288,6 +288,18 @@ Waybar modules mapping from current polybar setup:
 - [x] Waybar symlinked from dotfiles
 - [x] TX-02 font in waybar config
 - [x] Color scheme ported
+- [x] Network module: set `interface` or it defaults to `lo` (loopback) — useless
+
+  ```jsonc
+  "network": {
+    "interface": "wl*",
+    "format-wifi": "󰤢 {essid}",
+    "format-ethernet": "󰈀 {ifname}",
+    "format-disconnected": "󰤠 disconnected",
+    "interval": 5,
+    "tooltip": false
+  }
+  ```
 
 ---
 
@@ -411,6 +423,9 @@ pkill xdg-desktop-portal; sleep 1; /usr/lib/xdg-desktop-portal-hyprland &
 | Flameshot canvas doesn't cover full screen (waybar/groupbar excluded) | Use `float = on` + `fullscreen = true` + `no_anim = true` in windowrule. `float` pulls it out of groups; `fullscreen` covers all layer shells. Do NOT add `suppress_event = fullscreen` — that makes the returning window fullscreen after flameshot closes. Use `flameshot-git` (AUR), NOT stable `flameshot`. Do NOT set `useGrimAdapter=true` — git version has native Wayland and breaks with it. |
 | `org.freedesktop.portal.Screenshot` missing | `xdg-desktop-portal` 1.18+ requires `org.freedesktop.impl.portal.Access` for Screenshot's confirmation dialog. Install `xdg-desktop-portal-gtk` to provide it. |
 | `DBUS_SESSION_BUS_ADDRESS` not set on OpenRC | Artix OpenRC puts session bus at `/run/user/$UID/bus` but doesn't export the env var. Set `DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus` in `start-hyprland`. Without it libsecret consumers report "no secret store". |
+| Mako default font is `monospace 10` — small and ugly | Use a proportional font at a larger size. `Adwaita Sans Light 12` reads well. Mako uses Pango so any installed font works: `font=Adwaita Sans Light 12` in `~/.config/mako/config`. |
+| Sub-pixel rendering not enabled by default on Artix | Symlink the preset and rebuild the font cache: `sudo ln -sf /usr/share/fontconfig/conf.avail/10-sub-pixel-rgb.conf /etc/fonts/conf.d/ && fc-cache -f`. Verify with `fc-match --verbose "font name" \| grep rgba` — should show `rgba: 1`. Note: at fractional scale (1.25) the benefit is less pronounced than at 1.0. |
+| Waybar network module shows `lo` (loopback) | No `interface` set — Waybar picks the first interface alphabetically. Set `"interface": "wl*"` to target wifi; use `{essid}` in `format-wifi` and `{ifname}` in `format-ethernet`. |
 
 ---
 

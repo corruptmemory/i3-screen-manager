@@ -692,6 +692,9 @@ For reference — these were laptop issues that the desktop doesn't have:
 | `exec Hyprland` in custom start script → "launched without start-hyprland" | Use `exec /usr/bin/start-hyprland` instead — it's a wrapper binary that sets up the instance correctly |
 | Rofi works on Wayland (2.0+ has native Wayland) | Same |
 | `GIO_USE_VFS=local` for GTK file dialog fix | Same |
+| Mako default font is `monospace 10` — small and ugly | `font=Adwaita Sans Light 12` in `~/.config/mako/config`. Mako uses Pango — any installed font works. |
+| Sub-pixel rendering not enabled by default | `sudo ln -sf /usr/share/fontconfig/conf.avail/10-sub-pixel-rgb.conf /etc/fonts/conf.d/ && fc-cache -f`. Verify: `fc-match --verbose "Adwaita Sans" \| grep rgba` → `rgba: 1`. Desktop at scale 1.0 benefits more than laptop at 1.25. |
+| Waybar network module shows `lo` (loopback) | Desktop is wired — set `"interface": "en*"` (or the specific NIC name). Use `{ifname}` in `format-ethernet`. |
 
 ---
 
