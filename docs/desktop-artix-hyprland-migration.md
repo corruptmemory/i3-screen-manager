@@ -246,6 +246,27 @@ echo "it87" | sudo tee /etc/modules-load.d/it87.conf
 # yay -S it87-dkms-git
 ```
 
+### Packages in Arch `extra` but missing from Artix
+
+Some packages exist in Arch Linux's `extra` repo but haven't been packaged for Artix. The fix is to pull the `.pkg.tar.zst` directly from an Arch mirror and install with `pacman -U`. Artix's pacman will accept Arch packages for packages with no Artix-specific patches.
+
+```bash
+# General recipe:
+curl -L "https://archlinux.org/packages/extra/x86_64/PKGNAME/download/" -o /tmp/pkg.tar.zst
+sudo pacman -U --noconfirm /tmp/pkg.tar.zst
+
+# Known packages that need this treatment on Artix:
+#   git-delta  (diff viewer used by git)
+curl -L "https://archlinux.org/packages/extra/x86_64/git-delta/download/" -o /tmp/git-delta.pkg.tar.zst
+sudo pacman -U --noconfirm /tmp/git-delta.pkg.tar.zst
+
+#   azure-cli  (if needed)
+curl -L "https://archlinux.org/packages/extra/x86_64/azure-cli/download/" -o /tmp/azure-cli.pkg.tar.zst
+sudo pacman -U --noconfirm /tmp/azure-cli.pkg.tar.zst
+```
+
+The download URL redirects to a mirror — `curl -L` follows it automatically. If a package has dependencies also missing from Artix, install those first the same way (pacman will tell you what's missing).
+
 ---
 
 ## Phase 3: Hyprland Installation
