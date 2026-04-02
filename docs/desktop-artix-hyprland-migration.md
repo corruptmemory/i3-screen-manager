@@ -220,6 +220,19 @@ sudo pacman -S solaar
 sudo pacman -S tlp tlp-openrc
 sudo rc-update add tlp default
 sudo rc-service tlp start
+
+# CRITICAL: Fix TLP defaults after install — the shipped default is wrong
+# RUNTIME_PM_ON_AC defaults to "on" which means "keep devices always ON" (disables PM)
+# Set to "auto" so PCIe devices (GPU, NVMe, etc.) can idle down
+sudo sed -i '/^#RUNTIME_PM_ON_AC=on$/s/^#//' /etc/tlp.conf        # uncomment
+sudo sed -i 's/^RUNTIME_PM_ON_AC=on$/RUNTIME_PM_ON_AC=auto/' /etc/tlp.conf
+
+# Enable audio power saving and disable NMI watchdog (periodic interrupt)
+sudo sed -i 's/^#SOUND_POWER_SAVE_ON_AC=1$/SOUND_POWER_SAVE_ON_AC=1/' /etc/tlp.conf
+sudo sed -i 's/^#SOUND_POWER_SAVE_ON_BAT=1$/SOUND_POWER_SAVE_ON_BAT=1/' /etc/tlp.conf
+sudo sed -i 's/^#NMI_WATCHDOG=0$/NMI_WATCHDOG=0/' /etc/tlp.conf
+
+sudo tlp ac   # apply immediately
 ```
 
 ### Desktop-specific: it87 CMOS battery module
@@ -702,7 +715,7 @@ For reference — these were laptop issues that the desktop doesn't have:
 | Mako default font is `monospace 10` — small and ugly | `font=Adwaita Sans Light 12` in `~/.config/mako/config`. Mako uses Pango — any installed font works. |
 | Sub-pixel rendering not enabled by default | `sudo ln -sf /usr/share/fontconfig/conf.avail/10-sub-pixel-rgb.conf /etc/fonts/conf.d/ && fc-cache -f`. Verify: `fc-match --verbose "Adwaita Sans" \| grep rgba` → `rgba: 1`. Desktop at scale 1.0 benefits more than laptop at 1.25. |
 | Waybar network module shows `lo` (loopback) | Desktop is wired — set `"interface": "en*"` (or the specific NIC name). Use `{ifname}` in `format-ethernet`. |
-| Hyprland idles hotter than i3/X11 | Add `vfr = true` to `misc {}` in hyprland.conf. Without it Hyprland redraws at full refresh rate constantly, preventing deep CPU C-states. |
+| Hyprland idles hotter than i3/X11 | Two causes: (1) `vfr = true` missing from `misc {}` — without it Hyprland redraws at full refresh rate constantly, preventing deep CPU C-states; (2) TLP `RUNTIME_PM_ON_AC=on` — despite the name, `on` disables runtime PM; set to `auto` to let PCIe devices idle. Also enable `SOUND_POWER_SAVE_ON_AC=1` and `NMI_WATCHDOG=0`. After fixing: C8/C10 states active at idle. |
 
 ---
 
