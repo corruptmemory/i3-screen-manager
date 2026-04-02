@@ -375,16 +375,16 @@ listener {
 }
 ```
 
-#### 9. Check hy3 plugin availability
+#### 9. Replace hy3 with built-in layout
 
-The desktop config uses `layout = hy3`. This is a third-party plugin — check if it's packaged for Artix:
+The desktop config uses `layout = hy3` — a third-party plugin that's uncomfortably quirky. **Don't use it.** Switch to a built-in layout:
 
-```bash
-yay -Ss hyprland-plugins    # or
-yay -Ss hy3
+```
+# Change in general section:
+layout = master    # or dwindle — laptop uses master
 ```
 
-If not available, switch to `layout = master` or `layout = dwindle` (built-in). The laptop config uses `master`.
+Hyprland's built-in grouping (`togglegroup`, `changegroupactive`, `movewindoworgroup` — already in the keybinds) provides the i3-style grouped-window workflow without hy3.
 
 #### 10. Fix application references
 
