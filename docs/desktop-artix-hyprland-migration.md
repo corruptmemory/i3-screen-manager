@@ -719,6 +719,25 @@ For reference — these were laptop issues that the desktop doesn't have:
 
 ---
 
+## Firmware Updates (fwupd)
+
+Same setup as the laptop — fwupd covers virtually everything without Windows.
+
+```bash
+sudo pacman -S fwupd
+yay -S fwupd-openrc
+sudo rc-update add fwupd default
+sudo rc-service fwupd start
+
+fwupdmgr refresh
+fwupdmgr get-updates
+sudo fwupdmgr update
+```
+
+The desktop likely has different updatable devices (no Thunderbolt, different NVMe vendors, no fingerprint sensor) but the workflow is identical. Keep the UEFI Secure Boot dbx current — fwupd will flag it when Microsoft publishes a new revocation list.
+
+---
+
 ## References
 
 - [Artix installation guide](https://wiki.artixlinux.org/Main/Installation)

@@ -495,9 +495,9 @@ pkill xdg-desktop-portal; sleep 1; /usr/lib/xdg-desktop-portal-hyprland &
 | Mako default font is `monospace 10` — small and ugly | Use a proportional font at a larger size. `Adwaita Sans Light 12` reads well. Mako uses Pango so any installed font works: `font=Adwaita Sans Light 12` in `~/.config/mako/config`. |
 | Sub-pixel rendering not enabled by default on Artix | Symlink the preset and rebuild the font cache: `sudo ln -sf /usr/share/fontconfig/conf.avail/10-sub-pixel-rgb.conf /etc/fonts/conf.d/ && fc-cache -f`. Verify with `fc-match --verbose "font name" \| grep rgba` — should show `rgba: 1`. Note: at fractional scale (1.25) the benefit is less pronounced than at 1.0. |
 | Waybar network module shows `lo` (loopback) | No `interface` set — Waybar picks the first interface alphabetically. Set `"interface": "wl*"` to target wifi; use `{essid}` in `format-wifi` and `{ifname}` in `format-ethernet`. |
-| Laptop runs warmer under Hyprland than i3/X11 | NVIDIA GPU stays fully powered because: (1) `power/control` defaults to `on` for all NVIDIA PCI functions, and (2) `GBM_BACKEND=nvidia-drm` + `__GLX_VENDOR_LIBRARY_NAME=nvidia` force NVIDIA rendering. Fix: `NVreg_DynamicPowerManagement=0x02` + udev rule (see Phase 2) + remove those two env vars from `start-hyprland`. Verify: `cat /sys/bus/pci/devices/0000:01:00.0/power/runtime_status` → `suspended`. |
+| Laptop runs warmer under Hyprland than i3/X11 | NVIDIA GPU stays fully powered because: (1) `power/control` defaults to `on` for all NVIDIA PCI functions, and (2) `GBM_BACKEND=nvidia-drm` + `__GLX_VENDOR_LIBRARY_NAME=nvidia` force NVIDIA rendering. Fix: `NVreg_DynamicPowerManagement=0x02` + udev rule (see Phase 2) + remove those two env vars from `start-hyprland`. Verify: `cat /sys/bus/pci/devices/0000:01:00.0/power/runtime_status` → `suspended`. Real-world confirmation: GPU enclosure (above keyboard) is cold to the touch, fans inaudible at idle. |
 | udev `ACTION=="bind"` rule doesn't apply at boot on Artix/OpenRC | NVIDIA modules load from initramfs; bind fires before system udev rules load. Use `ACTION=="add"` instead — `power/control` is a PCI subsystem attribute available at device discovery, before the driver binds. |
-| Hyprland idles hotter than i3/X11 (CPU stuck in C2/C3, won't reach C8+) | Two causes: (1) `vfr = true` missing from `misc {}` — without it Hyprland redraws at full refresh rate (~60 wakeups/sec) preventing deep CPU C-states; (2) TLP `RUNTIME_PM_ON_AC=on` — despite the name, `on` means "keep devices always on" (disables runtime PM). Set it to `auto` to enable idle power-down for PCIe devices (GPU, NVMe, wifi). After fixing both: C8/C10 states become active. Also enable `SOUND_POWER_SAVE_ON_AC=1` (audio controller idles when silent) and `NMI_WATCHDOG=0` (eliminates a periodic interrupt). Verify C-states: `grep -r . /sys/devices/system/cpu/cpu0/cpuidle/state*/usage` — C10 should accumulate hits at idle. |
+| Hyprland idles hotter than i3/X11 (CPU stuck in C2/C3, won't reach C8+) | Two causes: (1) `vfr = true` missing from `misc {}` — without it Hyprland redraws at full refresh rate (~60 wakeups/sec) preventing deep CPU C-states; (2) TLP `RUNTIME_PM_ON_AC=on` — despite the name, `on` means "keep devices always on" (disables runtime PM). Set it to `auto` to enable idle power-down for PCIe devices (GPU, NVMe, wifi). After fixing both: C8/C10 states become active. Also enable `SOUND_POWER_SAVE_ON_AC=1` (audio controller idles when silent) and `NMI_WATCHDOG=0` (eliminates a periodic interrupt). Verify C-states: `grep -r . /sys/devices/system/cpu/cpu0/cpuidle/state*/usage` — C10 should accumulate hits at idle. Note: a small residual temperature delta vs i3/X11 (~5°C) is expected and unavoidable — wlroots runs a full compositor pipeline even with animations disabled, whereas X11+picom can idle more aggressively. This is not a configuration problem. |
 | All external monitor ports wired through NVIDIA | Can't drop NVIDIA from `AQ_DRM_DEVICES` without losing external monitor support. Keep both GPUs listed (Intel first for compositor), rely on RTD3 to power NVIDIA down when idle. NVIDIA wakes automatically when a monitor is plugged in. |
 
 ---
@@ -594,6 +594,40 @@ enableWaylandShare=true
 Then in Zoom: Settings → Share Screen → Advanced → Screen Capture Mode → **PipeWire** (not Automatic).
 
 Alternatively, set `xwayland=false` to force full Wayland mode (skips XWayland entirely), but this may break `ZoomWebviewHost`. Test both approaches.
+
+---
+
+## Firmware Updates (fwupd)
+
+fwupd covers the vast majority of firmware updates on both machines without needing Windows or Lenovo Vantage. LVFS has good ThinkPad/Threadripper coverage.
+
+```bash
+sudo pacman -S fwupd
+yay -S fwupd-openrc
+sudo rc-update add fwupd default
+sudo rc-service fwupd start
+
+# Fetch latest LVFS metadata and check for updates
+fwupdmgr refresh
+fwupdmgr get-updates
+
+# Apply all pending updates (staged UEFI updates need a reboot)
+sudo fwupdmgr update
+```
+
+**What fwupd can update on the X1 Extreme Gen 5:**
+- System firmware (BIOS/UEFI)
+- Embedded Controller (EC)
+- Thunderbolt/USB4 controller
+- Micron/SK hynix NVMe SSDs (updates rare but possible)
+- Goodix fingerprint sensor
+- UEFI Secure Boot dbx (forbidden signature database — keep this current)
+- Intel ME
+
+**What still needs Windows (rare):**
+- Some UEFI capsule updates that stage correctly but don't apply on reboot (try Linux first; fall back to Vantage only if version doesn't change after reboot)
+
+The fwupd service runs in the background and caches LVFS metadata. Check periodically with `fwupdmgr get-updates`.
 
 ---
 
