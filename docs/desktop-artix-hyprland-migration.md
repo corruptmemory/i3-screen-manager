@@ -702,6 +702,7 @@ For reference — these were laptop issues that the desktop doesn't have:
 | Mako default font is `monospace 10` — small and ugly | `font=Adwaita Sans Light 12` in `~/.config/mako/config`. Mako uses Pango — any installed font works. |
 | Sub-pixel rendering not enabled by default | `sudo ln -sf /usr/share/fontconfig/conf.avail/10-sub-pixel-rgb.conf /etc/fonts/conf.d/ && fc-cache -f`. Verify: `fc-match --verbose "Adwaita Sans" \| grep rgba` → `rgba: 1`. Desktop at scale 1.0 benefits more than laptop at 1.25. |
 | Waybar network module shows `lo` (loopback) | Desktop is wired — set `"interface": "en*"` (or the specific NIC name). Use `{ifname}` in `format-ethernet`. |
+| Hyprland idles hotter than i3/X11 | Add `vfr = true` to `misc {}` in hyprland.conf. Without it Hyprland redraws at full refresh rate constantly, preventing deep CPU C-states. |
 
 ---
 
