@@ -58,12 +58,19 @@ Driver 580 has a known regression (fails to load on some Arch systems). If hit, 
 - [x] Create `/etc/udev/rules.d/80-nvidia-pm.rules`
   ```udev
   # Enable runtime PM for all NVIDIA PCI functions.
-  # Must cover ALL functions (GPU .0, audio .1, etc.) — any one held "on" prevents D3.
-  ACTION=="bind", SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", TEST=="power/control", ATTR{power/control}="auto"
+  # Must cover ALL functions (GPU .0, audio .1) — any one held "on" prevents D3.
+  # Use ACTION=="add" not ACTION=="bind": on Artix/OpenRC nvidia loads from initramfs,
+  # so the bind event fires before system udev rules are available. power/control is a
+  # PCI subsystem attribute (not driver), so it exists at device discovery time (add).
+  ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", TEST=="power/control", ATTR{power/control}="auto"
   ```
   **Critical:** on this machine NVIDIA has two PCI functions (GPU `01:00.0`, audio `01:00.1`).
   The audio function defaults to `on` and silently prevents the GPU from ever suspending.
-  The udev rule fires at driver bind (boot), so it persists across reboots.
+
+  **Artix/OpenRC gotcha:** `ACTION=="bind"` does NOT work here — NVIDIA modules are in the
+  initramfs, so driver bind fires before the main system's udev rules load. Use `ACTION=="add"`
+  instead. `power/control` is a PCI subsystem attribute available at device discovery, before
+  the driver binds.
 
 - [x] Update `/etc/mkinitcpio.conf` MODULES — `i915` MUST come first (prevents 1-minute stall in Electron/Chromium apps):
   ```
@@ -488,7 +495,8 @@ pkill xdg-desktop-portal; sleep 1; /usr/lib/xdg-desktop-portal-hyprland &
 | Mako default font is `monospace 10` — small and ugly | Use a proportional font at a larger size. `Adwaita Sans Light 12` reads well. Mako uses Pango so any installed font works: `font=Adwaita Sans Light 12` in `~/.config/mako/config`. |
 | Sub-pixel rendering not enabled by default on Artix | Symlink the preset and rebuild the font cache: `sudo ln -sf /usr/share/fontconfig/conf.avail/10-sub-pixel-rgb.conf /etc/fonts/conf.d/ && fc-cache -f`. Verify with `fc-match --verbose "font name" \| grep rgba` — should show `rgba: 1`. Note: at fractional scale (1.25) the benefit is less pronounced than at 1.0. |
 | Waybar network module shows `lo` (loopback) | No `interface` set — Waybar picks the first interface alphabetically. Set `"interface": "wl*"` to target wifi; use `{essid}` in `format-wifi` and `{ifname}` in `format-ethernet`. |
-| Laptop runs warmer under Hyprland than i3/X11 | NVIDIA GPU stays fully powered because: (1) `power/control` defaults to `on` for all NVIDIA PCI functions, and (2) Hyprland holds a DRM fd on NVIDIA when it's in `AQ_DRM_DEVICES`. Fix: `NVreg_DynamicPowerManagement=0x02` (fine-grained RTD3 — suspends despite open fd) + udev rule setting `power/control=auto` on ALL NVIDIA PCI functions at bind time. Verify: `cat /sys/bus/pci/devices/0000:01:00.0/power/runtime_status` → `suspended`. Also remove `GBM_BACKEND=nvidia-drm` and `__GLX_VENDOR_LIBRARY_NAME=nvidia` from `start-hyprland` — these force NVIDIA as the renderer and prevent D3. |
+| Laptop runs warmer under Hyprland than i3/X11 | NVIDIA GPU stays fully powered because: (1) `power/control` defaults to `on` for all NVIDIA PCI functions, and (2) `GBM_BACKEND=nvidia-drm` + `__GLX_VENDOR_LIBRARY_NAME=nvidia` force NVIDIA rendering. Fix: `NVreg_DynamicPowerManagement=0x02` + udev rule (see Phase 2) + remove those two env vars from `start-hyprland`. Verify: `cat /sys/bus/pci/devices/0000:01:00.0/power/runtime_status` → `suspended`. |
+| udev `ACTION=="bind"` rule doesn't apply at boot on Artix/OpenRC | NVIDIA modules load from initramfs; bind fires before system udev rules load. Use `ACTION=="add"` instead — `power/control` is a PCI subsystem attribute available at device discovery, before the driver binds. |
 | All external monitor ports wired through NVIDIA | Can't drop NVIDIA from `AQ_DRM_DEVICES` without losing external monitor support. Keep both GPUs listed (Intel first for compositor), rely on RTD3 to power NVIDIA down when idle. NVIDIA wakes automatically when a monitor is plugged in. |
 
 ---
