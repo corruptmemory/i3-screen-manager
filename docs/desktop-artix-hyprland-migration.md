@@ -233,7 +233,10 @@ echo "it87" | sudo tee /etc/modules-load.d/it87.conf
 
 ```bash
 # Core Hyprland ecosystem
-sudo pacman -S hyprland hyprpaper hyprlock hypridle \
+# NOTE: do NOT install hyprpaper — the stable package (0.8.3-4) is broken:
+# it silently ignores its config file (confirmed via strace, GitHub issue open).
+# Use swaybg instead (see exec-once in Phase 4).
+sudo pacman -S hyprland hyprlock hypridle swaybg \
   xdg-desktop-portal-hyprland xdg-desktop-portal-gtk \
   waybar mako wlr-randr wayland-protocols
 
@@ -262,7 +265,7 @@ sudo pacman -S network-manager-applet
 mkdir -p ~/.config/hypr ~/.config/waybar
 ln -sf ~/projects/dotfiles/.config/hypr/hyprland-desktop.conf ~/.config/hypr/hyprland.conf
 ln -sf ~/projects/dotfiles/.config/hypr/hyprlock.conf ~/.config/hypr/hyprlock.conf
-ln -sf ~/projects/dotfiles/.config/hypr/hyprpaper.conf ~/.config/hypr/hyprpaper.conf
+# Note: hyprpaper.conf is NOT symlinked — we use swaybg instead (hyprpaper stable is broken)
 ln -sf ~/projects/dotfiles/.config/waybar/config-desktop.jsonc ~/.config/waybar/config
 ```
 
@@ -337,7 +340,18 @@ exec-once = flameshot
 
 **Do NOT** set `useGrimAdapter=true` — flameshot-git has native Wayland and breaks with it.
 
-#### 7. Update waybar config
+#### 7. Wallpaper — use swaybg, not hyprpaper
+
+Replace any `exec-once = hyprpaper` in the config with swaybg:
+
+```
+# In exec-once section:
+exec-once = swaybg -i ~/projects/wallpapers/0003.jpg -m stretch
+```
+
+hyprpaper stable (0.8.3-4) silently ignores its config file entirely. strace confirms it never opens `hyprpaper.conf`. The GitHub issue is open but not fixed in stable. swaybg is simpler and reliable.
+
+#### 8. Update waybar config
 
 The desktop waybar config uses `sway/workspaces` and `sway/window` — these need to be Hyprland modules:
 
@@ -351,7 +365,7 @@ The desktop waybar config uses `sway/workspaces` and `sway/window` — these nee
 
 Also remove the `wlr/workspaces` block (dead config).
 
-#### 8. hypridle — remove battery/suspend check
+#### 9. hypridle — remove battery/suspend check
 
 The desktop has no battery. The existing hypridle.conf has a `systemctl suspend` call gated on battery state — remove or adapt:
 
@@ -375,7 +389,7 @@ listener {
 }
 ```
 
-#### 9. Replace hy3 with built-in layout
+#### 10. Replace hy3 with built-in layout
 
 The desktop config uses `layout = hy3` — a third-party plugin that's uncomfortably quirky. **Don't use it.** Switch to a built-in layout:
 
@@ -386,7 +400,25 @@ layout = master    # or dwindle — laptop uses master
 
 Hyprland's built-in grouping (`togglegroup`, `changegroupactive`, `movewindoworgroup` — already in the keybinds) provides the i3-style grouped-window workflow without hy3.
 
-#### 10. Fix application references
+#### 11. Groupbar color requires `gradients = true` (counter-intuitive)
+
+If you use Hyprland groups, the groupbar `col.active` / `col.inactive` colors **only render if `gradients = true`**, even if you want solid colors. Without it the bar is fully transparent regardless of what you set. This is Hyprland issue #9352, present in 0.54.x.
+
+```
+group {
+    groupbar {
+        gradients = true      # REQUIRED for any color to show — not just gradients
+        height = 20
+        indicator_height = 0  # hides the thin indicator bar at the bottom of the groupbar
+        gaps_in = 0
+        gaps_out = 0
+        col.active = rgb(2d4d6e)
+        col.inactive = rgb(1a1a2e)
+    }
+}
+```
+
+#### 11. Fix application references
 
 ```
 # nautilus → probably not installed, change to thunar or remove
@@ -407,7 +439,16 @@ cat > ~/.local/bin/start-hyprland << 'SCRIPT'
 # Desktop start-hyprland — much simpler than laptop (no NVIDIA)
 
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+
+# Artix OpenRC does not export DBUS_SESSION_BUS_ADDRESS — apps (Brave, Azure
+# Storage Explorer, rbw) will report "no secret store" without this.
 export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+
+# gnome-keyring: start daemon and pick up SSH_AUTH_SOCK + GNOME_KEYRING_CONTROL.
+# Must use eval, not just call it — the daemon prints exports that need sourcing.
+eval $(gnome-keyring-daemon --start --components=secrets,pkcs11,ssh)
+export GNOME_KEYRING_CONTROL
+export SSH_AUTH_SOCK
 
 # Vulkan ICD — AMD
 export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json:/usr/share/vulkan/icd.d/radeon_icd.i686.json
@@ -415,16 +456,19 @@ export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json:/usr/shar
 # VA-API — AMD
 export LIBVA_DRIVER_NAME=radeonsi
 
-# GTK file dialog fix
+# GTK file dialog fix (avoids 25s hang in GTK open/save dialogs)
 export GIO_USE_VFS=local
 
-exec Hyprland
+# Use the system-installed /usr/bin/start-hyprland wrapper, not Hyprland directly.
+# Calling Hyprland directly skips its instance setup and triggers a
+# "launched without start-hyprland" warning on every startup.
+exec /usr/bin/start-hyprland
 SCRIPT
 chmod +x ~/.local/bin/start-hyprland
 ```
 
 `★ Insight ─────────────────────────────────────`
-Compare this to the laptop's start-hyprland: no `AQ_DRM_DEVICES`, no `readlink` DRI path resolution, no `__GLX_VENDOR_LIBRARY_NAME`, no `GBM_BACKEND`, no `NVD_BACKEND`. AMD GPU simplifies the launcher from ~20 lines of NVIDIA workarounds to 5 lines of straightforward exports.
+Compare this to the laptop's start-hyprland: no `AQ_DRM_DEVICES`, no `readlink` DRI path resolution, no `__GLX_VENDOR_LIBRARY_NAME`, no `GBM_BACKEND`, no `NVD_BACKEND`. AMD GPU simplifies the launcher from ~20 lines of NVIDIA workarounds to a handful of straightforward exports.
 `─────────────────────────────────────────────────`
 
 ### Fish auto-start
@@ -638,10 +682,14 @@ For reference — these were laptop issues that the desktop doesn't have:
 | `dbus-update-activation-environment --systemd` → drop `--systemd` | Same fix |
 | `systemctl --user` calls fail on OpenRC | Same — use `exec-once` or OpenRC user services |
 | `DBUS_SESSION_BUS_ADDRESS` not set on OpenRC | Same — set in `start-hyprland` |
+| gnome-keyring: just setting `DBUS_SESSION_BUS_ADDRESS` is not enough | Must `eval $(gnome-keyring-daemon --start ...)` and export `SSH_AUTH_SOCK` + `GNOME_KEYRING_CONTROL`. Without this, Brave and Azure Storage Explorer report "no secret store" even when the bus address is correct. |
 | Portal startup needs sleep delays (no socket activation) | Same — `sleep 1 && portal-hyprland`, `sleep 2 && portal` |
 | `xdg-desktop-portal-gtk` needed for Screenshot portal Access interface | Same |
-| Flameshot needs `float + fullscreen + no_anim` window rules | Same |
+| Flameshot needs `float + fullscreen + no_anim` window rules | Same. No `suppress_event = fullscreen` — that causes the returning window to fullscreen after flameshot closes. |
 | Use `flameshot-git`, NOT stable; don't set `useGrimAdapter=true` | Same |
+| hyprpaper stable broken — use swaybg | Same — hyprpaper 0.8.3-4 never reads its config on Artix |
+| Groupbar `gradients = true` required for any color to render | Same — Hyprland 0.54.x issue #9352 |
+| `exec Hyprland` in custom start script → "launched without start-hyprland" | Use `exec /usr/bin/start-hyprland` instead — it's a wrapper binary that sets up the instance correctly |
 | Rofi works on Wayland (2.0+ has native Wayland) | Same |
 | `GIO_USE_VFS=local` for GTK file dialog fix | Same |
 
