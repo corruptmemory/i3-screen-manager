@@ -214,6 +214,12 @@ pipx install rofi-rbw
 
 # Solaar (mouse DPI)
 sudo pacman -S solaar
+
+# Power management — TLP handles CPU frequency scaling, PCIe PM, USB autosuspend
+# Not critical on desktop but reduces heat and noise under light load
+sudo pacman -S tlp tlp-openrc
+sudo rc-update add tlp default
+sudo rc-service tlp start
 ```
 
 ### Desktop-specific: it87 CMOS battery module
@@ -669,6 +675,7 @@ For reference — these were laptop issues that the desktop doesn't have:
 | `i915` must be first in MODULES | No Intel GPU |
 | Electron 1-minute stall at boot | Intel GPU race condition, N/A |
 | External monitor 30fps on hybrid | Single GPU |
+| NVIDIA RTD3 power management / laptop runs warm | No NVIDIA — amdgpu handles power states natively via runtime PM without configuration |
 | Touchpad configuration | Desktop, no touchpad |
 | Lid switch handling | Desktop, no lid |
 | Battery in hypridle | Desktop, no battery |

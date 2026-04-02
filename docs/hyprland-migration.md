@@ -50,7 +50,21 @@ Driver 580 has a known regression (fails to load on some Arch systems). If hit, 
 - [x] Create `/etc/modprobe.d/nvidia.conf`
   ```
   options nvidia_drm modeset=1
+  options nvidia NVreg_DynamicPowerManagement=0x02
   ```
+  `0x02` = fine-grained RTD3 — GPU can enter D3/suspended when no rendering activity,
+  even while Hyprland holds an open DRM fd on the device.
+
+- [x] Create `/etc/udev/rules.d/80-nvidia-pm.rules`
+  ```udev
+  # Enable runtime PM for all NVIDIA PCI functions.
+  # Must cover ALL functions (GPU .0, audio .1, etc.) — any one held "on" prevents D3.
+  ACTION=="bind", SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", TEST=="power/control", ATTR{power/control}="auto"
+  ```
+  **Critical:** on this machine NVIDIA has two PCI functions (GPU `01:00.0`, audio `01:00.1`).
+  The audio function defaults to `on` and silently prevents the GPU from ever suspending.
+  The udev rule fires at driver bind (boot), so it persists across reboots.
+
 - [x] Update `/etc/mkinitcpio.conf` MODULES — `i915` MUST come first (prevents 1-minute stall in Electron/Chromium apps):
   ```
   MODULES=(i915 nvidia nvidia_modeset nvidia_uvm nvidia_drm)
@@ -59,10 +73,13 @@ Driver 580 has a known regression (fails to load on some Arch systems). If hit, 
   ```bash
   sudo mkinitcpio -P
   ```
-- [x] Reboot and verify (modeset=Y confirmed)
+- [x] Reboot and verify
   ```bash
-  cat /sys/module/nvidia_drm/parameters/modeset
-  # Must return: Y
+  cat /sys/module/nvidia_drm/parameters/modeset   # must be Y
+  # After boot with no external monitor, verify NVIDIA is suspended:
+  cat /sys/bus/pci/devices/0000:01:00.0/power/runtime_status   # want: suspended
+  cat /proc/driver/nvidia/gpus/0000:01:00.0/power              # RTD3 detail
+  nvidia-smi -q | grep "Performance State"                      # want: P8 or higher
   ```
 
 ---
@@ -110,6 +127,51 @@ sudo pacman -S waybar
 DRI paths confirmed:
 - Intel: `/dev/dri/by-path/pci-0000:00:02.0-card` ✓
 - NVIDIA: `/dev/dri/by-path/pci-0000:01:00.0-card` — **will only appear after Phase 2** (nvidia_drm modeset=1 + mkinitcpio -P + reboot). Script has correct path already.
+
+### Canonical start-hyprland (as of 2026-04-02)
+
+```sh
+#!/bin/sh
+# Locale — /etc/locale.conf not auto-loaded on OpenRC
+export LANG=en_US.UTF-8
+export LC_COLLATE=C
+
+# Session type
+export XDG_CURRENT_DESKTOP=Hyprland
+export XDG_SESSION_TYPE=wayland
+export XDG_SESSION_DESKTOP=Hyprland
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
+
+# D-Bus — OpenRC doesn't export this; without it libsecret reports "no secret store"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus"
+
+# Cursor
+export XCURSOR_SIZE=24
+export XCURSOR_THEME=Adwaita
+export HYPRCURSOR_SIZE=24
+
+# NVIDIA hybrid — Intel compositor (first), NVIDIA for external monitors (all ports
+# on this machine route through NVIDIA). NVIDIA powers down when idle via RTD3;
+# see Phase 2 for modprobe + udev config required to make that work.
+INTEL_CARD=$(readlink -f /dev/dri/by-path/pci-0000:00:02.0-card)
+NVIDIA_CARD=$(readlink -f /dev/dri/by-path/pci-0000:01:00.0-card)
+export AQ_DRM_DEVICES="${INTEL_CARD}:${NVIDIA_CARD}"
+
+export NVD_BACKEND=direct        # VA-API via NVIDIA path
+export LIBVA_DRIVER_NAME=iHD    # Intel iHD for VA-API (not nvidia)
+export AQ_FORCE_LINEAR_BLIT=0   # external monitor perf fix on hybrid
+# GBM_BACKEND and __GLX_VENDOR_LIBRARY_NAME intentionally omitted —
+# they force NVIDIA as renderer, prevent RTD3 power-down, break Firefox
+
+export XCOMPOSEFILE=~/.XCompose
+
+# gnome-keyring — must eval to capture SSH_AUTH_SOCK etc.
+eval $(gnome-keyring-daemon --start --components=secrets,pkcs11,ssh)
+export GNOME_KEYRING_CONTROL
+export SSH_AUTH_SOCK
+
+exec /usr/bin/start-hyprland
+```
 
 ---
 
@@ -395,7 +457,7 @@ pkill xdg-desktop-portal; sleep 1; /usr/lib/xdg-desktop-portal-hyprland &
 | App / Feature | Status | Notes |
 |---|---|---|
 | Hyprland boot | ✅ | Via `~/.local/bin/start-hyprland` → `/usr/bin/start-hyprland` |
-| NVIDIA hybrid | ✅ | `AQ_DRM_DEVICES` resolved via `readlink` to avoid colon-splitting |
+| NVIDIA hybrid | ✅ | Intel-primary compositor; NVIDIA included for external monitors; RTD3 power-down via `NVreg_DynamicPowerManagement=0x02` + udev rule |
 | gnome-keyring / libsecret | ✅ | `DBUS_SESSION_BUS_ADDRESS` must be set explicitly on OpenRC |
 | Brave browser | ✅ | Wayland-native, keyring working |
 | Azure Storage Explorer | ✅ | libsecret working |
@@ -426,6 +488,8 @@ pkill xdg-desktop-portal; sleep 1; /usr/lib/xdg-desktop-portal-hyprland &
 | Mako default font is `monospace 10` — small and ugly | Use a proportional font at a larger size. `Adwaita Sans Light 12` reads well. Mako uses Pango so any installed font works: `font=Adwaita Sans Light 12` in `~/.config/mako/config`. |
 | Sub-pixel rendering not enabled by default on Artix | Symlink the preset and rebuild the font cache: `sudo ln -sf /usr/share/fontconfig/conf.avail/10-sub-pixel-rgb.conf /etc/fonts/conf.d/ && fc-cache -f`. Verify with `fc-match --verbose "font name" \| grep rgba` — should show `rgba: 1`. Note: at fractional scale (1.25) the benefit is less pronounced than at 1.0. |
 | Waybar network module shows `lo` (loopback) | No `interface` set — Waybar picks the first interface alphabetically. Set `"interface": "wl*"` to target wifi; use `{essid}` in `format-wifi` and `{ifname}` in `format-ethernet`. |
+| Laptop runs warmer under Hyprland than i3/X11 | NVIDIA GPU stays fully powered because: (1) `power/control` defaults to `on` for all NVIDIA PCI functions, and (2) Hyprland holds a DRM fd on NVIDIA when it's in `AQ_DRM_DEVICES`. Fix: `NVreg_DynamicPowerManagement=0x02` (fine-grained RTD3 — suspends despite open fd) + udev rule setting `power/control=auto` on ALL NVIDIA PCI functions at bind time. Verify: `cat /sys/bus/pci/devices/0000:01:00.0/power/runtime_status` → `suspended`. Also remove `GBM_BACKEND=nvidia-drm` and `__GLX_VENDOR_LIBRARY_NAME=nvidia` from `start-hyprland` — these force NVIDIA as the renderer and prevent D3. |
+| All external monitor ports wired through NVIDIA | Can't drop NVIDIA from `AQ_DRM_DEVICES` without losing external monitor support. Keep both GPUs listed (Intel first for compositor), rely on RTD3 to power NVIDIA down when idle. NVIDIA wakes automatically when a monitor is plugged in. |
 
 ---
 
