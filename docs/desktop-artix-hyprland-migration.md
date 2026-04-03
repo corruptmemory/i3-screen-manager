@@ -646,23 +646,36 @@ i3-cmos-battery               # should print voltage (desktop-specific)
 
 ---
 
-## Phase 8: Waybar Module Migration
+## Phase 8: Waybar Setup
 
-Port the polybar modules to waybar. The desktop waybar config is minimal (clock, audio, tray). Consider adding:
+**Done.** Desktop waybar config is at `~/projects/dotfiles/.config/waybar/config-desktop.jsonc`, symlinked from `~/.config/waybar/config`.
 
-| Current polybar module | Waybar equivalent | Priority |
-|---|---|---|
-| `i3` workspaces | `hyprland/workspaces` | **Done** (in config) |
-| `xwindow` | `hyprland/window` | **Done** (in config) |
-| `pulseaudio` | `pulseaudio` | **Done** (in config) |
-| `clock` | `clock` | **Done** (in config) |
-| `tray` | `tray` | **Done** (in config) |
-| `cpu` | `cpu` | Nice to have |
-| `memory` | `memory` | Nice to have |
-| `temperature` | `temperature` | Nice to have |
-| CMOS battery | `custom/cmos-battery` | Port later |
+### What was needed
 
-CMOS battery waybar module (custom):
+1. **Symlink the config** — waybar looks for `~/.config/waybar/config` (no extension):
+   ```bash
+   mkdir -p ~/.config/waybar
+   ln -sf ~/projects/dotfiles/.config/waybar/config-desktop.jsonc ~/.config/waybar/config
+   ```
+
+2. **No style.css needed** — waybar falls back to `/etc/xdg/waybar/style.css` (system default). Custom styling can be added later.
+
+3. **Network module uses `eth*`** — desktop is wired, not wifi. The laptop config uses `wl*`.
+
+4. **No battery module** — desktop doesn't have one. Removed from config vs laptop.
+
+5. **Idle inhibitor added** — toggle button in the bar to prevent screen DPMS timeout.
+
+### Module layout
+
+| Position | Modules |
+|---|---|
+| Left | `hyprland/workspaces`, `hyprland/window` |
+| Right | `idle_inhibitor`, `pulseaudio`, `network`, `cpu`, `memory`, `temperature`, `clock`, `tray` |
+
+### CMOS battery (future)
+
+Can be added as a custom waybar module:
 ```jsonc
 "custom/cmos-battery": {
     "exec": "i3-cmos-battery --short",
@@ -670,6 +683,10 @@ CMOS battery waybar module (custom):
     "format": "CMOS: {}"
 }
 ```
+
+### Waybar not appearing on first boot?
+
+The `exec-once = waybar & mako` in the Hyprland config may fail silently if the config has parse errors (waybar starts, reads broken config, exits). Fix the config errors first, then `pkill waybar && waybar &` or reload Hyprland.
 
 ---
 
@@ -735,7 +752,9 @@ For reference — these were laptop issues that the desktop doesn't have:
 | `GIO_USE_VFS=local` for GTK file dialog fix | Same |
 | Mako default font is `monospace 10` — small and ugly | `font=Adwaita Sans Light 12` in `~/.config/mako/config`. Mako uses Pango — any installed font works. |
 | Sub-pixel rendering not enabled by default | `sudo ln -sf /usr/share/fontconfig/conf.avail/10-sub-pixel-rgb.conf /etc/fonts/conf.d/ && fc-cache -f`. Verify: `fc-match --verbose "Adwaita Sans" \| grep rgba` → `rgba: 1`. Desktop at scale 1.0 benefits more than laptop at 1.25. |
-| Waybar network module shows `lo` (loopback) | Desktop is wired — set `"interface": "en*"` (or the specific NIC name). Use `{ifname}` in `format-ethernet`. |
+| Waybar network module shows `lo` (loopback) | Desktop is wired — set `"interface": "eth*"` (or the specific NIC name). Use `{ifname}` in `format-ethernet`. |
+| `pipewire-pulse` not started by OpenRC user services | The `pipewire-openrc` package only provides a user service for `pipewire` itself, not `pipewire-pulse`. Without it, anything using PulseAudio API (waybar `pulseaudio` module, `pactl`, `pavucontrol`) fails with "Connection refused". Waybar's pulseaudio module loops reconnection attempts until it exhausts file descriptors ("Too many open files" spam). Fix: add `exec-once = pipewire-pulse &` in hyprland.conf BEFORE waybar. Also delay waybar slightly: `exec-once = sleep 1 && waybar & mako`. |
+| Old single-line `windowrule` syntax broken in 0.54.x | Hyprland 0.54+ requires block syntax: `windowrule { name = ...; match:class = ...; float = true }`. Old `windowrule = float,class:^(foo)$` lines cause "invalid field type" errors. |
 | Hyprland idles hotter than i3/X11 | Two causes: (1) `vfr = true` missing from `misc {}` — without it Hyprland redraws at full refresh rate constantly, preventing deep CPU C-states; (2) TLP `RUNTIME_PM_ON_AC=on` — despite the name, `on` disables runtime PM; set to `auto` to let PCIe devices idle. Also enable `SOUND_POWER_SAVE_ON_AC=1` and `NMI_WATCHDOG=0`. After fixing: C8/C10 states active at idle. |
 
 ---
