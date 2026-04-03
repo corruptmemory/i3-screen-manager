@@ -755,6 +755,8 @@ For reference — these were laptop issues that the desktop doesn't have:
 | Waybar network module shows `lo` (loopback) | Desktop is wired — set `"interface": "eth*"` (or the specific NIC name). Use `{ifname}` in `format-ethernet`. |
 | `pipewire-pulse` not started by OpenRC user services | The `pipewire-openrc` package only provides a user service for `pipewire` itself, not `pipewire-pulse`. Without it, anything using PulseAudio API (waybar `pulseaudio` module, `pactl`, `pavucontrol`) fails with "Connection refused". Waybar's pulseaudio module loops reconnection attempts until it exhausts file descriptors ("Too many open files" spam). Fix: add `exec-once = pipewire-pulse &` in hyprland.conf BEFORE waybar. Also delay waybar slightly: `exec-once = sleep 1 && waybar & mako`. |
 | Old single-line `windowrule` syntax broken in 0.54.x | Hyprland 0.54+ requires block syntax: `windowrule { name = ...; match:class = ...; float = true }`. Old `windowrule = float,class:^(foo)$` lines cause "invalid field type" errors. |
+| `$LANG` not set — hunspell/flyspell broken | OpenRC doesn't source `/etc/locale.conf` automatically (systemd-localed does this). Without `LANG=en_US.UTF-8`, hunspell looks for a dictionary named "default" which doesn't exist. Fix: add `export LANG=en_US.UTF-8` and `export LC_COLLATE=C` to `start-hyprland`. |
+| GTK CSS does not support `@import` | Waybar uses GTK3's CSS engine, which silently ignores `@import url(...)`. Must inline the full CSS — copy `/etc/xdg/waybar/style.css` and modify, don't try to layer overrides. |
 | Hyprland idles hotter than i3/X11 | Two causes: (1) `vfr = true` missing from `misc {}` — without it Hyprland redraws at full refresh rate constantly, preventing deep CPU C-states; (2) TLP `RUNTIME_PM_ON_AC=on` — despite the name, `on` disables runtime PM; set to `auto` to let PCIe devices idle. Also enable `SOUND_POWER_SAVE_ON_AC=1` and `NMI_WATCHDOG=0`. After fixing: C8/C10 states active at idle. |
 
 ---
@@ -775,6 +777,34 @@ sudo fwupdmgr update
 ```
 
 The desktop likely has different updatable devices (no Thunderbolt, different NVMe vendors, no fingerprint sensor) but the workflow is identical. Keep the UEFI Secure Boot dbx current — fwupd will flag it when Microsoft publishes a new revocation list.
+
+---
+
+## Mirror Optimization
+
+Rank Artix mirrors for your location using `rankmirrors` (from `pacman-contrib`):
+
+```bash
+# Back up current mirrorlist
+sudo cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.backup
+
+# Extract regional mirrors into a temp file, then rank them
+# Example: US + Canada mirrors
+grep -A1 'United States\|Canada' /etc/pacman.d/mirrorlist.backup | grep '^Server' > /tmp/regional.txt
+rankmirrors -v -n 6 /tmp/regional.txt
+
+# Write the ranked list as the new mirrorlist, add a few EU fallbacks
+sudo cp /tmp/ranked-output /etc/pacman.d/mirrorlist
+
+# Verify
+sudo pacman -Sy
+```
+
+**Gotchas:**
+- Drop HTTP-only mirrors — HTTPS only for a rolling release distro
+- The default Artix mirrorlist has EU mirrors at the top regardless of your location
+- `rankmirrors` is slow (tests sequentially) but gives accurate results
+- Keep the backup at `/etc/pacman.d/mirrorlist.backup`
 
 ---
 
