@@ -260,12 +260,12 @@ sudo pacman -U --noconfirm /tmp/pkg.tar.zst
 curl -L "https://archlinux.org/packages/extra/x86_64/git-delta/download/" -o /tmp/git-delta.pkg.tar.zst
 sudo pacman -U --noconfirm /tmp/git-delta.pkg.tar.zst
 
-#   azure-cli  (if needed)
-curl -L "https://archlinux.org/packages/extra/x86_64/azure-cli/download/" -o /tmp/azure-cli.pkg.tar.zst
+#   azure-cli  (arch=any, not x86_64 — use a direct mirror URL)
+curl -L "https://mirror.rackspace.com/archlinux/extra/os/x86_64/azure-cli-2.84.0-2-any.pkg.tar.zst" -o /tmp/azure-cli.pkg.tar.zst
 sudo pacman -U --noconfirm /tmp/azure-cli.pkg.tar.zst
 ```
 
-The download URL redirects to a mirror — `curl -L` follows it automatically. If a package has dependencies also missing from Artix, install those first the same way (pacman will tell you what's missing).
+The `/download/` redirect works for arch=x86_64 packages. For `arch=any` packages (like azure-cli), the redirect returns a 404 — use a direct mirror URL instead, substituting the current version from `https://archlinux.org/packages/extra/x86_64/azure-cli/`. If a package has dependencies also missing from Artix, install those first the same way (pacman will tell you what's missing).
 
 ---
 
