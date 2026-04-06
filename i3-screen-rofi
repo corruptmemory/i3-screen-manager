@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# i3-screen-rofi — rofi menu for i3-screen-manager
+# i3-screen-rofi — rofi menu for i3-screen-manager (Hyprland/Wayland)
 #
 
 set -euo pipefail
@@ -8,60 +8,42 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MANAGER="$SCRIPT_DIR/i3-screen-manager"
 
-# Check if an external display is connected
 has_external() {
     local ext
     ext=$("$MANAGER" status 2>/dev/null | awk '/^External:/ { print $2 }')
     [[ "$ext" != "none" ]]
 }
 
-# Build menu based on current state
 build_menu() {
     if has_external; then
-        echo "Extend Left"
         echo "Extend Right"
+        echo "Extend Left"
         echo "Extend Above"
         echo "Extend Below"
         echo "Clamshell (external only)"
-        echo "Clamshell (custom DPI)"
         echo "Mirror (presentation)"
-        echo "Adjust DPI"
+        echo "Adjust Scale"
         echo "Disconnect"
     else
         echo "No external display detected"
-        echo "Adjust DPI"
-        echo "Disconnect (restore internal)"
+        echo "Adjust Scale"
     fi
 }
 
-# Map selection to command
 run_selection() {
     case "$1" in
-        "Extend Left")                "$MANAGER" extend-left ;;
         "Extend Right")               "$MANAGER" extend-right ;;
+        "Extend Left")                "$MANAGER" extend-left ;;
         "Extend Above")               "$MANAGER" extend-above ;;
         "Extend Below")               "$MANAGER" extend-below ;;
-        "Clamshell (external only)")   "$MANAGER" clamshell ;;
-        "Clamshell (custom DPI)")
-            local current dpi
-            current=$(xrdb -query 2>/dev/null | awk '/Xft\.dpi/ {print $2}')
-            dpi=$(printf "72\n84\n96\n108\n120\n144" \
-                | rofi -dmenu -i -p "DPI (current: ${current:-unknown})" \
-                    -theme-str 'window {width: 300px;}')
-            if [[ -n "$dpi" && "$dpi" =~ ^[0-9]+$ ]]; then
-                "$MANAGER" clamshell "$dpi"
-            fi
-            ;;
-        "Mirror (presentation)")       "$MANAGER" mirror ;;
-        "Adjust DPI")                  "$MANAGER" dpi ;;
-        "Disconnect")                  "$MANAGER" disconnect ;;
-        "Disconnect (restore internal)") "$MANAGER" disconnect ;;
+        "Clamshell (external only)")  "$MANAGER" clamshell ;;
+        "Mirror (presentation)")      "$MANAGER" mirror ;;
+        "Adjust Scale")               "$MANAGER" scale ;;
+        "Disconnect")                 "$MANAGER" disconnect ;;
         *)                            exit 0 ;;
     esac
 }
 
 choice=$(build_menu | rofi -dmenu -i -p "Display" -theme-str 'window {width: 300px;}')
 
-if [[ -n "$choice" ]]; then
-    run_selection "$choice"
-fi
+[[ -n "$choice" ]] && run_selection "$choice"
