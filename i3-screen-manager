@@ -27,8 +27,9 @@ PIDFILE="/tmp/i3-screen-manager-inhibit.pid"
 # --- Detection ---
 
 find_external() {
-    hyprctl monitors -j 2>/dev/null | \
-        jq -r --arg int "$INTERNAL" '.[] | select(.name != $int) | .name' | head -1
+    # wlr-randr lists all physically connected outputs (including Hyprland-disabled ones).
+    # hyprctl monitors -j only shows active ones — misses monitors disabled via keyword.
+    wlr-randr 2>/dev/null | grep -oP '^[A-Za-z0-9-]+' | grep -v "^${INTERNAL}$" | head -1
 }
 
 find_lid_state() {
@@ -65,21 +66,47 @@ monitor_logical_height() {
         '.[] | select(.name==$n) | (.height / .scale) | floor'
 }
 
-# Physical pixel dimensions of the preferred (first) mode
-preferred_width() {
-    hyprctl monitors -j | jq -r --arg n "$1" \
-        '.[] | select(.name==$n) | .availableModes[0]' | grep -oP '^\d+'
-}
-
-preferred_height() {
-    hyprctl monitors -j | jq -r --arg n "$1" \
-        '.[] | select(.name==$n) | .availableModes[0]' | grep -oP 'x\K\d+'
-}
-
-# Mode string for hyprctl: "2560x1440@59.95" (no Hz suffix)
+# Mode string for hyprctl keyword: "2560x1440@59.95" (no Hz suffix).
+# Tries hyprctl first (monitor is active); falls back to wlr-randr (monitor disabled).
 preferred_mode() {
-    hyprctl monitors -j | jq -r --arg n "$1" \
-        '.[] | select(.name==$n) | .availableModes[0]' | sed 's/Hz//'
+    local name="$1" mode
+    mode=$(hyprctl monitors -j 2>/dev/null | jq -r --arg n "$name" \
+        '.[] | select(.name==$n) | .availableModes[0]' | sed 's/Hz//')
+    if [[ -z "$mode" || "$mode" == "null" ]]; then
+        # Parse wlr-randr: find the line marked (preferred) under this output
+        mode=$(wlr-randr 2>/dev/null | awk -v out="$name" '
+            $0 ~ "^"out" " { found=1; next }
+            found && /preferred/ {
+                match($0, /([0-9]+)x([0-9]+) px, ([0-9.]+) Hz/, m)
+                printf "%sx%s@%s", m[1], m[2], m[3]
+                exit
+            }
+            found && /^[^ ]/ { exit }
+        ')
+    fi
+    echo "$mode"
+}
+
+preferred_width()  { preferred_mode "$1" | grep -oP '^\d+'; }
+preferred_height() { preferred_mode "$1" | grep -oP 'x\K\d+'; }
+
+# --- Desktop refresh ---
+
+refresh_desktop() {
+    # After monitor layout changes, swaybg and waybar don't auto-cover repositioned
+    # outputs (they only listen for new output events, not geometry changes).
+    # Restart swaybg with its current args, then reload waybar config.
+    local pid
+    pid=$(pgrep -o swaybg 2>/dev/null || true)
+    if [[ -n "$pid" ]]; then
+        local -a args
+        mapfile -d '' args < /proc/"$pid"/cmdline
+        pkill swaybg 2>/dev/null || true
+        sleep 0.2
+        "${args[@]}" &
+        disown
+    fi
+    pkill -SIGUSR2 waybar 2>/dev/null || true
 }
 
 # --- Inhibitor ---
@@ -145,25 +172,28 @@ cmd_extend() {
 
     stop_inhibitor
 
-    local int_lw int_lh ext_pw ext_ph ext_mode
+    local int_lw int_lh ext_pw ext_ph
     int_lw=$(monitor_logical_width "$INTERNAL")
     int_lh=$(monitor_logical_height "$INTERNAL")
     ext_pw=$(preferred_width "$ext")
     ext_ph=$(preferred_height "$ext")
-    ext_mode=$(preferred_mode "$ext")
 
     # Ensure internal is active at its canonical position
     hyprctl keyword monitor "$INTERNAL,preferred,0x0,$INTERNAL_SCALE"
 
+    # Use "preferred" mode keyword — avoids decimal precision mismatches from wlr-randr
     case "$direction" in
-        right) hyprctl keyword monitor "$ext,$ext_mode,${int_lw}x0,$EXTERNAL_SCALE" ;;
-        left)  hyprctl keyword monitor "$ext,$ext_mode,-${ext_pw}x0,$EXTERNAL_SCALE" ;;
-        above) hyprctl keyword monitor "$ext,$ext_mode,0x-${ext_ph},$EXTERNAL_SCALE" ;;
-        below) hyprctl keyword monitor "$ext,$ext_mode,0x${int_lh},$EXTERNAL_SCALE" ;;
+        right) hyprctl keyword monitor "$ext,preferred,${int_lw}x0,$EXTERNAL_SCALE" ;;
+        left)  hyprctl keyword monitor "$ext,preferred,-${ext_pw}x0,$EXTERNAL_SCALE" ;;
+        above) hyprctl keyword monitor "$ext,preferred,0x-${ext_ph},$EXTERNAL_SCALE" ;;
+        below) hyprctl keyword monitor "$ext,preferred,0x${int_lh},$EXTERNAL_SCALE" ;;
     esac
 
+    sleep 0.5
     ensure_workspace_on "$ext"
-    echo "Extended $direction: $INTERNAL + $ext ($ext_mode)"
+    sleep 0.5
+    refresh_desktop
+    echo "Extended $direction: $INTERNAL + $ext"
 }
 
 cmd_clamshell() {
@@ -201,6 +231,8 @@ cmd_mirror() {
 
     hyprctl keyword monitor "$INTERNAL,preferred,0x0,$INTERNAL_SCALE"
     hyprctl keyword monitor "$ext,preferred,0x0,$EXTERNAL_SCALE,mirror,$INTERNAL"
+    sleep 0.3
+    refresh_desktop
 
     echo "Mirror: $ext mirrors $INTERNAL"
 }
@@ -223,7 +255,9 @@ cmd_disconnect() {
     if [[ -n "$ext" ]]; then
         move_workspaces_from "$ext" "$INTERNAL"
         sleep 0.2
+        # hyprctl disable stops compositing; wlr-randr --off cuts the physical signal
         hyprctl keyword monitor "$ext,disable"
+        wlr-randr --output "$ext" --off 2>/dev/null || true
         echo "Disconnected: $ext off, $INTERNAL restored"
     else
         echo "Internal display restored (no external was active)"
