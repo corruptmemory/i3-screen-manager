@@ -484,11 +484,19 @@ export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 # Storage Explorer, rbw) will report "no secret store" without this.
 export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
 
-# gnome-keyring: start daemon and pick up SSH_AUTH_SOCK + GNOME_KEYRING_CONTROL.
-# Must use eval, not just call it — the daemon prints exports that need sourcing.
-eval $(gnome-keyring-daemon --start --components=secrets,pkcs11,ssh)
+# gnome-keyring: secrets and PKCS#11 only. The "ssh" component was deprecated
+# upstream and silently dropped — the daemon accepts `--components=...,ssh`
+# but no longer exports SSH_AUTH_SOCK. Ask only for what still works.
+eval $(gnome-keyring-daemon --start --components=secrets,pkcs11)
 export GNOME_KEYRING_CONTROL
-export SSH_AUTH_SOCK
+
+# ssh-agent: plain openssh-agent at a predictable socket path. See the note
+# in hyprland-migration.md for the full rationale.
+export SSH_AUTH_SOCK="${XDG_RUNTIME_DIR}/ssh-agent.sock"
+if ! SSH_AUTH_SOCK="$SSH_AUTH_SOCK" ssh-add -l >/dev/null 2>&1; then
+    rm -f "$SSH_AUTH_SOCK"
+    ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null
+fi
 
 # Vulkan ICD — AMD
 export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json:/usr/share/vulkan/icd.d/radeon_icd.i686.json
@@ -740,7 +748,7 @@ For reference — these were laptop issues that the desktop doesn't have:
 | `dbus-update-activation-environment --systemd` → drop `--systemd` | Same fix |
 | `systemctl --user` calls fail on OpenRC | Same — use `exec-once` or OpenRC user services |
 | `DBUS_SESSION_BUS_ADDRESS` not set on OpenRC | Same — set in `start-hyprland` |
-| gnome-keyring: just setting `DBUS_SESSION_BUS_ADDRESS` is not enough | Must `eval $(gnome-keyring-daemon --start ...)` and export `SSH_AUTH_SOCK` + `GNOME_KEYRING_CONTROL`. Without this, Brave and Azure Storage Explorer report "no secret store" even when the bus address is correct. |
+| gnome-keyring: just setting `DBUS_SESSION_BUS_ADDRESS` is not enough | Must `eval $(gnome-keyring-daemon --start --components=secrets,pkcs11)` and export `GNOME_KEYRING_CONTROL`. Without this, Brave and Azure Storage Explorer report "no secret store" even when the bus address is correct. **NOTE:** Do NOT include `ssh` in the components list — the SSH component was deprecated upstream and silently no-ops, and the daemon no longer exports `SSH_AUTH_SOCK`. Start a separate `ssh-agent` at `${XDG_RUNTIME_DIR}/ssh-agent.sock` instead. |
 | Portal startup needs sleep delays (no socket activation) | Same — `sleep 1 && portal-hyprland`, `sleep 2 && portal` |
 | `xdg-desktop-portal-gtk` needed for Screenshot portal Access interface | Same |
 | Flameshot needs `float + fullscreen + no_anim` window rules | Same. No `suppress_event = fullscreen` — that causes the returning window to fullscreen after flameshot closes. |

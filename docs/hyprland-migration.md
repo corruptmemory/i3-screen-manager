@@ -135,7 +135,7 @@ DRI paths confirmed:
 - Intel: `/dev/dri/by-path/pci-0000:00:02.0-card` ✓
 - NVIDIA: `/dev/dri/by-path/pci-0000:01:00.0-card` — **will only appear after Phase 2** (nvidia_drm modeset=1 + mkinitcpio -P + reboot). Script has correct path already.
 
-### Canonical start-hyprland (as of 2026-04-02)
+### Canonical start-hyprland (as of 2026-04-10)
 
 ```sh
 #!/bin/sh
@@ -172,10 +172,26 @@ export AQ_FORCE_LINEAR_BLIT=0   # external monitor perf fix on hybrid
 
 export XCOMPOSEFILE=~/.XCompose
 
-# gnome-keyring — must eval to capture SSH_AUTH_SOCK etc.
-eval $(gnome-keyring-daemon --start --components=secrets,pkcs11,ssh)
+# gnome-keyring: secrets and PKCS#11 only. The "ssh" component was deprecated
+# upstream and silently dropped — the daemon still accepts `--components=...,ssh`
+# for backward compatibility but no longer exports SSH_AUTH_SOCK, so older
+# versions of this script (with `,ssh` in the components list) silently left
+# SSH agent forwarding broken. Ask only for the components that still work.
+eval $(gnome-keyring-daemon --start --components=secrets,pkcs11)
 export GNOME_KEYRING_CONTROL
-export SSH_AUTH_SOCK
+
+# ssh-agent: dedicated agent at a predictable socket path. Idempotent —
+# reuses a live agent on the expected socket, cleans up stale sockets before
+# starting a fresh agent. Keys are added manually via `ssh-add` after login
+# (intentionally not auto-loaded to avoid passphrase prompts on unattended
+# reboots). The agent process persists across Hyprland restarts because it's
+# a user daemon, not a shell-owned child — you only pay the passphrase cost
+# once per system reboot.
+export SSH_AUTH_SOCK="${XDG_RUNTIME_DIR}/ssh-agent.sock"
+if ! SSH_AUTH_SOCK="$SSH_AUTH_SOCK" ssh-add -l >/dev/null 2>&1; then
+    rm -f "$SSH_AUTH_SOCK"
+    ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null
+fi
 
 exec /usr/bin/start-hyprland
 ```
