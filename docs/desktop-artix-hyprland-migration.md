@@ -792,29 +792,49 @@ The desktop likely has different updatable devices (no Thunderbolt, different NV
 
 ## Mirror Optimization
 
-Rank Artix mirrors for your location using `rankmirrors` (from `pacman-contrib`):
+The `artix-mirrorlist` package ships ~56 mirrors in `/etc/pacman.d/mirrorlist`. Use
+`rankmirrors` (from `pacman-contrib`) to test them all and pick the fastest.
+
+**Do not** try to fetch a fresh list from `artixlinux.org` or `packages.artixlinux.org` —
+both are behind Cloudflare and return 403/challenge pages to curl. The package itself is
+the authoritative source.
 
 ```bash
 # Back up current mirrorlist
-sudo cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.backup
+sudo cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.bak
 
-# Extract regional mirrors into a temp file, then rank them
-# Example: US + Canada mirrors
-grep -A1 'United States\|Canada' /etc/pacman.d/mirrorlist.backup | grep '^Server' > /tmp/regional.txt
-rankmirrors -v -n 6 /tmp/regional.txt
+# Extract the full unranked list from the installed package
+sudo bsdtar -xOf /var/cache/pacman/pkg/artix-mirrorlist-*.pkg.tar.zst \
+    etc/pacman.d/mirrorlist | grep '^Server' > /tmp/mirrorlist-all.txt
 
-# Write the ranked list as the new mirrorlist, add a few EU fallbacks
-sudo cp /tmp/ranked-output /etc/pacman.d/mirrorlist
+# Rank all servers, take top 8 (slow — tests ~56 mirrors sequentially, ~2 min)
+rankmirrors -n 8 /tmp/mirrorlist-all.txt
+
+# Write the result
+sudo tee /etc/pacman.d/mirrorlist << 'EOF'
+##
+## Artix Linux repository mirrorlist
+## Ranked by rankmirrors on YYYY-MM-DD
+##
+
+# Fastest mirrors (ranked)
+Server = ...  # paste rankmirrors output here
+EOF
 
 # Verify
 sudo pacman -Sy
 ```
 
 **Gotchas:**
+- `rate-mirrors artix` also works in principle but `packages.artixlinux.org` returns 403
+  — use the package-extraction approach above instead
+- `rankmirrors` measures response latency, not throughput — a mirror can rank #1 and then
+  stall on actual downloads (false positive). If `pacman -Sy` shows "Operation too slow"
+  from the top mirror, remove it and re-run
+- The package in `/var/cache/pacman/pkg/` may be stale if the cache was cleaned. In that
+  case: `sudo pacman -Sw artix-mirrorlist` to re-download it first
 - Drop HTTP-only mirrors — HTTPS only for a rolling release distro
-- The default Artix mirrorlist has EU mirrors at the top regardless of your location
-- `rankmirrors` is slow (tests sequentially) but gives accurate results
-- Keep the backup at `/etc/pacman.d/mirrorlist.backup`
+- Keep the backup at `/etc/pacman.d/mirrorlist.bak`
 
 ---
 
