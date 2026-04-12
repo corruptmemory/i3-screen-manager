@@ -632,12 +632,16 @@ cat /sys/bus/thunderbolt/devices/0-1/authorized     # want: 1
 confirmation. This is the recommended setting for a single-user personal machine —
 it eliminates authorization races on resume.
 
-### BIOS: Thunderbolt BIOS Assist Mode → OFF
+### BIOS: Thunderbolt BIOS Assist Mode — not present on Gen 5
 
-In ThinkPad BIOS setup (Security → Thunderbolt): ensure **Thunderbolt BIOS Assist Mode**
-is **disabled**. This mode was a workaround for pre-3.x kernels that lacked native TBT
-driver support. With the modern `thunderbolt` kernel module it interferes with dock
-re-enumeration, especially on resume.
+Older ThinkPad docs mention a "Thunderbolt BIOS Assist Mode" toggle under Security →
+Thunderbolt. This setting does **not exist** on the X1 Extreme Gen 5 — it was a TBT3-era
+concept where the firmware's Intel Connection Manager (ICM) could optionally handle device
+authentication instead of the kernel. The TBT4/USB4 architecture on this machine dropped
+the ICM model entirely; the BIOS hands control to the kernel's native USB4 CM driver
+unconditionally. Confirmed via EFI variables (only `TbtSetupVolatileData` present, no
+assist-mode flag) and dmesg (native driver discovering devices directly, no ICM messages,
+`iommu_dma_protection=1`).
 
 ### bolt — Thunderbolt device manager
 
