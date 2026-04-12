@@ -748,6 +748,47 @@ The fwupd service runs in the background and caches LVFS metadata. Check periodi
 
 ---
 
+## Post-migration cleanup (X11/i3 teardown)
+
+Once Hyprland is confirmed stable, remove the old stack:
+
+```bash
+# i3 and X11-only compositor/bar
+sudo pacman -R i3-wm i3lock i3status picom polybar
+
+# Replaced tools (Wayland equivalents already installed)
+# dunst → mako, feh → swaybg+imv, xclip/xsel → wl-clipboard, xdotool → (no equivalent needed)
+sudo pacman -R dunst feh xclip xsel xdotool
+
+# X server itself (remove all three together — circular deps)
+sudo pacman -R xlibre-xserver xlibre-input-evdev xlibre-input-libinput
+
+# Remaining X11 utilities with no Wayland dependents
+sudo pacman -R xorg-xinit xorg-xrdb xorg-xmodmap xorg-xset
+
+# Orphans left by i3/picom
+sudo pacman -R xcb-util-xrm libconfig yajl libev
+```
+
+**What survives intentionally (do not remove):**
+
+| Package | Why it stays |
+|---|---|
+| `xorg-xwayland` | Required by Hyprland for XWayland support |
+| `xlibre-xserver-common` | Provides `xorg-server-common`, required by xorg-xwayland |
+| `xorgproto` | Required by libx11, libxext, and the entire X11 client library stack (still used by many Wayland apps) |
+| `xorg-fonts-encodings` | Required by libfontenc |
+| `xorg-xrandr` | Required by steam, intel-gpu-tools, xorg-xinput |
+| `xorg-xprop` | Required by at-spi2-core (accessibility) |
+| `xorg-xauth` | SSH X11 forwarding |
+| `xorg-xdpyinfo` / `xorg-xinput` | Diagnostic tools |
+
+**PDF viewer:** `xreader` (Linux Mint's evince fork — no gvfs dependency, no 25s dialog hangs)
+
+**Image viewer:** `imv` (Wayland-native)
+
+---
+
 ## Reference
 
 - Hyprland NVIDIA wiki: https://wiki.hyprland.org/Nvidia/
