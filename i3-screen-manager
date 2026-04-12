@@ -248,20 +248,28 @@ cmd_disconnect() {
     local ext
     ext=$(find_external)
 
-    # Re-enable internal first — no window where zero displays are active
-    hyprctl keyword monitor "$INTERNAL,preferred,0x0,$INTERNAL_SCALE"
-    sleep 0.3
-
     if [[ -n "$ext" ]]; then
+        # Enable internal with 'auto' so Hyprland places it to the right of the
+        # external — avoids the overlap warning that fires when both monitors
+        # occupy 0x0 simultaneously (common in clamshell mode where ext is at origin).
+        hyprctl keyword monitor "$INTERNAL,preferred,auto,$INTERNAL_SCALE"
+        sleep 0.3
         move_workspaces_from "$ext" "$INTERNAL"
         sleep 0.2
         # hyprctl disable stops compositing; wlr-randr --off cuts the physical signal
         hyprctl keyword monitor "$ext,disable"
         wlr-randr --output "$ext" --off 2>/dev/null || true
+        sleep 0.2
+        # Reposition internal to origin now that external is gone
+        hyprctl keyword monitor "$INTERNAL,preferred,0x0,$INTERNAL_SCALE"
         echo "Disconnected: $ext off, $INTERNAL restored"
     else
+        hyprctl keyword monitor "$INTERNAL,preferred,0x0,$INTERNAL_SCALE"
         echo "Internal display restored (no external was active)"
     fi
+
+    sleep 0.3
+    refresh_desktop
 }
 
 cmd_scale() {
