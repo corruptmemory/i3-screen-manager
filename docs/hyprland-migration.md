@@ -614,6 +614,105 @@ Alternatively, set `xwayland=false` to force full Wayland mode (skips XWayland e
 
 ---
 
+## Thunderbolt Dock (ThinkPad Thunderbolt 3 Dock)
+
+Setup for a rock-solid docked experience when using the ThinkPad Thunderbolt 3 Dock (Gen 3)
+on the X1 Extreme Gen 5 (TBT4/USB4 host). The dock runs at TBT3 speeds (20 Gb/s each
+direction) — correct and sufficient for a single 2560x1440@60Hz display + USB + GbE + power.
+
+### Kernel / security mode
+
+Check with:
+```bash
+cat /sys/bus/thunderbolt/devices/domain0/security   # want: none
+cat /sys/bus/thunderbolt/devices/0-1/authorized     # want: 1
+```
+
+`security=none` is set in BIOS and means all TBT devices auto-authorize without user
+confirmation. This is the recommended setting for a single-user personal machine —
+it eliminates authorization races on resume.
+
+### BIOS: Thunderbolt BIOS Assist Mode → OFF
+
+In ThinkPad BIOS setup (Security → Thunderbolt): ensure **Thunderbolt BIOS Assist Mode**
+is **disabled**. This mode was a workaround for pre-3.x kernels that lacked native TBT
+driver support. With the modern `thunderbolt` kernel module it interferes with dock
+re-enumeration, especially on resume.
+
+### bolt — Thunderbolt device manager
+
+`bolt` is D-Bus activated (no init script needed). It stores device authorization policy
+and provides monitoring.
+
+```bash
+yay -S bolt           # install once
+
+boltctl list          # show connected/stored TBT devices
+boltctl monitor       # watch connect/disconnect events in real time
+```
+
+The dock is stored with `policy: iommu` — bolt will use IOMMU DMA protection on
+re-authorization. No manual `boltctl enroll` needed; the dock was auto-enrolled when
+`boltctl list` first ran while it was connected.
+
+### elogind resume hook
+
+After S3 suspend + resume, the TBT link re-establishes but the dock display (routed
+through NVIDIA) can re-enumerate after Hyprland has already run its DPMS wake logic,
+leaving the screen dark. The hook below handles it:
+
+`/etc/elogind/sleep.d/50-thunderbolt-dock` (chmod +x):
+
+```bash
+#!/bin/bash
+case "$1" in
+    post)
+        sleep 2   # wait for TBT link
+
+        # Re-authorize any TBT peripheral (idempotent at security=none)
+        for dev in /sys/bus/thunderbolt/devices/[0-9]-[0-9]; do
+            [[ -f "$dev/authorized" ]] && echo 1 > "$dev/authorized" 2>/dev/null || true
+        done
+
+        # Nudge Hyprland DPMS for the active user session
+        user=$(loginctl list-sessions --no-legend 2>/dev/null | awk 'NR==1{print $3}')
+        if [[ -n "$user" ]]; then
+            uid=$(id -u "$user")
+            runtime_dir="/run/user/$uid"
+            hl_sig=$(ls "$runtime_dir/hypr/" 2>/dev/null | head -1)
+            if [[ -n "$hl_sig" ]]; then
+                HYPRLAND_INSTANCE_SIGNATURE="$hl_sig" \
+                XDG_RUNTIME_DIR="$runtime_dir" \
+                su -c "hyprctl dispatch dpms on" "$user" 2>/dev/null || true
+            fi
+        fi
+        ;;
+esac
+```
+
+### Dock Ethernet and network metric
+
+The dock's built-in GbE appears as `eth0`. NetworkManager creates a "Wired connection 1"
+profile automatically. One gotcha: NM applies a 20000-base offset to DHCP ethernet route
+metrics (so `route-metric=100` becomes kernel metric 20100), while the iwd-backed WiFi
+uses its metric directly. To make wired preferred over WiFi:
+
+```bash
+# Wired: route-metric=100 → kernel metric 20100 (NM adds 20000 for ethernet DHCP)
+sudo nmcli connection modify "Wired connection 1" ipv4.route-metric 100 ipv6.route-metric 100
+
+# WiFi: must be above 20100 to be the fallback
+sudo nmcli connection modify "Wi-Fi" ipv4.route-metric 25000 ipv6.route-metric 25000
+
+# Apply
+sudo nmcli connection up "Wired connection 1"
+sudo nmcli connection up "Wi-Fi"
+```
+
+Verify: `ip route show default` — eth0 entry should have a lower metric than wlan0.
+
+---
+
 ## Firmware Updates (fwupd)
 
 fwupd covers the vast majority of firmware updates on both machines without needing Windows or Lenovo Vantage. LVFS has good ThinkPad/Threadripper coverage.
@@ -643,6 +742,7 @@ sudo fwupdmgr update
 
 **What still needs Windows (rare):**
 - Some UEFI capsule updates that stage correctly but don't apply on reboot (try Linux first; fall back to Vantage only if version doesn't change after reboot)
+- **Thunderbolt dock NVM firmware** — fwupdmgr sees the dock but has no update path for it. NVM updates for the ThinkPad Thunderbolt 3 Dock (40AC/40ANY) require Lenovo Vantage or Lenovo's standalone TBT firmware tool on Windows. Check Lenovo's support page for the dock model to see if an update is available. Current NVM on the dock is `56.0`.
 
 The fwupd service runs in the background and caches LVFS metadata. Check periodically with `fwupdmgr get-updates`.
 
