@@ -420,15 +420,17 @@ The `dpi` subcommand becomes a `scale` subcommand, or accepts a DPI and converts
 - Rofi menus (`i3-screen-rofi`) — just update the commands it calls
 - Safe-default logic (refuse disconnect if lid closed)
 
-### Plan
-- [ ] Add new `hyprland` branch or gate in `i3-screen-manager` on `WAYLAND_DISPLAY` being set *(needs external monitor)*
-- [ ] Rewrite `detect_external()` using `hyprctl monitors -j | jq`
-- [ ] Rewrite `extend_right/left/above/below()` using `hyprctl keyword monitor`
-- [ ] Rewrite `mirror()` using Hyprland mirror syntax
-- [ ] Rewrite `clamshell()` — disable eDP-1, move workspaces to external
-- [ ] Rewrite `disconnect()` — enable eDP-1, disable external, move workspaces back
-- [ ] Rewrite `dpi()` → `scale()` using `hyprctl keyword monitor`
-- [ ] Update `i3-screen-rofi` to call new subcommand names
+### Status: Complete ✓
+
+All commands rewritten and confirmed working with external monitor + clamshell + dock.
+Key implementation notes:
+
+- `find_external()` uses `wlr-randr` not `hyprctl monitors -j` — hyprctl drops disabled outputs; wlr-randr sees all physically connected outputs regardless of enable state
+- Mode uses `preferred` keyword not a specific mode string — wlr-randr reports decimal Hz values (e.g. `59.951000`) that hyprctl rejects
+- `refresh_desktop()` restarts swaybg (reads cmdline from `/proc/PID/cmdline`) and sends SIGUSR2 to waybar — neither auto-covers repositioned outputs
+- `disconnect` uses `wlr-randr --output $ext --off` in addition to `hyprctl keyword monitor $ext,disable` — hyprctl stops compositing but leaves the physical signal active
+
+**Overlap warning gotcha:** Hyprland emits *"Monitor X overlaps with other monitor(s)"* whenever two active monitors briefly share the same position during a transition. Both `clamshell` and `disconnect` had this — fixed by sequencing transitions so only one monitor is ever active at a given position at a time. See below.
 
 ---
 
@@ -516,6 +518,7 @@ pkill xdg-desktop-portal; sleep 1; /usr/lib/xdg-desktop-portal-hyprland &
 | udev `ACTION=="bind"` rule doesn't apply at boot on Artix/OpenRC | NVIDIA modules load from initramfs; bind fires before system udev rules load. Use `ACTION=="add"` instead — `power/control` is a PCI subsystem attribute available at device discovery, before the driver binds. |
 | Hyprland idles hotter than i3/X11 (CPU stuck in C2/C3, won't reach C8+) | Two causes: (1) `vfr = true` missing from `misc {}` — without it Hyprland redraws at full refresh rate (~60 wakeups/sec) preventing deep CPU C-states; (2) TLP `RUNTIME_PM_ON_AC=on` — despite the name, `on` means "keep devices always on" (disables runtime PM). Set it to `auto` to enable idle power-down for PCIe devices (GPU, NVMe, wifi). After fixing both: C8/C10 states become active. Also enable `SOUND_POWER_SAVE_ON_AC=1` (audio controller idles when silent) and `NMI_WATCHDOG=0` (eliminates a periodic interrupt). Verify C-states: `grep -r . /sys/devices/system/cpu/cpu0/cpuidle/state*/usage` — C10 should accumulate hits at idle. Note: a small residual temperature delta vs i3/X11 (~5°C) is expected and unavoidable — wlroots runs a full compositor pipeline even with animations disabled, whereas X11+picom can idle more aggressively. This is not a configuration problem. |
 | All external monitor ports wired through NVIDIA | Can't drop NVIDIA from `AQ_DRM_DEVICES` without losing external monitor support. Keep both GPUs listed (Intel first for compositor), rely on RTD3 to power NVIDIA down when idle. NVIDIA wakes automatically when a monitor is plugged in. |
+| Hyprland warns "Monitor X overlaps with other monitor(s)" during clamshell/disconnect | Two monitors briefly share position `0x0` during the transition — e.g. enabling eDP-1 at `0x0` while external is also at `0x0` (clamshell). Fix for `clamshell`: disable eDP-1 *first* (external stays active, no zero-display gap), then reposition external to `0x0`. Fix for `disconnect`: activate eDP-1 with `auto` positioning (Hyprland places it adjacent to external), disable external, then reposition eDP-1 to `0x0`. General rule: ensure only one monitor occupies any given position at a time. |
 
 ---
 
