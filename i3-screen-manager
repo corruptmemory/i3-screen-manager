@@ -208,10 +208,12 @@ cmd_clamshell() {
     move_workspaces_to "$ext"
     sleep 0.3
 
-    # External at origin, internal off
-    hyprctl keyword monitor "$ext,preferred,0x0,$EXTERNAL_SCALE"
-    sleep 0.3
+    # Disable internal first (ext is still active — no zero-display moment),
+    # then reposition external to origin. Doing it in the other order causes
+    # a brief overlap when both monitors occupy 0x0 simultaneously.
     hyprctl keyword monitor "$INTERNAL,disable"
+    sleep 0.2
+    hyprctl keyword monitor "$ext,preferred,0x0,$EXTERNAL_SCALE"
 
     # Prevent suspend on lid close
     start_inhibitor
