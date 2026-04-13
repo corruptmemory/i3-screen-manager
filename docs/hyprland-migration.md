@@ -617,23 +617,15 @@ Alternatively, set `xwayland=false` to force full Wayland mode (skips XWayland e
 
 ---
 
-## Thunderbolt Dock (ThinkPad Thunderbolt 3 Dock)
+## USB-C Hub (External Display + Ethernet)
 
-Setup for a rock-solid docked experience when using the ThinkPad Thunderbolt 3 Dock (Gen 3)
-on the X1 Extreme Gen 5 (TBT4/USB4 host). The dock runs at TBT3 speeds (20 Gb/s each
-direction) — correct and sufficient for a single 2560x1440@60Hz display + USB + GbE + power.
+The laptop runs in clamshell mode docked to a USB-C hub. A single USB-C cable provides
+DisplayPort (external monitor), GbE (RTL8153 USB3 Ethernet), USB peripherals, and power.
 
-### Kernel / security mode
-
-Check with:
-```bash
-cat /sys/bus/thunderbolt/devices/domain0/security   # want: none
-cat /sys/bus/thunderbolt/devices/0-1/authorized     # want: 1
-```
-
-`security=none` is set in BIOS and means all TBT devices auto-authorize without user
-confirmation. This is the recommended setting for a single-user personal machine —
-it eliminates authorization races on resume.
+> **Note on the ThinkPad Thunderbolt 3 Dock:** A TBT3 dock was tried first. It proved
+> remarkably unstable — repeated disconnects and re-enumeration loops — and was replaced
+> with the USB-C hub. The bolt/boltd tooling installed during that experiment is still
+> present and harmless; remove with `sudo pacman -R bolt` if desired.
 
 ### BIOS: Thunderbolt BIOS Assist Mode — not present on Gen 5
 
@@ -646,42 +638,35 @@ unconditionally. Confirmed via EFI variables (only `TbtSetupVolatileData` presen
 assist-mode flag) and dmesg (native driver discovering devices directly, no ICM messages,
 `iommu_dma_protection=1`).
 
-### bolt — Thunderbolt device manager
+### USB enumeration gotcha — SuperSpeed path required
 
-`bolt` is D-Bus activated (no init script needed). It stores device authorization policy
-and provides monitoring.
+The hub's Ethernet chip (RTL8153) lives on the USB3 SuperSpeed path. If the hub only
+negotiates USB 2.0 (cable without SS pins, wrong port, or enumeration glitch), the NIC
+never appears in `lsusb` and `eth0` is absent. Signs:
 
-```bash
-yay -S bolt           # install once
+- `lsusb` shows two `2109:2817 VIA Labs USB2.0 Hub` entries but no `0bda:8153 RTL8153`
+- `ip link show` has no eth0
+- `lsusb -v -d 2109:2817 | grep bcdUSB` shows `2.10` instead of `3.00`
 
-boltctl list          # show connected/stored TBT devices
-boltctl monitor       # watch connect/disconnect events in real time
-```
+Fix: use a cable rated USB 3.1 Gen 1 or higher (not a charge-only cable), plug directly
+into the laptop's USB-C port, and reboot if the SS path didn't negotiate on first plug.
 
-The dock is stored with `policy: iommu` — bolt will use IOMMU DMA protection on
-re-authorization. No manual `boltctl enroll` needed; the dock was auto-enrolled when
-`boltctl list` first ran while it was connected.
+When working correctly, `lsusb` shows the USB3 hub on Bus 004 with `0bda:8153` alongside
+it, and `eth0` appears in `ip link show`.
 
 ### elogind resume hook
 
-After S3 suspend + resume, the TBT link re-establishes but the dock display (routed
-through NVIDIA) can re-enumerate after Hyprland has already run its DPMS wake logic,
-leaving the screen dark. The hook below handles it:
+After S3 suspend + resume, the hub's DisplayPort output can re-enumerate after Hyprland
+has already run its DPMS wake logic, leaving the screen dark. The hook below nudges it:
 
-`/etc/elogind/sleep.d/50-thunderbolt-dock` (chmod +x):
+`/etc/elogind/sleep.d/50-display-resume` (chmod +x):
 
 ```bash
 #!/bin/bash
 case "$1" in
     post)
-        sleep 2   # wait for TBT link
+        sleep 1   # wait for USB-C hub to re-enumerate
 
-        # Re-authorize any TBT peripheral (idempotent at security=none)
-        for dev in /sys/bus/thunderbolt/devices/[0-9]-[0-9]; do
-            [[ -f "$dev/authorized" ]] && echo 1 > "$dev/authorized" 2>/dev/null || true
-        done
-
-        # Nudge Hyprland DPMS for the active user session
         user=$(loginctl list-sessions --no-legend 2>/dev/null | awk 'NR==1{print $3}')
         if [[ -n "$user" ]]; then
             uid=$(id -u "$user")
@@ -697,12 +682,12 @@ case "$1" in
 esac
 ```
 
-### Dock Ethernet and network metric
+### Hub Ethernet and network metric
 
-The dock's built-in GbE appears as `eth0`. NetworkManager creates a "Wired connection 1"
-profile automatically. One gotcha: NM applies a 20000-base offset to DHCP ethernet route
-metrics (so `route-metric=100` becomes kernel metric 20100), while the iwd-backed WiFi
-uses its metric directly. To make wired preferred over WiFi:
+The hub's GbE appears as `eth0` (RTL8153 via r8152 driver). NetworkManager creates a
+"Wired connection 1" profile automatically. One gotcha: NM applies a 20000-base offset
+to DHCP ethernet route metrics (so `route-metric=100` becomes kernel metric 20100), while
+iwd-backed WiFi uses its metric directly. To make wired preferred over WiFi:
 
 ```bash
 # Wired: route-metric=100 → kernel metric 20100 (NM adds 20000 for ethernet DHCP)
@@ -749,7 +734,7 @@ sudo fwupdmgr update
 
 **What still needs Windows (rare):**
 - Some UEFI capsule updates that stage correctly but don't apply on reboot (try Linux first; fall back to Vantage only if version doesn't change after reboot)
-- **Thunderbolt dock NVM firmware** — fwupdmgr sees the dock but has no update path for it. NVM updates for the ThinkPad Thunderbolt 3 Dock (40AC/40ANY) require Lenovo Vantage or Lenovo's standalone TBT firmware tool on Windows. Check Lenovo's support page for the dock model to see if an update is available. Current NVM on the dock is `56.0`.
+- **Thunderbolt dock NVM firmware** — if using the ThinkPad Thunderbolt 3 Dock (40AC/40ANY), fwupdmgr sees it but has no update path. NVM updates require Lenovo Vantage or the standalone TBT firmware tool on Windows. (Current setup uses a USB-C hub instead; this is moot.)
 
 The fwupd service runs in the background and caches LVFS metadata. Check periodically with `fwupdmgr get-updates`.
 
