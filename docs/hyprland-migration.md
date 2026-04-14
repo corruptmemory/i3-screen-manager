@@ -619,13 +619,57 @@ Alternatively, set `xwayland=false` to force full Wayland mode (skips XWayland e
 
 ## USB-C Hub (External Display + Ethernet)
 
-The laptop runs in clamshell mode docked to a USB-C hub. A single USB-C cable provides
-DisplayPort (external monitor), GbE (RTL8153 USB3 Ethernet), USB peripherals, and power.
+The laptop runs in clamshell mode docked to a **Brydge Stone Core B2206** USB-C hub.
+A single USB-C cable provides DisplayPort (external monitor), GbE (RTL8153 USB3
+Ethernet), USB peripherals, and power.
 
 > **Note on the ThinkPad Thunderbolt 3 Dock:** A TBT3 dock was tried first. It proved
 > remarkably unstable — repeated disconnects and re-enumeration loops — and was replaced
 > with the USB-C hub. The bolt/boltd tooling installed during that experiment is still
 > present and harmless; remove with `sudo pacman -R bolt` if desired.
+
+### Hub chipset breakdown
+
+The Brydge Stone Core uses a multi-chip design:
+
+| Path | Chips | Quality |
+|------|-------|---------|
+| USB3 SuperSpeed (Bus 004) | VIA Labs VL817 ×2 | Good — Ethernet, card reader |
+| USB2 main path (Bus 001) | VIA Labs VL817 ×2, TI TUSB2036 | Good |
+| USB2 port expansion (Bus 001) | **Terminus Technology 1a40:0101** | Problematic |
+
+The Terminus chip handles USB2 port expansion (keyboards, mice, USB audio). It can
+enter an unrecoverable suspended state, causing `lsusb` to hang and dropping all
+downstream devices (speakers, HID) until power-cycled.
+
+### Terminus autosuspend fix
+
+Prevent the Terminus chip from suspending by forcing it always-on via udev:
+
+`/etc/udev/rules.d/50-usb-autosuspend.rules`:
+```
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1a40", ATTR{idProduct}=="0101", ATTR{power/control}="on"
+```
+
+This rule is already applied. Verify after replug:
+```bash
+cat /sys/bus/usb/devices/1-1.4.3/power/control   # want: on
+```
+(The sysfs path `1-1.4.3` is stable as long as the hub is plugged into the same port.)
+
+If `lsusb` still hangs occasionally, a power-cycle of the hub clears it. `lsusb -t`
+(tree mode) never hangs and is a safe substitute for the flat list.
+
+### Upgrade path — TBT4 dock
+
+The Brydge's Terminus chip is a known reliability risk for USB audio specifically.
+If the dock needs replacing, the right upgrade is a **native TBT4 dock** — not TBT3.
+
+The previous bad experience was with a ThinkPad Thunderbolt 3 Dock (TBT3) on a TBT4
+host. TBT3 docks on TBT4 hosts have known firmware negotiation issues. A TBT4 dock is
+architecturally different: USB4 under the hood, better kernel support, no ICM/auth
+races. The **CalDigit TS4** (~$250) is the standard Linux recommendation — all VIA Labs
+chips, no Terminus, solid ThinkPad X1 Extreme track record.
 
 ### BIOS: Thunderbolt BIOS Assist Mode — not present on Gen 5
 
