@@ -47,6 +47,13 @@ pipx install rofi-rbw
 # Then: rbw register && rbw sync
 ```
 
+**Keep vault unlocked for the whole session:**
+```bash
+rbw config set lock_timeout 2147483647
+```
+`lock_timeout = 0` is rejected by rbw (must be > 0). Max int32 (~68 years) is the
+effective "never" — the vault auto-locks only when the rbw agent exits at logout.
+
 ### Fonts
 
 ```bash

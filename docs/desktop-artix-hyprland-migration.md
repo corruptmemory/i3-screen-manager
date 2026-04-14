@@ -212,6 +212,9 @@ yay -S rbw
 pipx install rofi-rbw
 # rbw register && rbw sync
 
+# Keep vault unlocked for the whole session (0 is rejected; max int32 = effective "never")
+rbw config set lock_timeout 2147483647
+
 # Solaar (mouse DPI)
 sudo pacman -S solaar
 
