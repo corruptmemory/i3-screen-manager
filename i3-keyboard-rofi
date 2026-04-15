@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+#
+# i3-keyboard-rofi — toggle keyboard remapping for laptop vs external keyboard
+#
+
+set -euo pipefail
+
+LAPTOP_OPTS="ctrl:nocaps,shift:both_capslock"
+
+current_mode() {
+    local raw opts isset
+    raw=$(hyprctl getoption input:kb_options)
+    opts=$(echo "$raw" | grep "^str:" | awk '{print $2}')
+    isset=$(echo "$raw" | grep "^set:" | awk '{print $2}')
+    # set: false = no keyword override, config value active (ctrl:nocaps = laptop)
+    # set: true  = keyword override active; check what it's set to
+    if [[ "$isset" == "false" ]] || echo "$opts" | grep -q "ctrl:nocaps"; then
+        echo "laptop"
+    else
+        echo "external"
+    fi
+}
+
+set_laptop() {
+    hyprctl keyword input:kb_options "$LAPTOP_OPTS"
+}
+
+set_external() {
+    hyprctl keyword input:kb_options ""
+}
+
+mode=$(current_mode)
+
+if [[ "$mode" == "laptop" ]]; then
+    current="Laptop (Caps→Ctrl)"
+    other="External (Default)"
+else
+    current="External (Default)"
+    other="Laptop (Caps→Ctrl)"
+fi
+
+choice=$(printf "%s\n%s" "● $current" "  $other" \
+    | rofi -dmenu -i -p "Keyboard" -theme-str 'window {width: 300px;}')
+
+case "$choice" in
+    *"Laptop"*)  set_laptop ;;
+    *"External"*) set_external ;;
+esac

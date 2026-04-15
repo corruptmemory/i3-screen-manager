@@ -1,0 +1,61 @@
+#!/bin/sh
+# Hyprland session launcher — Artix/OpenRC, Intel Iris Xe + NVIDIA RTX 3050 Ti Mobile
+# Symlink: ~/.config/hypr/hyprland.conf -> ~/projects/dotfiles/.config/hypr/hyprland-laptop.conf
+
+# Locale — /etc/locale.conf isn't loaded automatically on OpenRC (no pam_systemd)
+export LANG=en_US.UTF-8
+export LC_COLLATE=C
+
+# Session type
+export XDG_CURRENT_DESKTOP=Hyprland
+export XDG_SESSION_TYPE=wayland
+export XDG_SESSION_DESKTOP=Hyprland
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
+
+# D-Bus session bus — Artix/OpenRC user services put the socket here but don't
+# set the env var. Without this, libsecret (Brave, Azure Storage Explorer, etc.)
+# cannot find gnome-keyring and reports "no secret store".
+export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus"
+
+# Cursor
+export XCURSOR_SIZE=24
+export XCURSOR_THEME=Adwaita
+export HYPRCURSOR_SIZE=24
+
+# NVIDIA hybrid — Intel is the compositor GPU (listed first), NVIDIA is included
+# so external monitors (all ports are wired through NVIDIA on this machine) work.
+# NVIDIA power-down when idle is handled by:
+#   - NVreg_DynamicPowerManagement=0x02 in /etc/modprobe.d/nvidia.conf
+#   - udev rule /etc/udev/rules.d/80-nvidia-pm.rules setting power/control=auto
+#     on ALL NVIDIA PCI functions (GPU + audio); any function held "on" prevents D3
+# With no external monitor and no app using NVIDIA, it should reach D3/suspended.
+INTEL_CARD=$(readlink -f /dev/dri/by-path/pci-0000:00:02.0-card)
+NVIDIA_CARD=$(readlink -f /dev/dri/by-path/pci-0000:01:00.0-card)
+export AQ_DRM_DEVICES="${INTEL_CARD}:${NVIDIA_CARD}"
+
+export NVD_BACKEND=direct                 # VA-API hardware video via NVIDIA path
+export LIBVA_DRIVER_NAME=iHD             # Use Intel iHD for VA-API on hybrid (not nvidia)
+export AQ_FORCE_LINEAR_BLIT=0            # Fixes external monitor perf on hybrid
+# Note: GBM_BACKEND=nvidia-drm and __GLX_VENDOR_LIBRARY_NAME=nvidia deliberately
+# omitted — those force NVIDIA for all rendering and break Firefox/screensharing
+
+# XCompose
+export XCOMPOSEFILE=~/.XCompose
+
+# gnome-keyring: secrets and PKCS#11 only. The "ssh" component was deprecated
+# upstream and silently dropped — the daemon still accepts `--components=...,ssh`
+# for backward compatibility but no longer exports SSH_AUTH_SOCK, silently
+# leaving SSH agent forwarding broken. Ask only for the components that work.
+eval $(gnome-keyring-daemon --start --components=secrets,pkcs11)
+export GNOME_KEYRING_CONTROL
+
+# ssh-agent: dedicated agent at a predictable socket path. Idempotent —
+# reuses a live agent on the expected socket, cleans up stale sockets before
+# starting a fresh agent. Keys are added manually via `ssh-add` after login.
+export SSH_AUTH_SOCK="${XDG_RUNTIME_DIR}/ssh-agent.sock"
+if ! SSH_AUTH_SOCK="$SSH_AUTH_SOCK" ssh-add -l >/dev/null 2>&1; then
+    rm -f "$SSH_AUTH_SOCK"
+    ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null
+fi
+
+exec /usr/bin/start-hyprland
