@@ -129,7 +129,7 @@ sudo pacman -S waybar
 
 ## Phase 4: Hyprland Startup (replaces startx)
 
-**Already done.** `~/.local/bin/start-hyprland` is written and executable. Fish auto-start is in `~/.config/fish/config.fish`. Both committed.
+**Already done.** `~/.local/bin/start-hyprland` is a symlink into this repo (`i3-screen-manager/start-hyprland`). Fish auto-start is in `~/.config/fish/config.fish`.
 
 DRI paths confirmed:
 - Intel: `/dev/dri/by-path/pci-0000:00:02.0-card` ✓
@@ -432,6 +432,14 @@ Key implementation notes:
 
 **Overlap warning gotcha:** Hyprland emits *"Monitor X overlaps with other monitor(s)"* whenever two active monitors briefly share the same position during a transition. Both `clamshell` and `disconnect` had this — fixed by sequencing transitions so only one monitor is ever active at a given position at a time. See below.
 
+**`moveworkspacetomonitor` silently fails on disabled monitors:** In `clamshell`, the external monitor may start disabled. Calling `moveworkspacetomonitor` targeting a disabled output produces no error but does nothing — workspaces stay stranded on eDP-1. Fix: enable the external at a safe `auto` position *before* moving workspaces, then disable eDP-1 afterward.
+
+**`hyprctl keyword monitor X,disable` is unreliable:** Hyprland has a known issue where `keyword monitor eDP-1,disable` can re-enable eDP-1 as a phantom monitor. Belt-and-suspenders fix: always follow with `wlr-randr --output eDP-1 --off` — this cuts the physical DRM output and makes the disable stick.
+
+**Config reloads clobber runtime keyword overrides:** Any Hyprland config reload (file save, `hyprctl reload`) re-applies the static `monitor =` lines from the config file, re-enabling monitors that were disabled via `hyprctl keyword`. Clamshell mode is entirely runtime-keyword-based, so a config edit wakes eDP-1 back up. Fix: `hyprland-clamshell-restore` (in this repo, symlinked to `~/.local/bin/`) checks whether the clamshell inhibitor PID is alive and, if so, re-disables eDP-1. Wired via `exec` (not `exec-once`) in hyprland.conf so it fires on every reload, not just startup.
+
+**Future path — kanshi:** The root tension is that `hyprctl keyword monitor` overrides are ephemeral and fight the compositor's config-file-based state. The Wayland-native approach is `kanshi` (wlr-output-management protocol client), which manages display profiles declaratively and is authoritative from Hyprland's perspective. Workspace assignment would still need `hyprctl dispatch moveworkspacetomonitor` calls, wired to kanshi profile `exec` hooks. Worth revisiting if the workaround pile keeps growing.
+
 ---
 
 ## Phase 8: Remaining Tool Replacements
@@ -519,6 +527,9 @@ pkill xdg-desktop-portal; sleep 1; /usr/lib/xdg-desktop-portal-hyprland &
 | Hyprland idles hotter than i3/X11 (CPU stuck in C2/C3, won't reach C8+) | Two causes: (1) `vfr = true` missing from `misc {}` — without it Hyprland redraws at full refresh rate (~60 wakeups/sec) preventing deep CPU C-states; (2) TLP `RUNTIME_PM_ON_AC=on` — despite the name, `on` means "keep devices always on" (disables runtime PM). Set it to `auto` to enable idle power-down for PCIe devices (GPU, NVMe, wifi). After fixing both: C8/C10 states become active. Also enable `SOUND_POWER_SAVE_ON_AC=1` (audio controller idles when silent) and `NMI_WATCHDOG=0` (eliminates a periodic interrupt). Verify C-states: `grep -r . /sys/devices/system/cpu/cpu0/cpuidle/state*/usage` — C10 should accumulate hits at idle. Note: a small residual temperature delta vs i3/X11 (~5°C) is expected and unavoidable — wlroots runs a full compositor pipeline even with animations disabled, whereas X11+picom can idle more aggressively. This is not a configuration problem. **Laptop TLP config verified correct** (`RUNTIME_PM_ON_AC=auto`, `SOUND_POWER_SAVE_ON_AC=1`, `NMI_WATCHDOG=0`, `PCIE_ASPM_ON_AC=powersupersave`). Residual clamshell heat is NVIDIA staying active to drive the external DisplayPort — unavoidable on X1 Extreme Gen 5 since all external ports are wired through NVIDIA. |
 | All external monitor ports wired through NVIDIA | Can't drop NVIDIA from `AQ_DRM_DEVICES` without losing external monitor support. Keep both GPUs listed (Intel first for compositor), rely on RTD3 to power NVIDIA down when idle. NVIDIA wakes automatically when a monitor is plugged in. |
 | Hyprland warns "Monitor X overlaps with other monitor(s)" during clamshell/disconnect | Two monitors briefly share position `0x0` during the transition — e.g. enabling eDP-1 at `0x0` while external is also at `0x0` (clamshell). Fix for `clamshell`: disable eDP-1 *first* (external stays active, no zero-display gap), then reposition external to `0x0`. Fix for `disconnect`: activate eDP-1 with `auto` positioning (Hyprland places it adjacent to external), disable external, then reposition eDP-1 to `0x0`. General rule: ensure only one monitor occupies any given position at a time. |
+| `moveworkspacetomonitor` silently does nothing targeting a disabled monitor | No error, workspaces just stay where they are. Always enable the target monitor first (even at a throwaway `auto` position), move workspaces, then disable the source. |
+| `hyprctl keyword monitor eDP-1,disable` re-enables eDP-1 as a phantom monitor | Known Hyprland reliability issue. Follow every `hyprctl keyword monitor X,disable` with `wlr-randr --output X --off` — this cuts the physical DRM output and makes the disable stick. |
+| Editing hyprland.conf (or any config reload) wakes up clamshell-disabled eDP-1 | Config reload re-applies static `monitor =` lines, overriding runtime keyword state. Fix: `exec = hyprland-clamshell-restore` in hyprland.conf. The script checks the clamshell inhibitor PID and re-disables eDP-1 if clamshell is still active. Uses `exec` (not `exec-once`) so it fires on every reload. |
 
 ---
 
@@ -822,6 +833,35 @@ sudo pacman -R xcb-util-xrm libconfig yajl libev
 **PDF viewer:** `xreader` (Linux Mint's evince fork — no gvfs dependency, no 25s dialog hangs)
 
 **Image viewer:** `imv` (Wayland-native)
+
+---
+
+## Scripts in Version Control
+
+All Hyprland/display helper scripts live in the `i3-screen-manager` repo and are symlinked into `~/.local/bin/`. Editing them in the repo is enough — no manual copy step.
+
+| Script | Purpose |
+|--------|---------|
+| `i3-screen-manager` | Display management CLI (extend/clamshell/mirror/disconnect/scale/status) |
+| `i3-screen-rofi` | Rofi menu frontend for i3-screen-manager |
+| `i3-mouse-setup` | Login-time mouse DPI restore via solaar |
+| `i3-mouse-rofi` | Rofi DPI picker (saves choice persistently) |
+| `i3-cmos-battery` | CMOS battery voltage monitor (Polybar/CLI) |
+| `start-hyprland` | Hyprland session launcher (env, gnome-keyring, ssh-agent, hybrid GPU) |
+| `laptop-monitor.sh` | Lid switch handler — checks clamshell inhibitor before re-enabling eDP-1 |
+| `i3-keyboard-rofi` | Rofi toggle: laptop keyboard (Caps→Ctrl) vs external (default) |
+| `screenshot.sh` | hyprshot + satty screenshot workflow |
+| `flameshot.sh` | flameshot wrapper with `QT_SCREEN_SCALE_FACTORS="1;1"` DPI fix |
+| `volumecontrol.sh` | pavucontrol with Intel Vulkan ICD (avoids NVIDIA VA-API conflict) |
+| `hyprland-clamshell-restore` | Re-applies clamshell eDP-1 disable after config reload (wired via `exec`) |
+
+**Keybindings** (hyprland-laptop.conf):
+
+| Keybind | Action |
+|---------|--------|
+| `Super + Backspace` | `i3-screen-rofi` — full display menu |
+| `Super + Alt + Backspace` | `i3-screen-manager scale` — rofi scale picker |
+| `Super + Ctrl + Backspace` | `i3-keyboard-rofi` — keyboard layout toggle |
 
 ---
 
