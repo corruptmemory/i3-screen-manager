@@ -204,16 +204,29 @@ cmd_clamshell() {
         exit 1
     fi
 
-    # Move all workspaces off the internal before disabling it
+    # Enable external at a safe non-overlapping position first.
+    # moveworkspacetomonitor silently fails on disabled monitors, so ext must
+    # be active before we try to move workspaces to it.
+    hyprctl keyword monitor "$ext,preferred,auto,$EXTERNAL_SCALE"
+    sleep 0.5
+
+    # Now move all workspaces off the internal — ext is live, move will succeed.
     move_workspaces_to "$ext"
     sleep 0.3
 
     # Disable internal first (ext is still active — no zero-display moment),
     # then reposition external to origin. Doing it in the other order causes
     # a brief overlap when both monitors occupy 0x0 simultaneously.
+    # Use both hyprctl and wlr-randr: hyprctl keyword monitor disable is known
+    # to be unreliable (can re-enable with a phantom monitor); wlr-randr --off
+    # cuts the physical DRM output and makes the disable stick.
     hyprctl keyword monitor "$INTERNAL,disable"
     sleep 0.2
+    wlr-randr --output "$INTERNAL" --off 2>/dev/null || true
     hyprctl keyword monitor "$ext,preferred,0x0,$EXTERNAL_SCALE"
+
+    sleep 0.3
+    refresh_desktop
 
     # Prevent suspend on lid close
     start_inhibitor
