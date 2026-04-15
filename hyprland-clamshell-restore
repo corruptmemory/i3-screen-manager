@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+#
+# hyprland-clamshell-restore — re-apply clamshell display state after config reload
+#
+# Hyprland re-enables all monitors when it reloads its config (any `hyprctl reload`
+# or config file save). If clamshell mode was active, eDP-1 comes back uninvited.
+# This script is called via `exec` (not exec-once) in hyprland.conf so it runs on
+# every reload and puts the lid screen back off if clamshell is still in effect.
+#
+# Wire up in hyprland.conf:
+#   exec = ~/.local/bin/hyprland-clamshell-restore
+
+PIDFILE="/tmp/i3-screen-manager-inhibit.pid"
+
+# Exit immediately if clamshell inhibitor isn't running
+[[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null || exit 0
+
+# Give Hyprland a moment to finish applying its config before we override it
+sleep 1
+
+hyprctl keyword monitor "eDP-1,disable"
+sleep 0.2
+wlr-randr --output eDP-1 --off 2>/dev/null || true
