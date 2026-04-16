@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+#
+# i3-tailscale-rofi — toggle Tailscale on/off and switch Open Brain MCP URL
+#
+# When Tailscale comes up, the Open Brain MCP URL in ~/.claude.json is switched
+# from the home-LAN hostname (only reachable on VLAN 30) to the Tailscale IP
+# (reachable from anywhere on the tailnet). Reversed when Tailscale goes down.
+#
+# Prerequisite on node-0: Open Brain must listen on 0.0.0.0:8000 (not
+# 127.0.0.1:8000) so the Tailscale IP can reach it. Edit config.toml:
+#   [mcp]
+#   listen = "0.0.0.0:8000"
+# then restart the open-brain service.
+
+set -euo pipefail
+
+# --- Config ---
+BRAIN_KEY=$(jq -r '.mcpServers["open-brain"].headers["x-brain-key"]' ~/.claude.json 2>/dev/null || echo "")
+BRAIN_URL_LAN="http://open-brain/"
+BRAIN_URL_TS="http://100.118.98.4:8000/"   # node-0 Tailscale IP
+
+# --- Helpers ---
+
+ts_status() {
+    # Returns "up" or "down"
+    if tailscale status &>/dev/null; then
+        echo "up"
+    else
+        echo "down"
+    fi
+}
+
+brain_url_current() {
+    jq -r '.mcpServers["open-brain"].url' ~/.claude.json 2>/dev/null || echo ""
+}
+
+set_brain_url() {
+    local url="$1"
+    local tmp
+    tmp=$(mktemp)
+    jq --arg url "$url" '.mcpServers["open-brain"].url = $url' ~/.claude.json > "$tmp" \
+        && mv "$tmp" ~/.claude.json
+}
+
+ts_up() {
+    sudo rc-service tailscaled start 2>/dev/null || true
+    tailscale up
+    set_brain_url "$BRAIN_URL_TS"
+    notify-send -t 3000 "Tailscale" "Connected — Open Brain → Tailscale IP" 2>/dev/null || true
+}
+
+ts_down() {
+    tailscale down
+    set_brain_url "$BRAIN_URL_LAN"
+    notify-send -t 3000 "Tailscale" "Disconnected — Open Brain → LAN" 2>/dev/null || true
+}
+
+# --- Menu ---
+
+status=$(ts_status)
+brain_url=$(brain_url_current)
+
+if [[ "$status" == "up" ]]; then
+    current_label="● Tailscale: On"
+    toggle_label="  Turn Off"
+else
+    current_label="● Tailscale: Off"
+    toggle_label="  Turn On"
+fi
+
+brain_label="  Open Brain: $(basename "$brain_url" | sed 's|/||')"
+
+choice=$(printf "%s\n%s\n%s" \
+    "$current_label" \
+    "$toggle_label" \
+    "$brain_label" \
+    | rofi -dmenu -i -p "Network" -theme-str 'window {width: 320px;}') || exit 0
+
+case "$choice" in
+    *"Turn On"*)   ts_up ;;
+    *"Turn Off"*)  ts_down ;;
+    *"Open Brain"*)
+        # Manual URL toggle — useful if status drifted out of sync
+        if [[ "$brain_url" == "$BRAIN_URL_LAN" ]]; then
+            set_brain_url "$BRAIN_URL_TS"
+            notify-send -t 2000 "Open Brain" "→ Tailscale IP" 2>/dev/null || true
+        else
+            set_brain_url "$BRAIN_URL_LAN"
+            notify-send -t 2000 "Open Brain" "→ LAN" 2>/dev/null || true
+        fi
+        ;;
+esac
