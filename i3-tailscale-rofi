@@ -44,10 +44,43 @@ set_brain_url() {
         && mv "$tmp" ~/.claude.json
 }
 
+open_login_url() {
+    # Ask tailscale for a fresh auth URL and open it in the browser.
+    local output url
+    output=$(timeout 10 tailscale login 2>&1 || true)
+    url=$(echo "$output" | grep -oE 'https://login\.tailscale\.com/[^[:space:]]+' | head -1)
+    if [[ -n "$url" ]]; then
+        xdg-open "$url" &
+        notify-send -t 6000 "Tailscale" "Login required — browser opened" 2>/dev/null || true
+    else
+        notify-send -t 6000 "Tailscale" "Login failed — network may be blocking Tailscale control plane" 2>/dev/null || true
+    fi
+}
+
 ts_up() {
-    tailscale up --accept-dns=false --hostname=nomad-artix
-    set_brain_url "$BRAIN_URL_TS"
-    notify-send -t 3000 "Tailscale" "Connected — Open Brain → Tailscale IP" 2>/dev/null || true
+    local state output url
+
+    state=$(ts_backend_state)
+
+    if [[ "$state" == "NeedsLogin" ]]; then
+        open_login_url
+        return
+    fi
+
+    # Try to connect; tailscale up can also emit a login URL if auth expired mid-session
+    output=$(timeout 10 tailscale up --accept-dns=false --hostname=nomad-artix 2>&1) && {
+        set_brain_url "$BRAIN_URL_TS"
+        notify-send -t 3000 "Tailscale" "Connected — Open Brain → Tailscale IP" 2>/dev/null || true
+        return
+    }
+
+    url=$(echo "$output" | grep -oE 'https://login\.tailscale\.com/[^[:space:]]+' | head -1)
+    if [[ -n "$url" ]]; then
+        xdg-open "$url" &
+        notify-send -t 6000 "Tailscale" "Login required — browser opened" 2>/dev/null || true
+    else
+        notify-send -t 5000 "Tailscale" "Error: $(echo "$output" | head -2 | tr '\n' ' ')" 2>/dev/null || true
+    fi
 }
 
 ts_down() {
