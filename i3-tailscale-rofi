@@ -21,13 +21,15 @@ BRAIN_URL_TS="http://100.118.98.4:8000/"   # node-0 Tailscale IP
 
 # --- Helpers ---
 
-ts_status() {
-    # Returns "up" or "down"
-    if tailscale status &>/dev/null; then
-        echo "up"
-    else
-        echo "down"
-    fi
+ts_backend_state() {
+    # Returns the BackendState string from tailscale status --json:
+    #   Running     → connected to tailnet
+    #   Stopped     → tailscale down (daemon up, not connected)
+    #   NeedsLogin  → not authenticated
+    #   NoState     → daemon just started, never connected
+    tailscale status --json 2>/dev/null \
+        | python3 -c "import sys,json; print(json.load(sys.stdin).get('BackendState','NoState'))" \
+        2>/dev/null || echo "NoState"
 }
 
 brain_url_current() {
@@ -43,8 +45,7 @@ set_brain_url() {
 }
 
 ts_up() {
-    sudo rc-service tailscaled start 2>/dev/null || true
-    tailscale up
+    tailscale up --accept-dns=false
     set_brain_url "$BRAIN_URL_TS"
     notify-send -t 3000 "Tailscale" "Connected — Open Brain → Tailscale IP" 2>/dev/null || true
 }
@@ -57,16 +58,23 @@ ts_down() {
 
 # --- Menu ---
 
-status=$(ts_status)
+state=$(ts_backend_state)
 brain_url=$(brain_url_current)
 
-if [[ "$status" == "up" ]]; then
-    current_label="● Tailscale: On"
-    toggle_label="  Turn Off"
-else
-    current_label="● Tailscale: Off"
-    toggle_label="  Turn On"
-fi
+case "$state" in
+    Running)
+        current_label="● Tailscale: On"
+        toggle_label="  Turn Off"
+        ;;
+    NeedsLogin)
+        current_label="● Tailscale: Needs Login"
+        toggle_label="  Log In"
+        ;;
+    *)
+        current_label="● Tailscale: Off"
+        toggle_label="  Turn On"
+        ;;
+esac
 
 brain_label="  Open Brain: $(basename "$brain_url" | sed 's|/||')"
 
@@ -77,8 +85,8 @@ choice=$(printf "%s\n%s\n%s" \
     | rofi -dmenu -i -p "Network" -theme-str 'window {width: 320px;}') || exit 0
 
 case "$choice" in
-    *"Turn On"*)   ts_up ;;
-    *"Turn Off"*)  ts_down ;;
+    *"Turn On"*|*"Log In"*)  ts_up ;;
+    *"Turn Off"*)             ts_down ;;
     *"Open Brain"*)
         # Manual URL toggle — useful if status drifted out of sync
         if [[ "$brain_url" == "$BRAIN_URL_LAN" ]]; then
