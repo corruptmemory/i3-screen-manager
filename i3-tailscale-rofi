@@ -46,8 +46,10 @@ set_brain_url() {
 
 open_login_url() {
     # Quick reachability check before hanging on tailscale login.
-    if ! timeout 3 bash -c 'echo >/dev/tcp/controlplane.tailscale.com/443' 2>/dev/null; then
-        notify-send -t 8000 "Tailscale" "Control plane unreachable — use phone hotspot to re-authenticate, then switch back to this network" 2>/dev/null || true
+    # Use curl (TLS-verified) — a raw TCP check passes on networks that
+    # MITM HTTPS (hospital/corporate proxies) but present the wrong cert.
+    if ! timeout 5 curl -sf --head https://controlplane.tailscale.com/ >/dev/null 2>&1; then
+        notify-send -t 8000 "Tailscale" "Control plane unreachable (network may be intercepting HTTPS) — switch to phone hotspot, Tailscale will reconnect automatically" 2>/dev/null || true
         return
     fi
     # Ask tailscale for a fresh auth URL and open it in the browser.
