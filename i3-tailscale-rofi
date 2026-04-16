@@ -45,7 +45,7 @@ set_brain_url() {
 }
 
 ts_up() {
-    tailscale up --accept-dns=false
+    tailscale up --accept-dns=false --hostname=nomad-artix
     set_brain_url "$BRAIN_URL_TS"
     notify-send -t 3000 "Tailscale" "Connected — Open Brain → Tailscale IP" 2>/dev/null || true
 }
