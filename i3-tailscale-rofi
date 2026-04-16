@@ -45,6 +45,11 @@ set_brain_url() {
 }
 
 open_login_url() {
+    # Quick reachability check before hanging on tailscale login.
+    if ! timeout 3 bash -c 'echo >/dev/tcp/controlplane.tailscale.com/443' 2>/dev/null; then
+        notify-send -t 8000 "Tailscale" "Control plane unreachable — use phone hotspot to re-authenticate, then switch back to this network" 2>/dev/null || true
+        return
+    fi
     # Ask tailscale for a fresh auth URL and open it in the browser.
     local output url
     output=$(timeout 10 tailscale login 2>&1 || true)
