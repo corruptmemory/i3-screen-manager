@@ -483,9 +483,38 @@ cat > ~/.local/bin/start-hyprland << 'SCRIPT'
 
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 
-# Artix OpenRC does not export DBUS_SESSION_BUS_ADDRESS — apps (Brave, Azure
-# Storage Explorer, rbw) will report "no secret store" without this.
+# Locale — OpenRC does not source /etc/locale.conf automatically (no
+# pam_systemd). Without LANG, hunspell/flyspell look for a dictionary named
+# "default" and fail.
+export LANG=en_US.UTF-8
+export LC_COLLATE=C
+
+# Session identity — apps that check XDG_CURRENT_DESKTOP fall back to generic
+# behavior if these are unset (e.g. xdg-open picks wrong handlers).
+export XDG_CURRENT_DESKTOP=Hyprland
+export XDG_SESSION_TYPE=wayland
+export XDG_SESSION_DESKTOP=Hyprland
+
+# D-Bus session bus — Artix/OpenRC does NOT auto-launch a per-user session
+# bus (no pam_systemd triggering dbus.socket, and elogind creates the runtime
+# dir but no bus socket). Nothing creates /run/user/$UID/bus by default, so
+# we must launch dbus-daemon ourselves. Symptoms of forgetting this:
+#   waybar: "Could not connect: No such file or directory" (GDBus init fails)
+#   gnome-keyring: registers its Secret Service on a session bus that isn't
+#     there → seahorse shows no "Passwords" section, Brave/libsecret clients
+#     report "no secret store"
+# Setting DBUS_SESSION_BUS_ADDRESS without launching the daemon makes things
+# WORSE than leaving it unset (GLib's autolaunch fallback at least tries).
 export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+if [ ! -S "${XDG_RUNTIME_DIR}/bus" ]; then
+    dbus-daemon --session --address="${DBUS_SESSION_BUS_ADDRESS}" --fork --syslog-only
+    # --fork returns before the daemon has bind()+listen() completed. Wait for
+    # the socket to materialize before anything tries to connect to it.
+    for _ in $(seq 1 40); do
+        [ -S "${XDG_RUNTIME_DIR}/bus" ] && break
+        sleep 0.05
+    done
+fi
 
 # gnome-keyring: secrets and PKCS#11 only. The "ssh" component was deprecated
 # upstream and silently dropped — the daemon accepts `--components=...,ssh`
@@ -500,6 +529,9 @@ if ! SSH_AUTH_SOCK="$SSH_AUTH_SOCK" ssh-add -l >/dev/null 2>&1; then
     rm -f "$SSH_AUTH_SOCK"
     ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null
 fi
+
+# XCompose
+export XCOMPOSEFILE="$HOME/.XCompose"
 
 # Vulkan ICD — AMD
 export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json:/usr/share/vulkan/icd.d/radeon_icd.i686.json
@@ -521,6 +553,26 @@ chmod +x ~/.local/bin/start-hyprland
 `★ Insight ─────────────────────────────────────`
 Compare this to the laptop's start-hyprland: no `AQ_DRM_DEVICES`, no `readlink` DRI path resolution, no `__GLX_VENDOR_LIBRARY_NAME`, no `GBM_BACKEND`, no `NVD_BACKEND`. AMD GPU simplifies the launcher from ~20 lines of NVIDIA workarounds to a handful of straightforward exports.
 `─────────────────────────────────────────────────`
+
+### Fish function so `start-hyprland` finds our wrapper
+
+Default Artix PATH puts `/usr/bin` before `$HOME/.local/bin`, so typing
+`start-hyprland` resolves to `/usr/bin/start-hyprland` (the Hyprland package's
+own launcher) and **silently skips our env setup**. Symptoms: waybar fails
+with "Could not connect", keyring not visible in seahorse, etc.
+
+Reordering PATH is the wrong fix (fish config comment explicitly warns against
+`fish_add_path` because it reorders PATH entries). Instead, add a fish
+function — functions beat PATH resolution:
+
+```fish
+# ~/.config/fish/functions/start-hyprland.fish
+function start-hyprland --description "Launch Hyprland via the Artix/OpenRC wrapper"
+    exec $HOME/.local/bin/start-hyprland $argv
+end
+```
+
+Verify with `type -a start-hyprland` — the function must appear first.
 
 ### Fish auto-start
 
@@ -750,8 +802,9 @@ For reference — these were laptop issues that the desktop doesn't have:
 |---|---|
 | `dbus-update-activation-environment --systemd` → drop `--systemd` | Same fix |
 | `systemctl --user` calls fail on OpenRC | Same — use `exec-once` or OpenRC user services |
-| `DBUS_SESSION_BUS_ADDRESS` not set on OpenRC | Same — set in `start-hyprland` |
-| gnome-keyring: just setting `DBUS_SESSION_BUS_ADDRESS` is not enough | Must `eval $(gnome-keyring-daemon --start --components=secrets,pkcs11)` and export `GNOME_KEYRING_CONTROL`. Without this, Brave and Azure Storage Explorer report "no secret store" even when the bus address is correct. **NOTE:** Do NOT include `ssh` in the components list — the SSH component was deprecated upstream and silently no-ops, and the daemon no longer exports `SSH_AUTH_SOCK`. Start a separate `ssh-agent` at `${XDG_RUNTIME_DIR}/ssh-agent.sock` instead. |
+| No user D-Bus session bus on OpenRC | Setting `DBUS_SESSION_BUS_ADDRESS` is **not enough** — elogind creates `/run/user/$UID` but never launches a session bus there. Nothing else does either. You must `dbus-daemon --session --address="unix:path=${XDG_RUNTIME_DIR}/bus" --fork --syslog-only` from `start-hyprland` before anything else tries to use dbus (keyring, waybar, xdg portals). Symptom if missing: waybar dies with `Could not connect: No such file or directory` (GDBus init), gnome-keyring silently fails to register its Secret Service, seahorse shows no "Passwords" section. Note: `--fork` returns before `bind()+listen()` completes — add a short busy-wait on the socket path before continuing. |
+| gnome-keyring: dbus running + correct env still not enough | Must `eval $(gnome-keyring-daemon --start --components=secrets,pkcs11)` and export `GNOME_KEYRING_CONTROL`. Without the eval, `SSH_AUTH_SOCK` / `GNOME_KEYRING_CONTROL` are never imported into the session. **NOTE:** Do NOT include `ssh` in the components list — the SSH component was deprecated upstream and silently no-ops, and the daemon no longer exports `SSH_AUTH_SOCK`. Start a separate `ssh-agent` at `${XDG_RUNTIME_DIR}/ssh-agent.sock` instead. |
+| `$HOME/.local/bin/start-hyprland` shadowed by `/usr/bin/start-hyprland` | Default Artix PATH has `/usr/bin` first. Typing `start-hyprland` resolves to the Hyprland package's own launcher, bypassing our env-setup wrapper. Fix: add a fish function at `~/.config/fish/functions/start-hyprland.fish` that `exec`s `$HOME/.local/bin/start-hyprland` — fish functions beat PATH resolution without needing to reorder PATH. |
 | Portal startup needs sleep delays (no socket activation) | Same — `sleep 1 && portal-hyprland`, `sleep 2 && portal` |
 | `xdg-desktop-portal-gtk` needed for Screenshot portal Access interface | Same |
 | Flameshot needs `float + fullscreen + no_anim` window rules | Same. No `suppress_event = fullscreen` — that causes the returning window to fullscreen after flameshot closes. |
