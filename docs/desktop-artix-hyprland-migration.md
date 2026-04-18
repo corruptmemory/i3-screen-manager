@@ -305,12 +305,16 @@ sudo pacman -S network-manager-applet
 ### Symlink desktop config
 
 ```bash
-mkdir -p ~/.config/hypr ~/.config/waybar
+mkdir -p ~/.config/hypr ~/.config/waybar ~/.config/mako
 ln -sf ~/projects/dotfiles/.config/hypr/hyprland-desktop.conf ~/.config/hypr/hyprland.conf
 ln -sf ~/projects/dotfiles/.config/hypr/hyprlock.conf ~/.config/hypr/hyprlock.conf
 # Note: hyprpaper.conf is NOT symlinked — we use swaybg instead (hyprpaper stable is broken)
 ln -sf ~/projects/dotfiles/.config/waybar/config-desktop.jsonc ~/.config/waybar/config
+ln -sf ~/projects/dotfiles/.config/waybar/style-desktop.css ~/.config/waybar/style.css
+ln -sf ~/projects/dotfiles/.config/mako/config ~/.config/mako/config
 ```
+
+**Gotcha — don't assume all symlinks survived a backup restore.** The 2026-04 Arch→Artix restore brought the files in `~/projects/dotfiles/` back intact but did **not** recreate the `~/.config/*` symlinks pointing into them. Anything that "looks like default" after a restore (mako popups that never dismiss, waybar with system-default CSS, etc.) is almost always a missing symlink, not a missing file. Grep `ls -la ~/.config/` and cross-check against the dotfiles tree.
 
 ### Config changes needed for Artix/OpenRC
 
@@ -734,7 +738,28 @@ i3-cmos-battery               # should print voltage (desktop-specific)
 | Position | Modules |
 |---|---|
 | Left | `hyprland/workspaces`, `hyprland/window` |
-| Right | `idle_inhibitor`, `pulseaudio`, `network`, `cpu`, `memory`, `temperature`, `clock`, `tray` |
+| Center | `custom/clock` |
+| Right | `idle_inhibitor`, `pulseaudio`, `network`, `cpu`, `memory`, `temperature`, `tray` |
+
+### Clock format: {fmt}'s chrono grammar is strict POSIX
+
+The built-in `clock` module formats time via the bundled {fmt} library's chrono formatter, which follows the C++ `<chrono>` spec — a strict subset of POSIX `strftime`. It **does not** support glibc's padding-modifier flags (`%-I`, `%-d`), the space-padded hour (`%l`), or any width flag. Supplying any of them produces `[error] clock: chrono format error: invalid specifier in chrono-specs` and the module renders as empty (an invisible clock in a centered-module slot, which is doubly confusing because there's nothing visually marking the failure).
+
+For an unpadded 12-hour display (`8:34 PM` rather than `08:34:00 PM`), route through `date(1)` via a `custom/clock` module — `date` is GNU coreutils and honors the full glibc strftime extension set:
+
+```jsonc
+"modules-center": ["custom/clock"],
+
+"custom/clock": {
+  "exec": "date +'%-I:%M %p %F'",
+  "interval": 60,
+  "tooltip": false
+}
+```
+
+CSS: add `#custom-clock` alongside `#clock` in the shared module-styling rule in `style-desktop.css` so it picks up the same margin/padding/background as the built-in. Waybar maps custom modules named `custom/foo` to the CSS ID `#custom-foo` (dash, not slash).
+
+Trade-off: the built-in `clock` module offers a popup calendar (`tooltip-format` with `{calendar}`) that `custom/clock` can't replicate without a JSON-returning exec. Kept minimal here since the calendar tooltip wasn't in daily use.
 
 ### CMOS battery (future)
 
