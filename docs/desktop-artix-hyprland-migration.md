@@ -487,6 +487,7 @@ The laptop config accumulated a handful of app-specific rules that are equally u
 | `steam-settings` | Floats Steam's `Steam Settings` and `Friends List` windows, which tile awkwardly otherwise. |
 | `sublime-dialogs` | Floats Sublime Text's modal dialogs (`Select Folder`, `Open Folder`, `Open File`, `Save As`). Sublime 4 runs as a native Wayland client with class `sublime_text`, and Hyprland auto-groups all windows of the same class into a tab group by default — so without this rule, file-picker dialogs get absorbed into the main editor's tab bar instead of floating. |
 | `qalculate-gtk` | Added to the `float-apps` alternation. |
+| `pinentry` | Floats + centers credential/passphrase prompts. Matches `^(pinentry-.*)$` so it catches any pinentry variant (pinentry-gtk, pinentry-qt, pinentry-gnome3) without needing another rule edit if `rbw`'s pinentry choice ever changes. Triggered by `rofi-rbw`/`rbw unlock` and by `gpg`. |
 
 **Do NOT migrate from laptop:**
 - **Firefox rules** (`firefox-file-dialog`, `firefox-extension-popup`, `idle-inhibit-firefox`) — desktop uses Brave, which has equivalent rules already.
@@ -504,6 +505,36 @@ hyprctl dispatch centerwindow   # no address arg — operates on focused
 ```
 
 The resize is needed because `togglefloating` preserves tiled dimensions, so a previously-tiled window becomes a "floating near-fullscreen" window until explicitly resized.
+
+#### 13. rbw-agent stale environment → pinentry falls back to TTY
+
+Symptom: `rofi-rbw` (bound to `$mainMod+SHIFT+B`) picks an entry, prompts for the master password on the terminal/console instead of popping a GUI pinentry dialog. `rbw config show` correctly lists `"pinentry": "pinentry-gtk"` and running `pinentry-gtk` by hand pops a proper GTK window — so the binaries are fine.
+
+Root cause: `rbw-agent` daemonizes (reparents to PID 1) on first use and its environment is frozen for the lifetime of the process. Whichever process first invokes `rbw` after a fresh boot hands its env to the long-lived agent. If that first caller lacked `WAYLAND_DISPLAY` / `DISPLAY` (e.g. a shell inherited from before Hyprland exported its env, or an OpenRC-era autostart context), pinentry-gtk is launched without a display, falls back to its curses/TTY frontend, and stays that way for every subsequent unlock — even after Hyprland is fully up.
+
+Diagnosis:
+
+```bash
+pgrep -af rbw-agent                         # confirm it's running (and its uptime)
+cat /proc/<pid>/environ | tr '\0' '\n' \    # likely returns empty — rbw-agent sets
+  | grep -E 'WAYLAND_DISPLAY|DISPLAY'       # PR_SET_DUMPABLE=0 so env is not readable
+                                            # even by the owner. That alone isn't the bug;
+                                            # it just means you can't confirm from /proc.
+```
+
+Fix:
+
+```bash
+pkill rbw-agent                 # kill the stale daemon
+# Next rofi-rbw invocation (from the Hyprland keybind) spawns a fresh agent
+# inheriting a proper Wayland-aware environment, and pinentry-gtk opens a GUI.
+```
+
+Not needed in steady-state operation — `rofi-rbw` is launched by Hyprland's keybind so its child `rbw-agent` inherits Hyprland's env. The hazard is narrowly: (a) first boot after the migration, if something else invoked `rbw` earlier in your login sequence; (b) switching session types (X11 ↔ Wayland); (c) anyone scripting `rbw` from a pre-compositor context.
+
+Secondary symptom when testing with `setsid rbw unlock < /dev/null`: pinentry errors with `Inappropriate ioctl for device <Pinentry>`. That's an artifact of the test harness (detached TTY + stdin from /dev/null confuses pinentry's ttyname resolution) — it does not reproduce under normal `rofi-rbw` invocation.
+
+Companion windowrule: `pinentry` (see table above) — floats + centers the dialog so it doesn't land in a random tile slot.
 
 ### Create start-hyprland script
 
