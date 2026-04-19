@@ -477,6 +477,34 @@ $fileManager = thunar
 # morgen — keep or remove depending on whether you install it
 ```
 
+#### 12. Additional windowrules migrated from laptop
+
+The laptop config accumulated a handful of app-specific rules that are equally useful on the desktop. After restoring the base config, cherry-pick:
+
+| Rule | Purpose |
+|---|---|
+| `morgen` | Float and pin the Morgen calendar to `special:morgen`. (Don't just put it in `float-apps` — the workspace pin is the valuable part.) |
+| `steam-settings` | Floats Steam's `Steam Settings` and `Friends List` windows, which tile awkwardly otherwise. |
+| `sublime-dialogs` | Floats Sublime Text's modal dialogs (`Select Folder`, `Open Folder`, `Open File`, `Save As`). Sublime 4 runs as a native Wayland client with class `sublime_text`, and Hyprland auto-groups all windows of the same class into a tab group by default — so without this rule, file-picker dialogs get absorbed into the main editor's tab bar instead of floating. |
+| `qalculate-gtk` | Added to the `float-apps` alternation. |
+
+**Do NOT migrate from laptop:**
+- **Firefox rules** (`firefox-file-dialog`, `firefox-extension-popup`, `idle-inhibit-firefox`) — desktop uses Brave, which has equivalent rules already.
+- **`$msgApps` variable** — purely cosmetic; the laptop defines it but doesn't reference it in the rule body.
+- **`xdg-portal-size`** (forces 800×600 on `xdg-desktop-portal-gtk`) — desktop's existing `xdg-portal-dialog` rule centers without constraining size, which is a different UX preference. Leave unless you want the forced size.
+
+**Gotcha for any new `match:class = ^(sublime_text)$`-style rule**: changes take effect for *future* windows via `hyprctl reload`. Already-open windows keep their state. For a tab-grouped window that needs to become floating right now, the sequence is:
+
+```bash
+hyprctl dispatch moveoutofgroup address:0x<addr>
+hyprctl dispatch togglefloating address:0x<addr>
+hyprctl dispatch resizewindowpixel "exact 900 650,address:0x<addr>"
+hyprctl dispatch focuswindow address:0x<addr>
+hyprctl dispatch centerwindow   # no address arg — operates on focused
+```
+
+The resize is needed because `togglefloating` preserves tiled dimensions, so a previously-tiled window becomes a "floating near-fullscreen" window until explicitly resized.
+
 ### Create start-hyprland script
 
 ```bash
