@@ -215,8 +215,40 @@ pipx install rofi-rbw
 # Keep vault unlocked for the whole session (0 is rejected; max int32 = effective "never")
 rbw config set lock_timeout 2147483647
 
+# Use pinentry-qt, NOT the default pinentry-gtk. On Hyprland+Xwayland the
+# -gtk variant races on XGrabKeyboard (34+ retries observed under a busy
+# session) and the dialog often never gets mapped — you press Shift+Super+B
+# and nothing appears. pinentry-qt uses Wayland's shortcut-inhibit protocol
+# and doesn't need a keyboard grab, so no race. Requires kwindowsystem at
+# runtime — NOT declared as a pacman dep on the `pinentry` package, so a
+# bare install gives you a pinentry-qt that crashes on every invocation
+# with "libKF6WindowSystem.so.6: cannot open shared object file". See §13.
+sudo pacman -S kwindowsystem
+rbw config set pinentry pinentry-qt
+
 # Solaar (mouse DPI)
 sudo pacman -S solaar
+
+# NTP — split by machine mobility. Desktop stays put → openntpd is fine
+# (simpler, OpenBSD-derived). Laptop moves between networks and suspends →
+# chrony is the right answer (handles offline periods, resume events, and
+# large steps gracefully; `makestep 1.0 3` + `rtcsync` in the shipped
+# /etc/chrony.conf is already laptop-appropriate).
+#
+# On Artix the init script lives in a companion -openrc package — the
+# base `chrony` / `openntpd` package only ships the binary.
+#
+# Desktop:
+sudo pacman -S openntpd openntpd-openrc
+sudo rc-update add ntpd default
+sudo rc-service ntpd start
+#
+# Laptop equivalent:
+#   sudo pacman -S chrony chrony-openrc
+#   sudo rc-update add chrony default    # service name is `chrony`, not `chronyd`
+#   sudo rc-service chrony start
+#   chronyc tracking                     # verify; Stratum should drop from 0
+#   sudo chronyc makestep                # force an immediate step if offset > 1s
 
 # Power management — TLP handles CPU frequency scaling, PCIe PM, USB autosuspend
 # Not critical on desktop but reduces heat and noise under light load
@@ -534,7 +566,33 @@ Not needed in steady-state operation — `rofi-rbw` is launched by Hyprland's ke
 
 Secondary symptom when testing with `setsid rbw unlock < /dev/null`: pinentry errors with `Inappropriate ioctl for device <Pinentry>`. That's an artifact of the test harness (detached TTY + stdin from /dev/null confuses pinentry's ttyname resolution) — it does not reproduce under normal `rofi-rbw` invocation.
 
+**Follow-up: pinentry-gtk is unreliable under Hyprland even with a fresh agent.** The stale-env fix above gets the GUI path to *try* to open, but pinentry-gtk calls `XGrabKeyboard` (a security feature so keyloggers can't see the password) and on Xwayland-under-Hyprland that grab is racy. Under a busy session (Brave with many tabs, kitty, Slack, Sublime all open — i.e. a normal desktop) the grab fails repeatedly — agent.err logs "*it took 34 tries to grab the keyboard*" — and sometimes the window never gets mapped at all. On the laptop (lighter app set, fewer concurrent grabbers) it succeeds in 4–5 tries; on the desktop it frequently doesn't. The robust fix is to switch `rbw` to **pinentry-qt** (documented in Phase 2), which uses Wayland's `zwp_keyboard_shortcuts_inhibit` protocol instead of an exclusive X11 grab — no grab, no race. Requires `kwindowsystem` to be installed (not a declared dep of `pinentry`).
+
 Companion windowrule: `pinentry` (see table above) — floats + centers the dialog so it doesn't land in a random tile slot.
+
+#### 14. xdg-desktop-portal-hyprland: screen-share dialog parade
+
+Symptom: during a Zoom / Meet / Slack / Teams screen-share session, the "Do you really want to share your screen?" consent dialog fires 4–6+ times for a single call — on initial share, on switching windows, mid-call when the app re-requests the source, etc. This is not a Wayland-protocol requirement; it's an xdph default that doesn't trust stored grants.
+
+Fix: create `~/.config/hypr/xdph.conf` (checked into `~/projects/dotfiles/.config/hypr/xdph.conf` and symlinked in) with:
+
+```
+screencopy {
+    allow_token_by_default = 1
+}
+```
+
+With this set, when an app includes a `persist_mode` in its `ScreenCast` request, xdph will auto-approve re-requests using the stored token from `xdg-permission-store` instead of re-prompting. First-time grants still ask once per (app, source) pair. Apps that don't set `persist_mode` (app-side bug) will still re-prompt.
+
+To take effect, xdph must be restarted after the config file appears:
+
+```bash
+pkill -f xdg-desktop-portal-hyprland
+# re-launch so it reads the new config (requires Wayland/D-Bus env):
+hyprctl dispatch exec /usr/lib/xdg-desktop-portal-hyprland
+```
+
+Verified on the desktop with Zoom: "one ask and it worked." Same config deployed on the laptop via the shared dotfiles symlink. Other available knobs (all under `screencopy {}`): `max_fps` (default 120), `force_shm` (fallback if dmabuf transfers fail), `custom_picker_binary` (replace `hyprland-share-picker`). See `src/core/PortalManager.cpp` in `hyprwm/xdg-desktop-portal-hyprland` for the full list.
 
 ### Create start-hyprland script
 
