@@ -240,6 +240,9 @@ sudo pacman -S solaar
 #
 # Desktop:
 sudo pacman -S openntpd openntpd-openrc
+# Both of the next two commands are needed: rc-service start runs it for
+# the current session, rc-update add makes it stick across reboots. Skip
+# the rc-update and you get a silent clockless machine on next boot. See §15.
 sudo rc-update add ntpd default
 sudo rc-service ntpd start
 #
@@ -593,6 +596,39 @@ hyprctl dispatch exec /usr/lib/xdg-desktop-portal-hyprland
 ```
 
 Verified on the desktop with Zoom: "one ask and it worked." Same config deployed on the laptop via the shared dotfiles symlink. Other available knobs (all under `screencopy {}`): `max_fps` (default 120), `force_shm` (fallback if dmabuf transfers fail), `custom_picker_binary` (replace `hyprland-share-picker`). See `src/core/PortalManager.cpp` in `hyprwm/xdg-desktop-portal-hyprland` for the full list.
+
+#### 15. openntpd dormant after install — `rc-update add` is separate from `rc-service start`
+
+Symptom: system clock drifts noticeably (tens of seconds over a few days), `date -u` disagrees with Cloudflare's HTTP `Date` header by a growing margin. `pacman -Q openntpd` shows the package is installed, but `rc-service ntpd status` says `stopped` and `rc-update show | grep ntpd` is empty.
+
+Root cause: installing `openntpd` + `openntpd-openrc` does *not* enable the service. The `openrc-install.hook` scriptlet just prints a text reminder — it doesn't run `rc-update add` for you. If you run `rc-service ntpd start` *without* also running `rc-update add ntpd default`, ntpd runs for the current session and is cleanly stopped at the next shutdown (`/var/log/rc.log` shows "Stopping OpenNTPD") — then never starts again because there's no symlink in `/etc/runlevels/default/`. The failure is silent: boot logs show nothing about ntpd at all, and nothing on the machine complains about the missing daemon. Time-sensitive things (TLS chain validation, git commit timestamps, `tar` mtime comparisons, Kerberos if you had any) slowly start misbehaving in ways that don't point back at NTP.
+
+Diagnosis:
+
+```bash
+ls /etc/runlevels/default/ | grep ntpd    # should list ntpd; if empty → bug
+sudo grep -E 'Stopping|Starting' /var/log/rc.log | grep -i ntpd
+# A "Stopping OpenNTPD" without a matching start before it = next boot came up clockless.
+```
+
+Fix (the recipe from Phase 1 — run both, not just one):
+
+```bash
+sudo rc-update add ntpd default
+sudo rc-service ntpd start
+sudo ntpctl -s all    # verify: peers valid, constraint offset ≈ 0
+```
+
+**Sub-gotcha: openntpd `-s` only *steps* for offsets > ~180 seconds; smaller offsets are *slewed* at up to 500 ppm.** That means a 9-second drift takes ~5 hours to walk off — fine in steady state but awkward if you need the clock right *now* after discovering the bug. `/etc/conf.d/ntpd` ships with `NTPD_OPTS="-s"` (good — handles big cold-boot offsets), but for instant correction on a small drift, step manually with HTTP Date as the reference:
+
+```bash
+sudo rc-service ntpd stop
+T=$(curl -sI https://www.cloudflare.com | awk -F': ' 'tolower($1)=="date" { sub(/\r$/, "", $2); print $2 }')
+sudo date -u -s "$T"
+sudo rc-service ntpd start                # re-tracks from the new baseline
+```
+
+HTTP `Date` is 1-second-quantized with a few hundred ms of RTT, so you land within ~1 s; ntpd slews away the sub-second residual in a minute. Independently verify via `curl -sI https://www.google.com` — two unrelated infrastructures should agree to the second.
 
 ### Create start-hyprland script
 
