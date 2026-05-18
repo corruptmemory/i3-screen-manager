@@ -866,6 +866,32 @@ All Hyprland/display helper scripts live in the `i3-screen-manager` repo and are
 
 ---
 
+## Watch List: Hyprlang → Lua Config Migration
+
+**Last reviewed:** 2026-05-17 (Hyprland 0.55.1).
+
+Hyprland 0.55 introduced an alternative Lua-based configuration format alongside hyprlang (`hyprland.conf`). Upstream's stated plan is to support hyprlang for **1–2 releases starting from 0.55, then drop it entirely.** Source: [caelestia-dots #405](https://github.com/caelestia-dots/caelestia/issues/405) quoting upstream; release overview at [Linuxiac on 0.55](https://linuxiac.com/hyprland-0-55-brings-lua-configs-and-user-defined-layouts/). A migration tool (`hyprctl` subcommand that dumps loaded config as Lua) is planned but not shipped — see [Hyprland discussion #14463](https://github.com/hyprwm/Hyprland/discussions/14463). Some 0.55 config quirks are explicitly being deferred to the Lua path rather than fixed in hyprlang ([omarchy #5752](https://github.com/basecamp/omarchy/issues/5752)).
+
+**Current stance: don't migrate yet.** The only Lua-exclusive capability today is the **Layout API** (user-defined window layouts written in Lua); nothing in either machine's current config uses it. Everything else (monitors, binds, rules, animations, dwindle settings) maps 1:1 between the two formats. Migrating now means doing it twice — once by hand, again to match the `hyprctl`-generated style when the tool ships — and absorbing churn while the Lua API stabilises (cf. [omarchy #5879](https://github.com/basecamp/omarchy/issues/5879), where existing `hyprland.lua` configs broke between Lua API revisions).
+
+### Trigger conditions — migrate when ANY of these is true
+
+1. **`hyprctl` ships an export-to-Lua subcommand.** Verify each Hyprland upgrade with: `hyprctl --help 2>&1 | grep -iE 'lua|export|migrate'`.
+2. **A Hyprland release announces a concrete hyprlang removal version** (e.g. "hyprlang removed in 0.57"). At that point the countdown is real, not theoretical.
+3. **A specific need for the Layout API** — i.e. a custom window layout that the built-in `dwindle`/`master` layouts can't express. This is Lua-only.
+
+### Migration order when the time comes
+
+- **Laptop first** (`nomad-artix`, `hyprland-laptop.conf`) — lighter app set, fewer windowrules, smaller blast radius if the Lua port misbehaves.
+- **Desktop next** (`godlike-artix`, `hyprland-desktop.conf`) — use the laptop's working `hyprland-laptop.lua` as the template; only the desktop-specific deltas (monitor layout, group settings, etc.) need to be re-ported.
+- Keep the shared-bits split in `~/projects/dotfiles/.config/hypr/`, same as today.
+
+### Re-review cadence
+
+Re-check this section's "Last reviewed" date roughly **every Hyprland minor release** (currently arriving every ~6 weeks) or whenever a 0.55→0.56→0.57 upgrade is about to happen. If `hyprctl version` shows a new minor, search release notes for `hyprlang`, `lua`, `deprecated`, `removed` and update this section.
+
+---
+
 ## Reference
 
 - Hyprland NVIDIA wiki: https://wiki.hyprland.org/Nvidia/
