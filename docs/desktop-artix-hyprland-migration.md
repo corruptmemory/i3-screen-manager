@@ -819,6 +819,21 @@ Verify the actual output name after first Hyprland boot — it might be `DP-1` o
 hyprctl monitors
 ```
 
+### Rofi font (TX-02)
+
+Active theme `themes/nord.rasi` (loaded via `@theme` from `config.rasi`) has no `font:` declaration, so rofi falls back to whatever X resources / Pango default applies. Set TX-02 explicitly in the user-config layer:
+
+```rasi
+# ~/.config/rofi/config.rasi → inside the configuration { } block
+font: "TX-02 11";
+```
+
+Putting it in the `configuration { }` block (not in the theme) survives theme swaps — themes describe colors/layout; this is the user-preference layer. Size 11pt is tuned for DP-2 (2560×1440); revisit if the monitor changes.
+
+`global/rofi.rasi` declares `Inter Regular`/`FantasqueSansMono` fonts but is dormant — nothing `@import`s or `@theme`s it. Leftover from a previous setup; safe to leave alone, but don't be misled into editing it.
+
+Gotcha: `fc-match "TX-02"` returns FreeSans on this box (likely tied to the "looped directory detected" warning during `fc-cache -fv` on `/usr/share/fonts/berkeley-mono`). Don't trust fc-match — Pango resolves TX-02 correctly, which is what rofi/GTK actually use. Verify with `pango-view --font="TX-02 12" --text=hi --output=/tmp/p.png`.
+
 ### Kernel parameters
 
 Ensure GRUB carries over the desktop-specific params:

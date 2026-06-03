@@ -69,7 +69,18 @@ yay -S ttf-joypixels
 
 After installing fonts: `fc-cache -f`
 
-**Rofi font:** The global rofi config (`~/.config/rofi/global/rofi.rasi`) should use `TX-02` not `Inter Regular`.
+**Rofi font:** Set in `~/.config/rofi/config.rasi`'s `configuration { }` block (NOT in the theme, and NOT in `global/rofi.rasi` — that file is dormant, nothing `@import`s or `@theme`s it):
+
+```rasi
+configuration {
+  # ...
+  font: "TX-02 11";
+}
+```
+
+Putting it in the `configuration { }` block keeps the font choice intact when swapping themes (themes describe colors/layout; this is the user-preference layer). Size is monitor-dependent — 11pt fits the desktop's 2560×1440 panel; the laptop's HiDPI panel may want 10 or 12.
+
+Gotcha: `fc-match "TX-02"` returns FreeSans on at least one box, apparently due to a "looped directory detected" warning during `fc-cache -fv` on the berkeley-mono dir. Don't trust fc-match here — Pango (which rofi/GTK actually use for layout) resolves `TX-02` correctly. Verify with `pango-view --font="TX-02 12" --text=hi --output=/tmp/p.png`.
 
 ## Config Files Ported
 
