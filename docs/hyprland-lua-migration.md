@@ -5,7 +5,7 @@ against the old config** 2026-06-09 — running under the lua manager with full
 parity (see [verification](#runtime-verification-only-a-live-session-can-confirm)).
 Laptop (`nomad-artix`) authored 2026-06-13, validated (`config ok`), armed via
 `~/.config/hypr/hyprland.lua` symlink; pending logout/login to switch managers.
-Both machines must also patch their waybar config — see [waybar regression](#waybar-workspace-click-regression-waybar-5008).
+Both machines' waybar configs are now patched and live-verified for the workspace-click regression (2026-06-13) — see [waybar regression](#waybar-workspace-click-regression-waybar-5008).
 
 This is the worked record of migrating `hyprland-desktop.conf` (hyprlang) to
 `hyprland-desktop.lua` for Hyprland 0.55+. It exists so the laptop migration can
@@ -373,11 +373,14 @@ in `hl.dsp.focus({...})`.
 (open as of 2026-06). A patched waybar (gulafaran's diff in the comments)
 fixes it; expect upstream fix to ship in waybar 0.16+.
 
-**Partial workaround applied in `.config/waybar/config-laptop.jsonc`:**
+**Partial workaround — applied and live-verified on BOTH machines (2026-06-13).**
+The functional fix is the two `on-scroll-*` handlers; they use the only IPC form
+that focuses under Lua mode (`hl.dsp.focus({...})`). Desktop block:
 
 ```jsonc
 "hyprland/workspaces": {
-    "format": "{id}",
+    "format": "{name}",
+    "on-click": "activate",      // kept: self-heals when waybar #5008 lands (>= 0.16)
     "sort-by-number": true,
     "all-outputs": true,
     "on-scroll-up":   "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+1\" })'",
@@ -385,12 +388,31 @@ fixes it; expect upstream fix to ship in waybar 0.16+.
 }
 ```
 
-`on-scroll-*` is per-module with shell substitution-free strings — perfect fit
-for static `hl.dsp.focus({...})` IPC calls. Result: **mouse wheel cycling on
-the bar works**, **per-button clicks remain broken** until waybar #5008 lands.
+`on-scroll-*` is per-module with shell substitution-free strings — a perfect fit
+for static `hl.dsp.focus({...})` IPC calls. Result: **mouse-wheel cycling on the
+bar works**; **per-button clicks remain broken** until waybar #5008 lands.
 
-**Apply the same block to `config-desktop.jsonc`** — the desktop has been
-exposed to this regression since its 2026-06-09 migration.
+**Two cosmetically-different variants live in tree — both work identically** (only
+the scroll handlers matter):
+
+| | `config-desktop.jsonc` | `config-laptop.jsonc` |
+|---|---|---|
+| `format` | `{name}` | `{id}` (identical render for numbered workspaces) |
+| `on-click` | kept `"activate"` — resumes automatically when #5008 ships, no second edit | omitted — clicks just no-op until then |
+
+There's no functional reason to unify them; pick one form only if the divergence
+bothers you.
+
+**History note (corrected 2026-06-13):** an earlier draft of this runbook
+described the workaround as already present in `config-laptop.jsonc`, but at the
+time that file only listed the module in `modules-left` and inherited waybar
+defaults (no scroll handlers); `config-desktop.jsonc` carried `on-click: "activate"`
+with no handlers. Both files now carry a working block — committed to the dotfiles
+repo separately (laptop's `{id}` variant in `43314bc`, desktop's `{name}` variant
+alongside) — and were **live-verified on both machines** 2026-06-13: desktop
+reloaded in place (`killall -SIGUSR2 waybar`, validated first), laptop reloaded and
+tested independently. Mouse-wheel scroll-to-cycle confirmed working on
+`godlike-artix` and `nomad-artix`.
 
 **Workspace-switch UX under this regression:**
 
@@ -462,9 +484,11 @@ bits (monitor, brightness keys, touchpad, lid) are handled live:
 - Final laptop: `dotfiles/.config/hypr/hyprland-laptop.lua` (armed via
   `~/.config/hypr/hyprland.lua` symlink on `nomad-artix`; pending logout/login
   to switch managers).
-- Waybar workaround for the click regression: `dotfiles/.config/waybar/config-laptop.jsonc`
-  has a `hyprland/workspaces` block with scroll-to-cycle Lua-form dispatchers.
-  Apply the same block to `config-desktop.jsonc` when the desktop is touched next.
+- Waybar workaround for the click regression: applied to BOTH
+  `dotfiles/.config/waybar/config-desktop.jsonc` and `config-laptop.jsonc`
+  (2026-06-13) — a `hyprland/workspaces` block with scroll-to-cycle Lua-form
+  dispatchers. Live-verified on both machines: scroll-to-cycle confirmed working
+  on desktop and laptop.
 - Scratch (ephemeral): `/tmp/hypr-lua-migration/` — raw converter `out.lua`,
   official `example/hyprland.lua`, wiki markdown sources, `report.txt`, and the
   verification helpers `dump_binds.py` / `check_options.py` (rebuild on the
