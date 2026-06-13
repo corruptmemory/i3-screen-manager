@@ -373,14 +373,22 @@ in `hl.dsp.focus({...})`.
 (open as of 2026-06). A patched waybar (gulafaran's diff in the comments)
 fixes it; expect upstream fix to ship in waybar 0.16+.
 
-**Partial workaround — applied and live-verified on BOTH machines (2026-06-13).**
-The functional fix is the two `on-scroll-*` handlers; they use the only IPC form
-that focuses under Lua mode (`hl.dsp.focus({...})`). Desktop block:
+**Partial workaround — one shared block, applied and live-verified on BOTH machines
+(2026-06-13).** `config-desktop.jsonc` and `config-laptop.jsonc` now carry the
+**identical** `hyprland/workspaces` block. The functional fix is the two
+`on-scroll-*` handlers — they use the only IPC form that focuses under Lua mode
+(`hl.dsp.focus({...})`):
 
 ```jsonc
+// waybar #5008: under Hyprland Lua config mode the built-in per-button click
+// ("activate" -> `dispatch workspace N`) is wrapped as invalid Lua and silently
+// no-ops, so workspace buttons don't switch. on-click is kept so clicks resume
+// automatically when the upstream fix ships (>= waybar 0.16). Scroll-to-cycle
+// below uses hl.dsp.focus({...}), the only IPC form that focuses under Lua mode.
+// Direct jumps meanwhile: Super+1..0. See docs/hyprland-lua-migration.md.
 "hyprland/workspaces": {
     "format": "{name}",
-    "on-click": "activate",      // kept: self-heals when waybar #5008 lands (>= 0.16)
+    "on-click": "activate",
     "sort-by-number": true,
     "all-outputs": true,
     "on-scroll-up":   "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+1\" })'",
@@ -390,28 +398,20 @@ that focuses under Lua mode (`hl.dsp.focus({...})`). Desktop block:
 
 `on-scroll-*` is per-module with shell substitution-free strings — a perfect fit
 for static `hl.dsp.focus({...})` IPC calls. Result: **mouse-wheel cycling on the
-bar works**; **per-button clicks remain broken** until waybar #5008 lands.
-
-**Two cosmetically-different variants live in tree — both work identically** (only
-the scroll handlers matter):
-
-| | `config-desktop.jsonc` | `config-laptop.jsonc` |
-|---|---|---|
-| `format` | `{name}` | `{id}` (identical render for numbered workspaces) |
-| `on-click` | kept `"activate"` — resumes automatically when #5008 ships, no second edit | omitted — clicks just no-op until then |
-
-There's no functional reason to unify them; pick one form only if the divergence
-bothers you.
+bar works**; **per-button clicks remain broken** until waybar #5008 lands. We keep
+`on-click: "activate"` (a no-op today) so per-button clicks resume automatically
+the moment the upstream fix ships — no second config edit. `{name}` renders the
+same as `{id}` for numbered workspaces.
 
 **History note (corrected 2026-06-13):** an earlier draft of this runbook
 described the workaround as already present in `config-laptop.jsonc`, but at the
 time that file only listed the module in `modules-left` and inherited waybar
 defaults (no scroll handlers); `config-desktop.jsonc` carried `on-click: "activate"`
-with no handlers. Both files now carry a working block — committed to the dotfiles
-repo separately (laptop's `{id}` variant in `43314bc`, desktop's `{name}` variant
-alongside) — and were **live-verified on both machines** 2026-06-13: desktop
-reloaded in place (`killall -SIGUSR2 waybar`, validated first), laptop reloaded and
-tested independently. Mouse-wheel scroll-to-cycle confirmed working on
+with no handlers. The block first landed in each file in slightly different forms
+(laptop `{id}`/no `on-click` in `43314bc`; desktop `{name}`/`on-click` alongside),
+then was **unified to the single shared block above**. Live-verified on both
+machines: desktop reloaded in place (`killall -SIGUSR2 waybar`, validated first),
+laptop reloaded and tested. Mouse-wheel scroll-to-cycle confirmed working on
 `godlike-artix` and `nomad-artix`.
 
 **Workspace-switch UX under this regression:**
