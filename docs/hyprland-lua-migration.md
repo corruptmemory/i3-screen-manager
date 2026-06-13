@@ -3,7 +3,9 @@
 **Status:** Desktop (`godlike-artix`) migrated, validated, and **live-verified
 against the old config** 2026-06-09 — running under the lua manager with full
 parity (see [verification](#runtime-verification-only-a-live-session-can-confirm)).
-Laptop (`nomad-artix`) pending — follow the [in-situ laptop runbook](#in-situ-laptop-runbook).
+Laptop (`nomad-artix`) authored 2026-06-13, validated (`config ok`), armed via
+`~/.config/hypr/hyprland.lua` symlink; pending logout/login to switch managers.
+Both machines must also patch their waybar config — see [waybar regression](#waybar-workspace-click-regression-waybar-5008).
 
 This is the worked record of migrating `hyprland-desktop.conf` (hyprlang) to
 `hyprland-desktop.lua` for Hyprland 0.55+. It exists so the laptop migration can
@@ -247,37 +249,222 @@ startup.)
 
 ---
 
-## In-situ laptop runbook
+## Post-migration gotchas (Hyprland 0.55+)
+
+Three things bit during the laptop migration that the desktop didn't surface.
+Apply all three when redoing this on another machine — and to the desktop too,
+if applicable.
+
+### Removed: `gestures.workspace_swipe` and `gestures.workspace_swipe_fingers`
+
+The hyprlang `gestures { workspace_swipe = true; workspace_swipe_fingers = 3 }`
+block became invalid in 0.55+. Setting either key produces:
+
+```
+unknown config key 'gestures.workspace_swipe'
+unknown config key 'gestures.workspace_swipe_fingers'
+```
+
+The replacement is a new **top-level** `hl.gesture({...})` call (NOT inside
+`hl.config`). From the wiki `Variables.md` footnote:
+
+```lua
+hl.gesture({
+    fingers   = 3,
+    direction = "horizontal",
+    action    = "workspace",
+})
+```
+
+The desktop's `gestures {}` block was commented out, so it never surfaced. The
+laptop conf had `gesture = 3, horizontal, workspace` as a live top-level keyword
+(unrelated to the section), which I translated to the call above.
+
+The OTHER `gestures:*` keys (`workspace_swipe_distance`, `workspace_swipe_invert`,
+etc.) still live inside `hl.config({ gestures = { ... } })`. It's specifically
+the master toggle + finger count that moved.
+
+### `Hyprland --verify-config` runs registered hooks
+
+The dry-run is not as dry as the runbook above implied. During `--verify-config`,
+Hyprland executes registered `hl.on(...)` callbacks — including `config.reloaded`.
+Concrete observation from the laptop migration:
+
+```
+$ Hyprland --verify-config -c hyprland-laptop.lua
+DEBUG: [executor] Executing hyprland-clamshell-restore
+DEBUG: [executor] Process created with pid 13504
+...
+======== Config parsing result:
+config ok
+```
+
+The `hyprland-clamshell-restore` script is wired via `hl.on("config.reloaded", ...)`
+in the laptop config — and it ran during verification. For that specific
+command it's harmless (no-ops fast when the clamshell inhibitor PIDFILE is
+absent) but it's a real footgun: **never** wire destructive commands into
+`config.reloaded`, `hyprland.start`, or similar hooks without considering that
+they fire during `--verify-config` too.
+
+For testing-only hooks during development: gate them behind an env var the live
+session sets but `--verify-config` doesn't, e.g.:
+
+```lua
+hl.on("config.reloaded", function()
+    if os.getenv("HYPRLAND_RUNNING") == "1" then
+        hl.exec_cmd("hyprland-clamshell-restore")
+    end
+end)
+```
+
+…and have `start-hyprland` export `HYPRLAND_RUNNING=1` before `exec`'ing Hyprland.
+
+### `config.reloaded` is the correct hook for "every reload" behavior
+
+Under hyprlang we wired `hyprland-clamshell-restore` via `exec = …` (which fires
+on every reload, vs `exec-once = …` which fires once at startup). The Lua
+equivalent is **NOT** `hl.on("hyprland.start", …)` — that's exec-once semantics
+and skips reloads. The correct event is `config.reloaded`, exposed by
+`src/event/EventBus.hpp` and routed by `src/config/lua/LuaEventHandler.cpp`:
+
+```lua
+hl.on("config.reloaded", function() hl.exec_cmd("…") end)
+```
+
+`hyprland.start` and `config.reloaded` are the two compositor-lifecycle hooks
+documented in `LuaEventHandler.cpp` so far. Other categories (window/workspace/
+monitor/input/render/screenshare/keybinds/config:preReload) exist in the
+EventBus but I haven't traced whether they're exposed to Lua yet — check
+`LuaEventHandler.cpp`'s `dispatch("…", …)` calls before assuming an event name.
+
+### Waybar workspace click regression (waybar #5008)
+
+**Symptom:** After switching to the Lua config manager, clicking the workspace
+buttons in waybar's `hyprland/workspaces` module no longer focuses that
+workspace. The button highlights visually but the active workspace doesn't
+change.
+
+**Root cause: Hyprland-side, not waybar-side.** In `src/debug/HyprCtl.cpp::dispatchRequest`,
+under Lua mode the IPC dispatch handler turns every incoming `dispatch X`
+into the Lua expression `return hl.dispatch(X)` and evaluates it through the
+Lua manager. Waybar's `Workspace::handleClicked` sends `dispatch workspace 2`,
+which Hyprland turns into `return hl.dispatch(workspace 2)` — that's not valid
+Lua (no comma between tokens). The Lua evaluation fails. **But the fallback
+`.value_or("ok")` returns the literal string `"ok"`**, so Hyprland reports
+success while doing nothing. This is also why
+`hyprctl dispatch 'hl.dsp.exec_raw("workspace 2")'` reports ok but doesn't
+focus: the Lua evaluation succeeds, but `exec_raw` doesn't actually run a
+workspace dispatcher.
+
+**The only IPC form that focuses under Lua mode:**
+
+```sh
+hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'
+```
+
+**Why this can't be cleanly fixed at the waybar config level:** waybar's
+`Workspace::handleClicked` is hardcoded to call `IPC::dispatch("workspace", id)`
+— no config knob switches it to Lua syntax. `on-click` in waybar is a static
+shell command **per module**, not per button, with no `{id}` substitution.
+There's no way to inject the workspace ID into a click handler that wraps it
+in `hl.dsp.focus({...})`.
+
+**Tracking:** [waybar #5008](https://github.com/Alexays/Waybar/issues/5008)
+(open as of 2026-06). A patched waybar (gulafaran's diff in the comments)
+fixes it; expect upstream fix to ship in waybar 0.16+.
+
+**Partial workaround applied in `.config/waybar/config-laptop.jsonc`:**
+
+```jsonc
+"hyprland/workspaces": {
+    "format": "{id}",
+    "sort-by-number": true,
+    "all-outputs": true,
+    "on-scroll-up":   "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+1\" })'",
+    "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e-1\" })'",
+}
+```
+
+`on-scroll-*` is per-module with shell substitution-free strings — perfect fit
+for static `hl.dsp.focus({...})` IPC calls. Result: **mouse wheel cycling on
+the bar works**, **per-button clicks remain broken** until waybar #5008 lands.
+
+**Apply the same block to `config-desktop.jsonc`** — the desktop has been
+exposed to this regression since its 2026-06-09 migration.
+
+**Workspace-switch UX under this regression:**
+
+| Need | Working method |
+|---|---|
+| Jump to specific workspace | `Super + <N>` keyboard (Lua bind, unaffected) |
+| Cycle next/prev | Mouse wheel on bar (partial workaround) or `Super+Ctrl+Alt+arrow` keyboard |
+| Move window to workspace | `Super+Shift+<N>` (unaffected) |
+| Switch via bar click | **Broken — waiting on upstream waybar #5008** |
+
+If you're heavily reliant on bar clicks for navigation, the practical near-term
+options are: (1) keyboard primary + scroll-on-bar as fallback (cheap, no
+package burden), (2) build waybar from source with the patch (one package to
+maintain across upgrades).
+
+---
+
+## In-situ laptop runbook (DONE 2026-06-13)
 
 The laptop config (`hyprland-laptop.conf`) **differs** from desktop — do not
 copy the desktop `.lua`. Re-run the process *on the laptop* so device-specific
 bits (monitor, brightness keys, touchpad, lid) are handled live:
 
 1. `ssh`/sit at `nomad-artix`. `hyprctl version` (expect ≥0.55), `hyprctl configerrors` clean.
-2. `pipx install hyprconf2lua`.
-3. `hyprconf2lua --report ~/projects/dotfiles/.config/hypr/hyprland-laptop.conf -o /tmp/lap.lua`
-   — if it dies on a comma-in-value, sentinel it (defect #1) and re-run.
-4. Hand-correct against the [defect list](#converter-defects-hyprconf2lua-v130--what-to-hand-fix).
-   Laptop-specific watch items the desktop didn't have:
-   - **Brightness keys** (`XF86MonBrightnessUp/Down`) → `{ locked = true, repeating = true }`.
-   - **Lid switch** binds → `hl.bind("switch:on:[name]", …, { locked = true })`.
-   - **Touchpad** block under `input = { touchpad = { … } }`.
-   - **Monitor** likely `eDP-1` + scale; preserve the laptop's value.
-5. Validate: `lua5.4 -e 'assert(loadfile("…/hyprland-laptop.lua"))'` then
+2. **(actually used)** Skip the converter — start from `hyprland-desktop.lua`
+   structure and patch in laptop-specific bits by hand. The converter's
+   hand-correction tax has already been paid on the desktop; re-running it
+   buys no new information and ships the same defects. Use `hyprconf2lua` only
+   as a defense-in-depth check (bind count diff).
+3. Hand-port from the desktop `.lua` with these laptop-specific watch items:
+   - **Monitor** `eDP-1` + scale `1.25` (vs desktop's external + scale `1`).
+   - **Touchpad** block under `input = { touchpad = { natural_scroll = true, drag_lock = 0 } }`.
+   - **Gesture** — top-level `hl.gesture({ fingers, direction, action })`, NOT inside
+     `hl.config`. See [post-migration gotchas](#removed-gesturesworkspace_swipe-and-gesturesworkspace_swipe_fingers).
+   - **Brightness keys** (`XF86MonBrightnessUp/Down`) → `{ repeating = true }`
+     (faithful translation of the original `bind=` not `bindl=`; add
+     `locked = true` if you want dimming on lock screen).
+   - **Lid switch** binds → `hl.bind("switch:off:Lid Switch", hl.dsp.exec_cmd("…"), { locked = true })`.
+   - **`config.reloaded` hook** for `hyprland-clamshell-restore` (replaces the
+     hyprlang `exec = …` pattern, which has no Lua equivalent).
+   - **Extra env vars** the desktop didn't have: `HYPRCURSOR_SIZE`,
+     `QT_STYLE_OVERRIDE=Fusion`, `OZONE_PLATFORM`, `CHROMIUM_FLAGS`,
+     `XCOMPOSEFILE`, `_JAVA_AWT_WM_NONREPARENTING=1` (desktop uses `=0`).
+   - **No audio stack autostart** — laptop has pipewire/wireplumber/pipewire-pulse
+     as OpenRC user services. Don't copy the desktop's autostart audio block.
+   - **Volume keys**: upgraded `pactl` → `wpctl` to match the desktop pattern.
+   - **Tailscale rofi bind** `Super+Shift+N` → `i3-tailscale-rofi`.
+   - **Brave windowrules** incorporated from desktop (file/open/extension/idle).
+4. Validate: `lua5.4 -e 'assert(loadfile("…/hyprland-laptop.lua"))'` then
    `Hyprland --verify-config -c …/hyprland-laptop.lua` → must print `config ok`.
+   (Note: this fires `config.reloaded` hooks — see gotcha above.)
+5. Bind count sanity check: source `bind*=` lines should equal Lua runtime binds
+   (top-level `hl.bind(` count + submap binds + for-loop expansion).
 6. Arm: `ln -sf /home/jim/projects/dotfiles/.config/hypr/hyprland-laptop.lua ~/.config/hypr/hyprland.lua`
    (absolute target; keep `.conf`).
-7. **Logout/login** (not `hyprctl reload` — manager change), then walk the
+7. **Patch the waybar config** for the workspace-click regression — see
+   [waybar regression](#waybar-workspace-click-regression-waybar-5008).
+8. **Logout/login** (not `hyprctl reload` — manager change), then walk the
    [runtime verification](#runtime-verification-only-a-live-session-can-confirm)
    — Pass 1 (introspection) confirms the bulk, Pass 2 (keypresses) the rest.
-8. Once both machines are solid for a while, retire the `.conf` files.
+9. Once both machines are solid for a while, retire the `.conf` files.
 
 ---
 
 ## Artifacts
 
-- Final: `dotfiles/.config/hypr/hyprland-desktop.lua` (armed via
-  `~/.config/hypr/hyprland.lua` symlink; `.conf` kept for rollback).
+- Final desktop: `dotfiles/.config/hypr/hyprland-desktop.lua` (armed via
+  `~/.config/hypr/hyprland.lua` symlink on `godlike-artix`; `.conf` kept for rollback).
+- Final laptop: `dotfiles/.config/hypr/hyprland-laptop.lua` (armed via
+  `~/.config/hypr/hyprland.lua` symlink on `nomad-artix`; pending logout/login
+  to switch managers).
+- Waybar workaround for the click regression: `dotfiles/.config/waybar/config-laptop.jsonc`
+  has a `hyprland/workspaces` block with scroll-to-cycle Lua-form dispatchers.
+  Apply the same block to `config-desktop.jsonc` when the desktop is touched next.
 - Scratch (ephemeral): `/tmp/hypr-lua-migration/` — raw converter `out.lua`,
   official `example/hyprland.lua`, wiki markdown sources, `report.txt`, and the
   verification helpers `dump_binds.py` / `check_options.py` (rebuild on the
