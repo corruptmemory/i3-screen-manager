@@ -29,15 +29,35 @@ export HYPRCURSOR_SIZE=24
 #   - udev rule /etc/udev/rules.d/80-nvidia-pm.rules setting power/control=auto
 #     on ALL NVIDIA PCI functions (GPU + audio); any function held "on" prevents D3
 # With no external monitor and no app using NVIDIA, it should reach D3/suspended.
-INTEL_CARD=$(readlink -f /dev/dri/by-path/pci-0000:00:02.0-card)
-NVIDIA_CARD=$(readlink -f /dev/dri/by-path/pci-0000:01:00.0-card)
-export AQ_DRM_DEVICES="${INTEL_CARD}:${NVIDIA_CARD}"
+# GPU env auto-detected from which cards are actually present, so this script works
+# unchanged in BOTH BIOS modes:
+#   - Hybrid (Intel + NVIDIA): Intel composites (listed first), NVIDIA for external scanout.
+#   - Discrete-only (iGPU disabled in BIOS): NVIDIA is the SOLE GPU and drives the internal
+#     panel too (X1 Extreme Gen 5 MUX) — single GPU, no cross-GPU blits.
+# by-path symlinks are stable across card-number reshuffles; an absent card -> empty string.
+INTEL_CARD=$(readlink -f /dev/dri/by-path/pci-0000:00:02.0-card 2>/dev/null)
+NVIDIA_CARD=$(readlink -f /dev/dri/by-path/pci-0000:01:00.0-card 2>/dev/null)
 
-export NVD_BACKEND=direct                 # VA-API hardware video via NVIDIA path
-export LIBVA_DRIVER_NAME=iHD             # Use Intel iHD for VA-API on hybrid (not nvidia)
-export AQ_FORCE_LINEAR_BLIT=0            # Fixes external monitor perf on hybrid
-# Note: GBM_BACKEND=nvidia-drm and __GLX_VENDOR_LIBRARY_NAME=nvidia deliberately
-# omitted — those force NVIDIA for all rendering and break Firefox/screensharing
+if [ -n "$INTEL_CARD" ] && [ -n "$NVIDIA_CARD" ]; then
+    # Hybrid: Intel primary compositor, NVIDIA included for external monitors.
+    export AQ_DRM_DEVICES="${INTEL_CARD}:${NVIDIA_CARD}"
+    export LIBVA_DRIVER_NAME=iHD          # Intel iHD VA-API on hybrid
+    export NVD_BACKEND=direct
+    export AQ_FORCE_LINEAR_BLIT=0         # softens the hybrid cross-GPU blit
+    # GBM_BACKEND=nvidia-drm / __GLX_VENDOR_LIBRARY_NAME=nvidia deliberately OMITTED here —
+    # forcing NVIDIA on hybrid breaks Firefox/screensharing.
+elif [ -n "$NVIDIA_CARD" ]; then
+    # Discrete-only: NVIDIA is the only GPU. Force the NVIDIA stack (safe — no Intel to conflict).
+    export AQ_DRM_DEVICES="${NVIDIA_CARD}"
+    export GBM_BACKEND=nvidia-drm
+    export __GLX_VENDOR_LIBRARY_NAME=nvidia
+    export LIBVA_DRIVER_NAME=nvidia
+    export NVD_BACKEND=direct
+elif [ -n "$INTEL_CARD" ]; then
+    # Intel-only (no dGPU present): just Intel.
+    export AQ_DRM_DEVICES="${INTEL_CARD}"
+    export LIBVA_DRIVER_NAME=iHD
+fi
 
 # XCompose
 export XCOMPOSEFILE=~/.XCompose
