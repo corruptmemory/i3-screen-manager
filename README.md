@@ -1,118 +1,139 @@
 # i3-screen-manager
 
-Quality-of-life scripts for i3/X11 — display management, mouse DPI control, hardware monitoring, and keyboard layout toggling, all accessible via rofi menus and Polybar.
+Quality-of-life scripts for **Hyprland / Wayland** on Artix — display layout,
+output scaling, mouse DPI, hardware monitoring, keyboard-layout toggling, and a
+couple of standalone utilities — driven from rofi menus and Waybar.
+
+> The project began as an i3/X11 toolkit, hence the name and the `i3-` script
+> prefixes. Both machines migrated to Hyprland in 2026; the names stay because
+> they're wired into muscle memory and rofi menus. The X11-era instructions have
+> been retired from this README — see `docs/` and the `git log` if you ever need
+> them back.
 
 ## Modes
 
+`i3-screen-manager <command>`:
+
 | Command | What it does |
 |---------|-------------|
-| `extend-left/right/above/below` | External monitor positioned relative to laptop |
-| `clamshell` | External only, laptop screen off, lid-close safe |
-| `clamshell <DPI>` | Clamshell with custom DPI (e.g., `clamshell 108`) |
-| `mirror` | Both screens mirrored at best common resolution |
-| `disconnect` | Revert to laptop screen only |
-| `dpi [VALUE]` | Set Xft.dpi on the fly (rofi picker if no value given) |
-| `status` | Show current display state |
+| `extend-left/right/above/below` | External monitor positioned relative to the internal panel |
+| `clamshell` | External only, internal (`eDP-1`) off, lid-close safe |
+| `mirror` | Both outputs mirrored at the best common mode |
+| `disconnect` | Revert to the internal panel only |
+| `scale [VALUE] [OUTPUT]` | Set Wayland output scale (rofi picker if no value; presets `0.75`–`2.00`) |
+| `status` | Show internal/external, active monitors (pos/scale), and inhibitor state |
 
 ## Requirements
 
-- i3 window manager
-- X11 (not Wayland)
-- `xrandr`, `jq`, `rofi`
-- `systemd-inhibit` (for clamshell lid-close prevention)
-- `solaar` (for Logitech mouse DPI management — install with `yay -S solaar`)
-- `rbw`, `rofi-rbw` (for Bitwarden password lookup via rofi)
+- **Hyprland** on Wayland (Hyprland 0.55+, Lua config — see `docs/hyprland-lua-migration.md`)
+- `hyprctl`, `wlr-randr`, `jq`, `rofi`
+- `elogind-inhibit` (Artix's logind; holds the `handle-lid-switch` block for clamshell)
+- `solaar` (Logitech mouse DPI — `yay -S solaar`)
+- `rbw`, `rofi-rbw` (Bitwarden lookup via rofi)
+- Waybar (the `i3-cmos-battery` module renders into the bar)
 
 ## Installation
 
+Symlink the repo scripts onto `PATH` (run from the repo root):
+
 ```bash
-# Symlink to PATH
-ln -sf "$(pwd)/i3-screen-manager" ~/.local/bin/i3-screen-manager
-ln -sf "$(pwd)/i3-screen-rofi" ~/.local/bin/i3-screen-rofi
-ln -sf "$(pwd)/i3-mouse-setup" ~/.local/bin/i3-mouse-setup
-ln -sf "$(pwd)/i3-mouse-rofi" ~/.local/bin/i3-mouse-rofi
-ln -sf "$(pwd)/i3-cmos-battery" ~/.local/bin/i3-cmos-battery
+ln -sf "$(pwd)/i3-screen-manager"  ~/.local/bin/i3-screen-manager
+ln -sf "$(pwd)/i3-screen-rofi"     ~/.local/bin/i3-screen-rofi
+ln -sf "$(pwd)/i3-keyboard-rofi"   ~/.local/bin/i3-keyboard-rofi
+ln -sf "$(pwd)/i3-tailscale-rofi"  ~/.local/bin/i3-tailscale-rofi
+ln -sf "$(pwd)/i3-mouse-setup"     ~/.local/bin/i3-mouse-setup
+ln -sf "$(pwd)/i3-mouse-rofi"      ~/.local/bin/i3-mouse-rofi
+ln -sf "$(pwd)/i3-cmos-battery"    ~/.local/bin/i3-cmos-battery
 
 # Standalone system-maintenance utility (no relation to the display scripts)
-ln -sf "$(pwd)/aur-malware-check" ~/.local/bin/aur-malware-check
+ln -sf "$(pwd)/aur-malware-check"  ~/.local/bin/aur-malware-check
 ```
 
-Add to your i3 config:
+Add the binds to your Hyprland config (hyprlang shown; under Lua use
+`hl.bind(mainMod .. " + BackSpace", hl.dsp.exec_cmd("i3-screen-rofi"))` etc.):
 
-```
-# Display management
-bindsym $mod+BackSpace exec --no-startup-id i3-screen-rofi
-
-# Keyboard layout toggle
-bindsym $mod+Control+BackSpace exec --no-startup-id i3-keyboard-rofi
-
-# DPI adjustment
-bindsym $mod+$alt+BackSpace exec --no-startup-id i3-screen-manager dpi
-
-# Mouse DPI
-bindsym $mod+Mod1+m exec --no-startup-id i3-mouse-rofi
-
-# Bitwarden password lookup
-bindsym $mod+Shift+b exec --no-startup-id rofi-rbw
+```ini
+bind = $mainMod, BackSpace,          exec, i3-screen-rofi       # display menu
+bind = $mainMod CONTROL, BackSpace,  exec, i3-keyboard-rofi     # keyboard layout
+bind = $mainMod ALT, BackSpace,      exec, i3-screen-manager scale
+bind = $mainMod SHIFT, B,            exec, rofi-rbw             # Bitwarden
+bind = $mainMod SHIFT, N,            exec, i3-tailscale-rofi    # Tailscale + Open Brain URL
+# Optional: mouse DPI picker
+bind = $mainMod ALT, M,              exec, i3-mouse-rofi
 ```
 
-Add to your `~/.xinitrc` (before `exec i3`):
+Apply mouse DPI at login by adding to your Hyprland config:
 
-```bash
-i3-mouse-setup &
+```ini
+exec-once = i3-mouse-setup
 ```
 
-Reload i3 with `$mod+Shift+r`.
+Reload Hyprland with `hyprctl reload` (the live config is symlinked from
+`~/projects/dotfiles/.config/hypr/`). Note: the desktop machine still binds the
+removed `i3-screen-manager dpi` subcommand — use `scale` (see *Output Scaling*).
 
 ## Usage
 
-Via rofi menus:
+Recommended keybindings (as wired on these machines):
 
-| Keybinding | Menu |
+| Keybinding | Action |
 |---|---|
-| `Super+Backspace` | Display management |
+| `Super+Backspace` | Display management menu (`i3-screen-rofi`) |
 | `Super+Ctrl+Backspace` | Keyboard layout toggle |
-| `Super+Alt+Backspace` | DPI adjustment |
-| `Super+Alt+M` | Mouse DPI |
-| `Super+Shift+B` | Bitwarden password lookup |
+| `Super+Alt+Backspace` | Output scale picker (`i3-screen-manager scale`) |
+| `Super+Shift+B` | Bitwarden password lookup (`rofi-rbw`) |
+| `Super+Shift+N` | Tailscale up/down + Open Brain MCP URL switch |
 
 Via CLI:
 
 ```bash
 i3-screen-manager extend-right
 i3-screen-manager clamshell
-i3-screen-manager clamshell 108
-i3-screen-manager dpi
-i3-screen-manager dpi 96
+i3-screen-manager mirror
+i3-screen-manager scale              # rofi picker
+i3-screen-manager scale 1.5 eDP-1    # direct set, bypass the picker
 i3-screen-manager disconnect
 i3-screen-manager status
 ```
 
-## Hybrid Graphics
+## Hybrid Graphics (laptop)
 
-Tested with Intel (modesetting) + Nvidia (proprietary) using PRIME display offloading. The laptop panel runs on Intel (`eDP-1`), external outputs run through Nvidia (`HDMI-1-0`, `DP-1-*`). The script auto-detects whichever external output becomes connected.
+The ThinkPad is Intel Iris Xe + NVIDIA RTX 3050 Ti. Under Wayland the GPUs are
+selected via `AQ_DRM_DEVICES` in `start-hyprland`: Intel (`eDP-1`) is the
+compositor GPU listed first, NVIDIA is included so the external ports (all wired
+through NVIDIA) light up. NVIDIA outputs follow `*-N-N` naming (`HDMI-1-0`,
+`DP-1-*`); the script auto-detects whichever external becomes connected. The
+desktop (`godlike-artix`) is pure AMD with no hybrid concerns.
 
-## DPI Management
+## Output Scaling
 
-Clamshell mode automatically adjusts `Xft.dpi` from the laptop's 120 to 96 for external monitors. `disconnect` restores it. For non-standard monitors (TVs, high-DPI externals), use "Clamshell (custom DPI)" in the rofi menu or `Super+Alt+Backspace` to adjust on the fly.
+Wayland uses per-output scaling, not `Xft.dpi` (there is no X resource database).
+`i3-screen-manager scale` calls `hyprctl keyword monitor "$out,preferred,auto,$scale"`
+with a rofi picker of `0.75 / 1.00 / 1.25 / 1.50 / 1.75 / 2.00`, or takes a value
+and optional output directly (`scale 1.5 eDP-1`).
 
-DPI presets: 72, 84, 96, 108, 120, 144 — or type any value.
+Script defaults: internal `eDP-1` at scale **1.25**, external outputs at **1.0**.
+`clamshell`, `extend-*`, and `mirror` apply those automatically.
 
 ## Mouse DPI Management
 
-For Logitech mice connected via Bolt or Unifying receivers, `solaar` is used to adjust hardware DPI.
+For Logitech mice on Bolt/Unifying receivers, `solaar` sets hardware DPI.
 
-- **On login:** `i3-mouse-setup` runs from `~/.xinitrc` and applies the saved DPI automatically
-- **On the fly:** `Super+Alt+M` opens a rofi picker with common DPI presets (800–2000)
-- **Persistence:** Selected DPI is saved to `~/.config/i3-mouse-manager/dpi` and reapplied on boot
+- **On login:** add `exec-once = i3-mouse-setup` to your Hyprland config — it
+  auto-detects the mouse and applies the saved DPI.
+- **On the fly:** bind `i3-mouse-rofi` (e.g. `Super+Alt+M`) for a rofi picker of
+  common presets (800–2000).
+- **Persistence:** the choice is saved to `~/.config/i3-mouse-manager/dpi` and
+  reapplied on the next login.
 
 If no solaar-compatible mouse is detected, both scripts exit silently.
 
 ## CMOS Battery Monitoring
 
-`i3-cmos-battery` reads the motherboard CMOS battery voltage via the it87 Super I/O chip and reports health status.
+`i3-cmos-battery` reads the motherboard CMOS battery voltage via the it87 Super
+I/O chip and reports health.
 
-- **Polybar:** Displays `CMOS 3.29V` in the bar, refreshes every 6 hours
+- **Waybar:** a custom module shows e.g. `CMOS 3.29V`, refreshed every 6 hours
 - **CLI:** `i3-cmos-battery cli` for a human-readable report with warnings
 - **Thresholds:** OK (>= 2.8V), LOW/yellow (2.5–2.8V), DEAD/red (< 2.5V)
 
@@ -122,101 +143,95 @@ Requires the `it87` kernel module:
 echo "it87" | sudo tee /etc/modules-load.d/it87.conf
 ```
 
-On machines without the sensor (e.g., laptops), the script and Polybar module silently produce no output.
+On machines without the sensor (e.g. the laptop), the script and Waybar module
+produce no output.
 
 ## GTK File Dialog Fix
 
-GTK open/save dialogs hang for ~25 seconds on i3 because `gvfsd-trash` (the GNOME virtual filesystem trash backend) times out on a D-Bus call every time a FileChooserDialog builds its sidebar.
+GTK open/save dialogs can hang ~25s because `gvfsd-trash` (the GNOME virtual
+filesystem trash backend) times out on a D-Bus call every time a
+FileChooserDialog builds its sidebar.
 
-**Symptom:** Clicking "Open File" or "Save As" in any GTK app (Brave, Firefox, etc.) takes 25 seconds before the dialog appears.
+**Symptom:** "Open File"/"Save As" in any GTK app (Brave, Firefox, …) takes 25s
+before the dialog appears.
 
 **Diagnosis:**
 
 ```bash
-# This will hang ~25 seconds if you have the bug:
-time gio info trash:///
-
-# This should be instant:
-time GIO_USE_VFS=local gio info trash:///
+time gio info trash:///                  # hangs ~25s if you have the bug
+time GIO_USE_VFS=local gio info trash:///  # instant
 ```
 
-**Fix (root cause removal):**
+**Fix (root-cause removal):**
 
 ```bash
-# Install xreader (evince fork from Linux Mint — same UI, no gvfs dependency)
-sudo pacman -S xreader
-
-# Remove gvfs and evince (evince is the only hard dep on gvfs)
-sudo pacman -R evince gvfs
-
-# Set xreader as default PDF viewer
+sudo pacman -S xreader                 # evince fork, same UI, no gvfs dep
+sudo pacman -R evince gvfs             # evince is the only hard dep on gvfs
 xdg-mime default xreader.desktop application/pdf
 ```
 
-Also add to `~/.xinitrc` before `exec i3` as a safety net (in case a future package pulls gvfs back in):
+As a safety net (in case a future package pulls gvfs back in), set the env var in
+your Hyprland config so it covers the whole session:
 
-```bash
-export GIO_USE_VFS=local
+```ini
+env = GIO_USE_VFS,local
 ```
 
-The `gvfs` package provides GNOME virtual filesystem backends (`trash://`, `network://`, etc.) over D-Bus — useful on GNOME, dead weight on i3. Removing it eliminates the D-Bus timeout entirely. The only packages that optionally use gvfs (gimp, inkscape, pcmanfm) lose features like trash support and HTTP URI schemes, which are unused on i3.
+`gvfs` provides GNOME VFS backends (`trash://`, `network://`, …) over D-Bus —
+useful on GNOME, dead weight on Hyprland. Removing it eliminates the timeout
+entirely. **Applies to both machines.**
 
-**Applies to both desktop and laptop.**
+## Tailscale + Open Brain URL toggle
+
+`i3-tailscale-rofi` (`Super+Shift+N`) brings Tailscale up or down and, in lockstep,
+rewrites the Open Brain MCP `url` in `~/.claude.json` between the home-LAN
+hostname (`http://open-brain/`, only reachable on the HOME VLAN) and node-0's
+Tailscale IP (reachable from anywhere on the tailnet). This is the "Option B"
+explicit URL switch described in the global setup notes. Prerequisite: Open Brain
+on node-0 must listen on `0.0.0.0:8000` so the tailnet IP can reach it.
 
 ## Bitwarden via Rofi (rbw + rofi-rbw)
 
-Quick password lookup from any window via rofi, powered by `rbw` (unofficial Bitwarden CLI with a persistent agent).
+Quick password lookup from any window via rofi, powered by `rbw` (unofficial
+Bitwarden CLI with a persistent agent).
 
-**Install:**
+**Install & configure:**
 
 ```bash
 sudo pacman -S rbw rofi-rbw
-```
-
-**Configure:**
-
-```bash
 rbw config set email you@example.com
 rbw config set pinentry pinentry-gtk    # GTK dialog for master password
-rbw register                            # pinentry pops up — enter master password
-rbw unlock                              # unlocks the agent, syncs vault
+rbw register                            # enter master password
+rbw unlock                              # unlock agent, sync vault
 ```
 
-**i3 keybind:**
+**Hyprland keybind:** `bind = $mainMod SHIFT, B, exec, rofi-rbw`
 
-```
-bindsym $mod+Shift+b exec --no-startup-id rofi-rbw
-```
+- `Super+Shift+B` opens a rofi menu of your whole vault — type to filter, Enter to copy
+- `rbw-agent` starts on demand and caches the unlock for 1h (`rbw config set lock_timeout <s>`)
+- When the lock expires, the next call pops `pinentry-gtk`
+- For fields that reject paste, `rofi-rbw --action type` types the credential (via `wtype` on Wayland)
 
-**How it works:**
-
-- `Super+Shift+B` opens a rofi menu with your entire vault — type to filter, Enter to copy password
-- The `rbw-agent` starts on demand (no xinitrc entry needed) and caches your unlock for 1 hour (configurable via `rbw config set lock_timeout <seconds>`)
-- When the agent lock expires, the next invocation pops a `pinentry-gtk` dialog for your master password
-- For fields that don't support paste (e.g., OAuth popups in Grayjay), use `rofi-rbw --action type` to type credentials via `xdotool`
-
-**Why rbw over bitwarden-desktop:**
-
-The desktop app is an Electron wrapper that's slow to start and awkward on a tiling WM. `rbw` + `rofi-rbw` gives you sub-second vault access from any window. For vault management (creating entries, folders, attachments), use the Bitwarden browser extension or web vault at `vault.bitwarden.com`.
-
-**Applies to both desktop and laptop.**
+For vault management use the browser extension or web vault. **Applies to both machines.**
 
 ## Clamshell Safety
 
-When in clamshell mode with the lid closed, `disconnect` refuses to run and tells you to open the lid first. This prevents the "both screens go dark" scenario where `eDP-1` can't activate because the lid is physically closed.
+In clamshell mode with the lid closed, `disconnect` refuses to run and tells you
+to open the lid first — preventing the "both screens go dark" scenario where
+`eDP-1` can't reactivate because the lid is physically shut. Clamshell holds an
+`elogind-inhibit handle-lid-switch` block (PID in `/tmp/i3-screen-manager-inhibit.pid`)
+and survives Hyprland config reloads via `hyprland-clamshell-restore`.
 
 ## Keyboard Layout Toggle
 
-`i3-keyboard-rofi` switches between laptop and external keyboard layouts:
+`i3-keyboard-rofi` (`Super+Ctrl+Backspace`) switches between:
 
 | Mode | Layout |
 |------|--------|
 | Laptop | Caps Lock → Ctrl, both Shifts → Caps Lock |
 | External | Default US layout |
 
-The rofi menu shows the current mode and lets you switch. Bound to `Super+Ctrl+Backspace`.
-
-**Note:** `i3-keyboard-rofi` lives in `~/.local/bin/` directly (not symlinked from this repo) since it's a standalone single-file utility.
+The rofi menu shows the current mode and lets you switch.
 
 ## License
 
