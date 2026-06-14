@@ -53,6 +53,9 @@ Scripts, no build step. All committed in this repo and symlinked from
 - `flameshot.sh` — flameshot wrapper with `QT_SCREEN_SCALE_FACTORS="1;1"` for correct DPI
 - `volumecontrol.sh` — pavucontrol wrapper that forces Intel Vulkan ICD to avoid NVIDIA VA-API conflicts
 
+**System maintenance & security:**
+- `aur-malware-check` — Read-only audit of installed packages against the June 2026 "Atomic" AUR supply-chain denylist. Name intersection by default; `--deep` adds a pacman-scriptlet + filesystem IOC scan, `--near` flags confusable look-alikes (you have the safe name, a malicious twin exists), `--all` widens to every installed package, `--list`/`--url` override the source. Downloads + caches the denylist (offline fallback); exit `0`/`1`/`2` = clean/exposed/error, so it drops into a login hook or `&&` chain.
+
 ## Key Design Decisions
 
 - **Internal display is hardcoded as `eDP-1`** — standard for modern Intel laptop panels.
@@ -67,6 +70,7 @@ Scripts, no build step. All committed in this repo and symlinked from
 - **Mouse DPI via solaar** — `i3-mouse-setup` auto-detects Logitech mice at login and applies saved DPI from `~/.config/i3-mouse-manager/dpi`. `i3-mouse-rofi` provides on-the-fly adjustment that persists across reboots.
 - **CMOS battery monitoring** — `i3-cmos-battery` reads Vbat from the it87 Super I/O chip. Requires `it87` kernel module (auto-loaded via `/etc/modules-load.d/it87.conf`). Refreshes every 6 hours. Exits silently on machines without the sensor (laptops).
 - **Clamshell survives Hyprland config reload** — the `hyprland-clamshell-restore` script is wired into Hyprland (via `exec=` under hyprlang or `hl.on("config.reloaded")` under Lua) so saving the config file doesn't wake eDP-1 back up.
+- **`aur-malware-check` is a standalone tenant** — it has nothing to do with displays. It lives here because this repo is the home for the machine's hand-rolled bash scripts and it follows the same "commit here, symlink from `~/.local/bin/`" convention. It has no dependency on the rest of the toolkit and can be lifted out at any time.
 
 ## Testing
 

@@ -32,6 +32,9 @@ ln -sf "$(pwd)/i3-screen-rofi" ~/.local/bin/i3-screen-rofi
 ln -sf "$(pwd)/i3-mouse-setup" ~/.local/bin/i3-mouse-setup
 ln -sf "$(pwd)/i3-mouse-rofi" ~/.local/bin/i3-mouse-rofi
 ln -sf "$(pwd)/i3-cmos-battery" ~/.local/bin/i3-cmos-battery
+
+# Standalone system-maintenance utility (no relation to the display scripts)
+ln -sf "$(pwd)/aur-malware-check" ~/.local/bin/aur-malware-check
 ```
 
 Add to your i3 config:
