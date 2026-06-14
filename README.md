@@ -69,8 +69,12 @@ exec-once = i3-mouse-setup
 ```
 
 Reload Hyprland with `hyprctl reload` (the live config is symlinked from
-`~/projects/dotfiles/.config/hypr/`). Note: the desktop machine still binds the
-removed `i3-screen-manager dpi` subcommand — use `scale` (see *Output Scaling*).
+`~/projects/dotfiles/.config/hypr/`).
+
+Display layout and scaling are a **laptop-docking** workflow: `nomad-artix` uses
+these binds when an external monitor is plugged in. `godlike-artix` (desktop) is
+single-monitor by design and never adjusts displays, so its display binds are
+vestigial — the laptop/desktop asymmetry is deliberate, not drift to fix.
 
 ## Usage
 
