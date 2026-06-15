@@ -886,6 +886,28 @@ applied live with `pekwm_ctrl -a run Reload`):
   `FillEdge` half-screen (`Super+Shift+arrows`) + the `Ctrl+Super+C` corner chain
   are all default.
 
+### In-session refinements, round 2 (2026-06-15) — living-with-it adjustments
+
+After a few days of use, Jim asked for cleanups. Decisions worth keeping:
+- **No literal duplicate keybinds existed** — every combo in `Global` is unique, and
+  the `INCLUDE`d files (`keys_menu`/`keys_moveresize`/`keys_inputdialog`) are modal
+  sections, not global. What *felt* duplicated was redundant *function*: Reload/Exit
+  were bound directly AND in the `Ctrl+Super+P` chain — trimmed the chain to just
+  `Restart`.
+- **Dropped window grouping entirely** (cumbersome in practice): removed the
+  mark/attach/tab-cycle binds and the terminal-autogroup autoproperty.
+- **`Super+Tab` → `rofi -show window`** — the right answer for stacking-WM navigation.
+  `FocusDirectional` (Super+arrows) cannot reach a window *covered* by another; the
+  rofi window picker (EWMH `_NET_CLIENT_LIST`) and `Alt+Tab` MRU both reach everything.
+- **No window decorations by default** — catch-all autoproperty
+  `Property = ".*,.*" { ApplyOn = "Start New Reload" Titlebar = "False" Border = "False" }`.
+  The focused-window title lives in Polybar's `xwindow` module instead. (Open
+  question, unverified from Hyprland: whether a `.*,.*` catch-all's props merge with
+  more-specific rules or get overridden — if msg-apps keep titlebars, add the flag to
+  those rules too.)
+- **Disabled the workspace-switch popup** — `ShowWorkspaceIndicator = "0"` (system
+  default is 500ms; redundant with the Polybar workspace module).
+
 ### Flameshot under dual-WM + the stale-portal trap (2026-06-15)
 
 Running Flameshot under BOTH WMs needs different capture backends, and bouncing
