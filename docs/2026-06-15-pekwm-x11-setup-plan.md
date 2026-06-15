@@ -52,7 +52,19 @@ sudo pacman -S --needed --noconfirm \
 
 (`xdotool` powers the focus-by-class binds — `wmctrl` is **not** in the official repos and AUR is off-limits, so xdotool is the substitute; `xorg-server-xephyr` is the nested-X smoke-test harness for Task 11. Both small, both official-repo.)
 
-> **Safety gate (do this first if uncertain):** XLibre `Provides`/`Conflicts xorg-server`. Confirm the install won't yank anything load-bearing from the running Wayland session — dry-run with `pacman -S --print-format '%n' xlibre-xserver xorg-server-xephyr` (or `pacman -Sp`) and eyeball for unexpected **removals**. `xorg-server` is not installed (only `xorg-server-common`/`xorg-xwayland`), so it should be clean. If `xorg-server-xephyr` triggers a conflict against XLibre, drop it from the list and skip Task 11 (Xephyr) — the Task 13 TTY boot still validates everything.
+> **OBSERVED on godlike-artix (2026-06-15) — you WILL hit this on the laptop too:**
+> the install stops with `xlibre-xserver-common and xorg-server-common are in conflict.
+> Remove xorg-server-common? [y/N]` and `--noconfirm` aborts (defaults to No). This is
+> **safe to accept**: `xlibre-xserver-common` *Provides* `xorg-server-common`, and the
+> only thing depending on `xorg-server-common` is `xorg-xwayland` (Hyprland's XWayland)
+> — pacman replaces the `-common` package and `xorg-xwayland` stays satisfied via the
+> Provides (it is NOT removed). Verified post-install: `xorg-xwayland` still present,
+> `/usr/bin/Xwayland` intact, `pactree -r xorg-server-common` shows
+> `xlibre-xserver-common provides xorg-server-common → xorg-xwayland → hyprland`.
+> Accept the replacement non-interactively with `yes | sudo pacman -S --needed …`
+> (the only prompt in the transaction is this conflict removal). Reversible via
+> `sudo pacman -S xorg-server-common`. `xorg-server` proper is not installed, so it's
+> not part of the conflict.
 
 - [ ] **Step 2: Verify all installed**
 
@@ -798,3 +810,55 @@ Expected: XLibre starts on amdgpu; PekWM draws; Polybar appears; wallpaper set.
 - Tasks 1–10 can run start-to-finish in this session (system install, config authoring, Xephyr smoke-test). Task 12 is the human-in-the-loop TTY boot.
 - **All config commits target `~/projects/dotfiles`.** Nothing in this implementation modifies the `i3-screen-manager` repo (only this plan/spec live there, already committed).
 - Pushing the dotfiles repo is a separate explicit step — not part of any task above.
+
+---
+
+## Execution log & deviations — godlike-artix, 2026-06-15
+
+Tasks 1–11 executed autonomously and committed to the dotfiles repo; **Task 12
+(TTY boot) is the user's** and remains pending. What actually differed from the
+task bodies above — apply these when replaying on the laptop:
+
+1. **wmctrl → xdotool** (Task 1): `wmctrl` is not in the official repos; `xdotool`
+   (world) substitutes for the `Super+F1/F2/F3` focus-by-class binds. Already
+   reflected in Tasks 1/4.
+2. **Install conflict (Task 1): `xlibre-xserver-common` vs `xorg-server-common`.**
+   The install stops on this; accept it with `yes | sudo pacman -S --needed …`.
+   `xorg-xwayland` survived via the Provides bridge — **Hyprland stayed intact**
+   (verified: `/usr/bin/Xwayland` present, `pactree -r xorg-server-common` →
+   `… provides xorg-server-common → xorg-xwayland → hyprland`). See the Task 1 note.
+3. **PekWM config is modular** (Task 2): defaults live in **`/etc/pekwm/`** (not
+   `/usr/share/pekwm`), with `INCLUDE`d sub-files (`config_system`, `keys_moveresize`,
+   `mouse_system`, `autoproperties_typerules`) resolved via `$_PEKWM_ETC_PATH`.
+   Vendored the whole tree: `cp -r /etc/pekwm/. ~/projects/dotfiles/.pekwm-desktop/`.
+4. **Snapping was already on** (Task 3): `config_system` already defines `MoveResize{}`
+   (EdgeAttract/WindowAttract/OpaqueMove). Only bumped `WindowAttract` to 10.
+5. **keys: adopted native `FillEdge`** (Task 4) for `Super+Shift+arrows` half-screen
+   snapping — better than the planned `MoveClientRel`/`MoveToEdge`. `Exit` confirmed
+   a real action (default keychain). Replaced the whole `Global{}` block (lines
+   11–280), kept the `INCLUDE` lines 1–9.
+6. **mouse: no edit needed** (Task 5): `mouse_system` already binds `Mod4`-drag move
+   and sloppy focus — matches Hyprland. Left vendored.
+7. **autoproperties appended, not overwritten** (Task 6) — preserves the
+   `autoproperties_typerules` include (DESKTOP/DOCK window-type handling).
+8. **Polybar temp sensor: `k10temp`, not `x86_pkg_temp`** (Task 7): this AMD box has
+   no `x86_pkg_temp` zone. Used `hwmon-path = /sys/class/hwmon/hwmon5/temp1_input`
+   (k10temp Tctl). `hwmonN` can shift across reboots — re-find if the reading looks
+   wrong. (Laptop differs: `thinkpad_hwmon`, per the legacy `polybar/config.ini`.)
+9. **Session files suffixed + symlinked** (Tasks 8–9): `.xinitrc-desktop` (repo) →
+   `~/.xinitrc`; `start-pekwm` (repo `.local/bin`) → `~/.local/bin`. The repo's bare
+   `.xinitrc` is the stale laptop i3 one — left untouched. (Laptop: `start-pekwm`'s
+   `LIBVA_DRIVER_NAME=radeonsi` is desktop-specific; the laptop needs intel/nvidia.)
+10. **TearFree via `modesetting`** (Task 10): XLibre bundles `modesetting_drv.so`
+    under `/usr/lib/xorg/modules/xlibre-25.0/drivers/`. `xf86-video-amdgpu` (world)
+    is the fallback if modesetting misbehaves.
+11. **Xephyr smoke-test: PASS** (Task 11): pekwm parsed `~/.pekwm/config` and ran;
+    polybar loaded all 9 modules. **Known cosmetic issue:** `fc-match "TX-02"`
+    resolves to FreeSans on this machine (an fc-match-level quirk — Waybar/rofi use
+    TX-02 fine via GTK/pango), so polybar renders the TX-02 slots in FreeSans.
+    Non-blocking; tune at the TTY or investigate the system fontconfig TX-02 mapping.
+
+### Commit trail (dotfiles repo)
+`vendor baseline → config/keys/vars → autoproperties → polybar → session files →
+xorg TearFree`. (i3-screen-manager repo holds the spec, this plan, and the
+wmctrl→xdotool correction.) Neither repo was pushed.
