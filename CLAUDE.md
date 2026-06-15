@@ -18,7 +18,7 @@ labels are worth.
 ## Migration history
 
 The big migration runbooks live under `docs/`. Read them when working on
-anything compositor-adjacent:
+anything compositor- or tooling-adjacent:
 
 - `docs/hyprland-migration.md` — initial i3/X11 → Hyprland/Wayland migration
   (laptop, on Artix). Phase-by-phase. Captures startup, env, NVIDIA hybrid,
@@ -31,6 +31,12 @@ anything compositor-adjacent:
   open waybar #5008 regression.
 - `docs/artix-laptop-setup.md` — first-boot install/setup notes for the laptop.
 - `docs/hyprland-first-boot.md` — Hyprland-specific first-boot checklist.
+- `docs/claude-code-aur-to-native-migration.md` — switching Claude Code itself
+  off the AUR `claude-code` package onto Anthropic's native installer
+  (auto-updates, no more AUR exposure). Done on `godlike-artix` (2026-06-15);
+  **`nomad-artix` (laptop) still pending** — read before doing it there. Key
+  gotcha: the native install must be finalized from a clean terminal, *not*
+  from inside a Claude Code session.
 
 ## Architecture
 
