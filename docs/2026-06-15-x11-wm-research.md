@@ -66,9 +66,13 @@ All three are in Arch/AUR → trivial to trial on Artix (`yay -S icewm pekwm fvw
 
 ## Open questions / next actions
 
-- [ ] Jim doing his own reading (esp. PekWM, revisit IceWM).
-- [ ] Offered: stand up a throwaway **PekWM** config mirroring current i3-style
-      keybinds + wiring in the `i3-screen-*` / `i3-mouse-*` scripts, swapping the
-      Wayland guts (`wlr-randr`/`hyprctl`) back to `xrandr`. Most of this repo's
-      scripts port back to X11 cleanly — display layer is the main delta.
-- [ ] Decide PekWM vs IceWM after hands-on trial.
+- [x] Jim did his reading and **chose PekWM** to trial first (Fossil dev,
+      stacking, native frame-tabbing). IceWM stays the backup if PekWM disappoints.
+- [x] PekWM config **built and smoke-tested** (2026-06-15): full Hyprland-parity
+      keybinds, Polybar, rofi, dunst, autostart — on XLibre, toggleable against
+      Hyprland. Display scripts (`i3-screen-*`) were **not** ported — godlike-artix
+      is single-monitor, so they're moot. Adopted PekWM's native `FillEdge`
+      half-screen snapping as the stacking-world stand-in for tiling. See
+      `2026-06-15-pekwm-x11-setup.md` (spec) and `…-plan.md` (build + execution log).
+- [ ] **Pending:** TTY-boot validation (only Jim can do it from a real session),
+      then the verdict — PekWM vs Hyprland, and vs IceWM if PekWM falls short.

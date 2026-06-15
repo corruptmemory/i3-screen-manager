@@ -38,6 +38,18 @@ anything compositor- or tooling-adjacent:
   gotcha: the native install must be finalized from a clean terminal, *not*
   from inside a Claude Code session.
 
+The PekWM/XLibre work is a *forward-looking experiment* (possibly leaving
+Hyprland for a stacking X11 WM), not a migration, but its docs live alongside:
+
+- `docs/2026-06-15-x11-wm-research.md` — the "why PekWM" survey of living X11 WMs.
+- `docs/2026-06-15-pekwm-x11-setup.md` (+ `…-plan.md`) — design, build plan, and
+  execution log for a **PekWM-on-XLibre** session on `godlike-artix`, toggleable
+  against Hyprland (`start-pekwm` for X11 vs `start-hyprland` for Wayland). The
+  PekWM config itself lives in the **dotfiles repo** (`.pekwm-desktop/`,
+  `polybar/config-pekwm.ini`, `.xinitrc-desktop`, `.local/bin/start-pekwm`), not
+  here. Built + smoke-tested 2026-06-15; **pending TTY-boot validation**.
+  Additive and reversible — Hyprland is untouched and remains the fallback.
+
 ## Architecture
 
 Scripts, no build step. All committed in this repo and symlinked from
