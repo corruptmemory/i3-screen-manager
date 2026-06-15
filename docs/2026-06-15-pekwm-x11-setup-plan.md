@@ -46,9 +46,15 @@
 
 ```bash
 sudo pacman -S --needed --noconfirm \
-  xlibre-xserver xlibre-input-libinput pekwm polybar dunst feh i3lock xdotool \
+  xlibre-xserver xlibre-input-libinput xorg-xinit pekwm polybar dunst feh i3lock xdotool \
   xorg-server-xephyr
 ```
+
+> **`xorg-xinit` is mandatory** — it provides `startx`/`xinit`, which `start-pekwm`
+> execs. A Wayland-only machine won't have it; omitting it fails the launcher at
+> `exec: startx: not found` (discovered on godlike-artix at the first TTY boot). Its
+> deps (`xorg-xauth`/`xorg-xrdb`/`xorg-xmodmap`) come along; the setuid `Xorg.wrap`
+> (from `xlibre-xserver-common`) lets the active-VT user start X rootless.
 
 (`xdotool` powers the focus-by-class binds — `wmctrl` is **not** in the official repos and AUR is off-limits, so xdotool is the substitute; `xorg-server-xephyr` is the nested-X smoke-test harness for Task 11. Both small, both official-repo.)
 
@@ -858,7 +864,52 @@ task bodies above — apply these when replaying on the laptop:
     TX-02 fine via GTK/pango), so polybar renders the TX-02 slots in FreeSans.
     Non-blocking; tune at the TTY or investigate the system fontconfig TX-02 mapping.
 
-### Commit trail (dotfiles repo)
-`vendor baseline → config/keys/vars → autoproperties → polybar → session files →
-xorg TearFree`. (i3-screen-manager repo holds the spec, this plan, and the
-wmctrl→xdotool correction.) Neither repo was pushed.
+### First TTY boot — Task 12 (2026-06-15)
+
+`start-pekwm` failed immediately at `exec: startx: not found`. **Root cause:
+`xorg-xinit` was never installed** (a Wayland-only box has no `startx`/`xinit`) —
+a gap in the Task 1 list, now fixed there. Installed `xorg-xinit` (pulls
+`xorg-xauth`/`xorg-xrdb`/`xorg-xmodmap`); confirmed `/usr/lib/Xorg.wrap` is setuid
+and XLibre provides `/usr/bin/X`, so the rootless-X chain is complete. The
+`keyring/control: No such file` line in the error log is benign first-run noise,
+not the failure. Retry pending.
+
+### In-session refinements (2026-06-15) — PekWM live tweaks
+
+After the session came up, a few adjustments (all in the vendored pekwm config,
+applied live with `pekwm_ctrl -a run Reload`):
+- **Super + right-drag = resize** — added `Client { Motion = "Mod4 3" {...Resize} }`
+  to `mouse` (the default only gave Super+left-drag = move).
+- **Super + Shift + M = maximize + hide titlebar** — `Toggle Maximized True True;
+  Toggle DecorTitlebar` in `keys` (distinct from FullScreen: keeps the bar).
+- Snapping needed no work — `EdgeAttract`/`WindowAttract` (config_system) +
+  `FillEdge` half-screen (`Super+Shift+arrows`) + the `Ctrl+Super+C` corner chain
+  are all default.
+
+### Flameshot under dual-WM + the stale-portal trap (2026-06-15)
+
+Running Flameshot under BOTH WMs needs different capture backends, and bouncing
+between them corrupts the Wayland portal — two separate problems:
+
+- **Per-session backend.** PekWM/X11 has no `xdg-desktop-portal` Screenshot backend
+  (none exists for a bare X11 WM), so Flameshot must bypass the portal:
+  `useX11LegacyScreenshot=true` (Qt native X11 grab). Hyprland/Wayland needs the
+  *opposite* — the portal (`xdg-desktop-portal-hyprland`); the legacy flag breaks it.
+  **Toggle:** two configs `~/.config/flameshot/flameshot-{wayland,x11}.ini`; each
+  launcher `cp`s the right one onto `flameshot.ini` before `exec` — **copy, not
+  symlink** (Qt QSettings atomic-writes would clobber a symlink).
+- **Stale-portal trap.** Every Hyprland start spawns an `xdg-desktop-portal`
+  frontend; switching to PekWM and back leaves the old ones alive. A leftover
+  frontend squats the `org.freedesktop.portal.Desktop` D-Bus name unresponsively →
+  Flameshot (and any portal screenshot) hangs, while `grim` (direct wlroots
+  screencopy) still works — that asymmetry is the diagnostic tell. **Fix:** both
+  launchers reap stale `xdg-desktop-portal*` at start, **matched by executable, not
+  cmdline** (a `pkill -f xdg-desktop-portal` matches — and kills — the launcher's own
+  shell). Health check:
+  `busctl --user introspect org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop | grep Screenshot`.
+
+### Commit trail
+dotfiles: `vendor baseline → config/keys/vars → autoproperties → polybar →
+session files → xorg TearFree → gitignore runtime`. i3-screen-manager: spec, plan,
+execution log, wmctrl→xdotool, CLAUDE.md pointer + research-note loop-closure.
+**Both repos pushed** (the `xorg-xinit` fix above lands in a follow-up commit).

@@ -83,7 +83,13 @@ the repo's established `-desktop`/`-laptop` suffix + symlink pattern (same as
 
 ## 4. Packages (100% official repos — no AUR)
 
-Install: `xlibre-xserver xlibre-input-libinput pekwm polybar dunst feh i3lock`.
+Install: `xlibre-xserver xlibre-input-libinput xorg-xinit pekwm polybar dunst feh i3lock xdotool`.
+
+> **`xorg-xinit` is essential and easy to forget** — it provides `startx`/`xinit`,
+> which `start-pekwm` execs. A Wayland-only box has never needed it, so it won't be
+> present. Without it the launcher dies at `exec: startx: not found`. Its deps
+> (`xorg-xauth`/`xorg-xrdb`/`xorg-xmodmap`) come along; `Xorg.wrap` (setuid, from
+> `xlibre-xserver-common`) handles rootless start for the active-VT user.
 
 Already present and X11-native: `kitty brave emacs flameshot nm-applet udiskie
 rofi` + the pipewire stack + `wpctl`/`playerctl`.
