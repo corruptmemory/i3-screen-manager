@@ -89,8 +89,10 @@ Already present and X11-native: `kitty brave emacs flameshot nm-applet udiskie
 rofi` + the pipewire stack + `wpctl`/`playerctl`.
 
 **Verify-at-impl availability** (used by a few binds; substitute if absent):
-- `wmctrl` — for the `Super+F1/F2/F3` focus-by-class binds (PekWM has no native
-  "focus window by class" action).
+- `xdotool` — for the `Super+F1/F2/F3` focus-by-class binds (PekWM has no native
+  "focus window by class" action). **`wmctrl` is NOT in the official repos** (and
+  AUR is off-limits), so xdotool is the substitute: `xdotool search --class <name>
+  windowactivate`. Confirmed in `world` at impl.
 - `xidlehook` or `xss-lock` — only if idle auto-lock is added later (not this cut;
   `xss-lock` was NOT in repos as of survey — check again or use `xidlehook`).
 
@@ -182,7 +184,7 @@ the stacking model has no clean tiling analog.
 | Workspace switch 1–10 | `Super+1..0` | `GotoWorkspace 1..10` (⚠ indexing, §6.5) |
 | Send window to ws | `Super+Shift+1..0` | `SendToWorkspace 1..10` |
 | Workspace scroll | `Ctrl+Alt+left/right` | `GotoWorkspace Left/Right` |
-| Focus Slack/Keybase/discord | `Super+F1/F2/F3` | `Exec wmctrl -x -a <class>` (needs wmctrl) |
+| Focus Slack/Keybase/discord | `Super+F1/F2/F3` | `Exec xdotool search --class <name> windowactivate` (wmctrl not in repos) |
 | Restart bar | `Super+Shift+W` | `Exec ~/.config/polybar/launch.sh` |
 | Volume up/down/mute | `XF86Audio*` | `Exec wpctl …` (identical) |
 | Mic mute | `Ctrl+F1` | `Exec wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle` |
@@ -317,7 +319,7 @@ Boot `start-pekwm`, then verify:
 - [ ] Volume/media keys; `Ctrl+F1` mic mute.
 - [ ] `Print` → flameshot overlay.
 - [ ] `notify-send test` → dunst notification.
-- [ ] `Super+F1/F2/F3` focuses Slack/Keybase/discord (wmctrl).
+- [ ] `Super+F1/F2/F3` focuses Slack/Keybase/discord (xdotool).
 - [ ] Quit (`Super+Shift+Escape`) returns to TTY; `start-hyprland` still works
       unchanged.
 
@@ -328,7 +330,7 @@ Boot `start-pekwm`, then verify:
 - **XLibre is young** — past vblank regression on this repo's record (§5). Hyprland
   is the fallback; keep it.
 - **EWMH coverage** — confirm PekWM publishes the desktop/active-window hints
-  Polybar's `xworkspaces` and `wmctrl` rely on. If thin, fall back to a custom
+  Polybar's `xworkspaces` and `xdotool` rely on. If thin, fall back to a custom
   workspace module or `pekwm`'s own panel (`pekwm_panel`).
 - **Workspace indexing inconsistency** (§6.5) — most likely first-boot foot-gun.
 - **Config-dir XDG support** (§3 note) — verify before deciding symlink target.

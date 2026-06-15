@@ -46,11 +46,11 @@
 
 ```bash
 sudo pacman -S --needed --noconfirm \
-  xlibre-xserver xlibre-input-libinput pekwm polybar dunst feh i3lock wmctrl \
+  xlibre-xserver xlibre-input-libinput pekwm polybar dunst feh i3lock xdotool \
   xorg-server-xephyr
 ```
 
-(`wmctrl` powers the focus-by-class binds; `xorg-server-xephyr` is the nested-X smoke-test harness for Task 11. Both small, both official-repo.)
+(`xdotool` powers the focus-by-class binds — `wmctrl` is **not** in the official repos and AUR is off-limits, so xdotool is the substitute; `xorg-server-xephyr` is the nested-X smoke-test harness for Task 11. Both small, both official-repo.)
 
 > **Safety gate (do this first if uncertain):** XLibre `Provides`/`Conflicts xorg-server`. Confirm the install won't yank anything load-bearing from the running Wayland session — dry-run with `pacman -S --print-format '%n' xlibre-xserver xorg-server-xephyr` (or `pacman -Sp`) and eyeball for unexpected **removals**. `xorg-server` is not installed (only `xorg-server-common`/`xorg-xwayland`), so it should be clean. If `xorg-server-xephyr` triggers a conflict against XLibre, drop it from the list and skip Task 11 (Xephyr) — the Task 13 TTY boot still validates everything.
 
@@ -58,7 +58,7 @@ sudo pacman -S --needed --noconfirm \
 
 Run:
 ```bash
-pacman -Q xlibre-xserver xlibre-input-libinput pekwm polybar dunst feh i3lock wmctrl xorg-server-xephyr
+pacman -Q xlibre-xserver xlibre-input-libinput pekwm polybar dunst feh i3lock xdotool xorg-server-xephyr
 ```
 Expected: a version line for each, no "was not found".
 
@@ -253,10 +253,10 @@ Global {
     KeyPress = "Ctrl Mod1 Right" { Actions = "GotoWorkspace Right" }
     KeyPress = "Ctrl Mod1 Left"  { Actions = "GotoWorkspace Left" }
 
-    # --- Quick-focus messaging apps (needs wmctrl) ---
-    KeyPress = "Mod4 F1" { Actions = "Exec wmctrl -x -a slack" }
-    KeyPress = "Mod4 F2" { Actions = "Exec wmctrl -x -a keybase" }
-    KeyPress = "Mod4 F3" { Actions = "Exec wmctrl -x -a discord" }
+    # --- Quick-focus messaging apps (needs xdotool; wmctrl not in repos) ---
+    KeyPress = "Mod4 F1" { Actions = "Exec xdotool search --class slack windowactivate" }
+    KeyPress = "Mod4 F2" { Actions = "Exec xdotool search --class keybase windowactivate" }
+    KeyPress = "Mod4 F3" { Actions = "Exec xdotool search --class discord windowactivate" }
 
     # --- Bar restart / keyboard layout ---
     KeyPress = "Mod4 Shift w"      { Actions = "Exec ~/.config/polybar/launch.sh" }
