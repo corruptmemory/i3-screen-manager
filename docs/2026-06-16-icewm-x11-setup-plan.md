@@ -16,12 +16,12 @@
 
 **Files:** none yet (capture findings into this doc under "Task 1 — findings").
 
-- [ ] **Step 1: Install from the official repo (not AUR)**
+- [x] **Step 1: Install from the official repo (not AUR)**
 
 Run: `yay -S --noconfirm icewm` (or `sudo pacman -S icewm`)
 Expected: installs `icewm 4.0.0-1` from `world`. Verify: `icewm --version`.
 
-- [ ] **Step 2: Locate defaults + docs**
+- [x] **Step 2: Locate defaults + docs**
 
 Run:
 ```bash
@@ -30,7 +30,7 @@ for m in icewm icewm-preferences icewm-keys icewm-winoptions icewm-theme icewm-s
 ```
 Expected: a `preferences` defaults file under `/usr/share/icewm/`, and man pages present.
 
-- [ ] **Step 3: Confirm the exact option/key names this plan depends on**
+- [x] **Step 3: Confirm the exact option/key names this plan depends on**
 
 Capture the real names (grep the installed defaults — authoritative over memory):
 ```bash
@@ -43,7 +43,7 @@ man icewm-winoptions | grep -iE 'title|border|decor|frame' | head    # confirm t
 ```
 Record into "Task 1 — findings" below: exact names for each, whether native tiling keys exist, and the winoptions key that removes the title bar (candidates: a per-class decoration/`noTitleBar`-style flag, else fall back to a titleH=0 theme).
 
-- [ ] **Step 4: Commit the findings note**
+- [x] **Step 4: Commit the findings note**
 
 ```bash
 cd /home/jim/projects/i3-screen-manager
@@ -51,7 +51,18 @@ git add docs/2026-06-16-icewm-x11-setup-plan.md
 git commit -m "icewm: Task 1 recon — confirmed IceWM 4.0 option/key names"
 ```
 
-**Task 1 — findings:** _(fill during execution)_
+**Task 1 — findings (2026-06-16):**
+
+- `icewm 4.0.0` installed from `world`. Defaults at `/usr/share/icewm/{preferences,keys,winoptions,toolbar}`; all man pages present. Native control CLI: **`icesh`** (`icesh keys` / `icesh winoptions` reload those files; `icesh restart`; EWMH-based, ships with IceWM).
+- **Corrections to the draft config below (applied when writing the real files in Tasks 2–3/5):**
+  1. **Tray option** is `TaskBarEnableSystemTray=1` (there is no `TaskBarShowSystemTray`); `TaskBarShowTray=1` shows app icons in the tray panel.
+  2. **Border-color format uses slashes:** `ColorActiveBorder="rgb:33/CC/FF"`, `ColorNormalBorder="rgb:33/33/33"`.
+  3. **Titlebarless is a winoptions DECOR option and can be GLOBAL:** `.dTitleBar: 0` (leading-dot form ⇒ all windows); keep borders with `.dBorder: 1`. → `winoptions` becomes one global rule, no per-class list (per-class override still possible, e.g. `KittyFloating.dTitleBar: 1`).
+  4. **Half-tiling is NATIVE:** `KeyWinTileLeft/Right/Top/Bottom` (+ corners/center) exist → Task 5 uses **path A** (native keys); the wmctrl `icewm-snap` helper is **dropped**.
+  5. **No absolute send-to-workspace key** (only relative `KeySysWorkspace{Next,Prev,Last}TakeWin`). → bind `Super+Shift+N` to **`icesh -f setWorkspace <idx>`** directly in `keys` (verify 0- vs 1-indexing + focus-survival in Task 4; wrap in a helper only if focus is lost).
+  6. **`wmctrl` unavailable** (confirmed); use `xdotool`/`icesh`. IceWM `keys` runs `program + args` (no shell) ⇒ no `~` expansion, no inline compound commands ⇒ absolute paths / helper scripts.
+- Confirmed as drafted: `ClickToFocus=1`, `RaiseOnClickClient=1`, `QuickSwitch=1`, `WorkspaceNames`, `DesktopBackgroundImage/Scaled`, `KeyWin{Maximize,Restore,Close,Fullscreen}`, `KeySysWorkspace1..10`.
+- ⚠️ Self-inflicted nit: an `icesh -f setWorkspace 1` parse-check was run against the **live `:0`** session; if a window was focused it may have hopped a workspace. Lesson: mutating `icesh`/`xdotool` tests go in Xephyr (Task 4), never `:0`.
 
 ---
 
