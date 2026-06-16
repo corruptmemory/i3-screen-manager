@@ -1,2 +1,7 @@
 .claude/
 .playwright-mcp/
+
+# Sublime Text project/workspace files (editor-local, machine-specific paths +
+# session state — not part of the repo's shared config)
+*.sublime-project
+*.sublime-workspace

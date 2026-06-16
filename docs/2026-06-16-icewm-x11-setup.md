@@ -1,6 +1,6 @@
 # IceWM-on-XLibre setup — design spec (godlike-artix)
 
-**Date:** 2026-06-16 · **Machine:** `godlike-artix` (desktop, Artix/OpenRC, AMD Navi 31, single monitor DP-2) · **Status:** design approved, pre-build
+**Date:** 2026-06-16 · **Machine:** `godlike-artix` (desktop, Artix/OpenRC, AMD Navi 31, single monitor DP-2) · **Status:** built, tuned, and in daily use (2026-06-16) — judged more responsive + stable than the PekWM trial; see `…-plan.md` for the execution log + verdict
 
 A third toggleable WM in the rotation, alongside Hyprland (Wayland) and PekWM
 (X11/XLibre). Goal: reproduce the current PekWM daily-driver setup in IceWM —

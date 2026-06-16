@@ -413,16 +413,53 @@ Verified in nested Xephyr; full *keyboard* testing is blocked by the outer PekWM
 - ✅ `start-icewm` + `.xinitrc-icewm` (clones of the PekWM siblings): keyring
   bootstrap + `dbus-update-activation-environment` carried over so the unlock
   prompt draws; native taskbar (no Polybar), IceWM owns the wallpaper (no feh).
-- 🔧 OPEN: the categorized **application menu still pops up** despite
-  `TaskBarShowStartMenu=0` + `DesktopMenuButton=0` + `DesktopWinListButton=0`.
-  Trigger unidentified under Xephyr (input-grab). Re-check live with `icesh`.
-- ❓ OPEN: bar **system stats** (CPU/RAM/temp/net) — currently off; pick a minimal
-  subset vs. clock-and-tray clean.
-- ❓ OPEN (real session): mouse `Super`+drag move/resize parity; wallpaper fill vs.
-  scale; final flatness/colour pass.
+- ✅ RESOLVED: the bare-**Super tap** opened the start menu — trigger was
+  `Win95Keys=1` (IceWM's Win95 "tap Win → menu"). `Win95Keys=0` kills it without
+  touching explicit `Super+<key>` binds. (It was NOT a desktop/bar menu —
+  `DesktopMenuButton=0`/`DesktopWinListButton=0`/`TaskBarShowStartMenu=0` were red
+  herrings; the empty `~/.icewm/toolbar` did remove the xterm/web quick-launchers.)
+- ✅ RESOLVED: bar **system stats** — CPU/RAM/Net monitors on (IceWM's are little
+  time-series graphs, not Polybar-style text); temp omitted (ample cooling, no
+  native widget).
+- ✅ RESOLVED: **Super+drag** — `MouseWinMove="Super+Pointer_Button1"` /
+  `MouseWinSize="Super+Pointer_Button3"` (replaces default Alt+drag, frees Alt+click
+  for apps). And direct **Alt+Tab** — `KeySysWinNext` (NOT QuickSwitch, which
+  `QuickSwitch=0` disables *entirely*) + `RaiseOnFocus=1` raises each window so you
+  see it; no popup list.
 
 **Control CLI:** `icesh` (EWMH-aware, ships with IceWM) — drives the keybinds and
-is the live-debugging tool for the OPEN items. `icewmhint` for per-window hints.
+was the live-debugging tool for everything above. `icewmhint` for per-window hints.
+
+### Round-2 — live-session results, gotchas, verdict (2026-06-16)
+
+Tuned entirely *inside* a real `start-icewm` session via `icesh` (PekWM's `Super`
+grabs blocked keyboard testing in Xephyr). Key gotchas:
+
+- **`icesh restart` applies preference changes in place** — the WM re-execs, all
+  client windows survive (re-parented), and config is re-read. This is the live-
+  tweak loop; no logout needed. (Mouse/`Win95Keys`/`Look`/border changes all need
+  a restart, not just `icesh winoptions`/`keys`.)
+- **The bar's 3D look AND the window-frame bevel both came from the default
+  `pixmap` theme**, which silently overrode preference `Look="flat"` for frames.
+  A minimal custom theme (`themes/godlike/default.theme`, `Look=flat`) displaced
+  it — that's what flattened the bar *and* enabled a thin border.
+- **IceWM window borders are color-computed with a Win95 raised bevel on every
+  `Look`** — top/left = highlight (`ColorActiveBorder`), bottom/right = shadow.
+  There is **no flat/uniform-border option and no image-based border** (pixmap
+  themes only image titlebar buttons, not the frame). At `BorderSizeX/Y=1` only
+  the highlight shows (top-left "⌐"); at `2` all sides show but stay beveled.
+  Settled on **2px** cyan(focus)/slate(unfocus) — the balanced ceiling.
+- **`QuickSwitch=0` disables Alt+Tab outright** (the popup *is* the switch);
+  direct cycling is a different action, `KeySysWinNext`.
+- **Bare `Super` tap → menu** is `Win95Keys=1` (default), not a desktop/bar menu.
+
+**Verdict (user, daily use):** IceWM is **noticeably more responsive and more
+stable** than the PekWM trial — several PekWM "oddities" that read as bugs (the
+focus-fallback-after-SendToWorkspace miss, the dead `Titlebar`/`KeyWinClose`
+autoprops, `~`-not-expanding in `Exec`) simply don't occur here; the two-decade
+maturity shows. **IceWM adopted as the active X11 daily driver** in the toggle
+rotation (`start-icewm` / `start-pekwm` / `start-hyprland`). PekWM and Hyprland
+remain installed and toggleable; nothing was removed.
 
 ---
 
