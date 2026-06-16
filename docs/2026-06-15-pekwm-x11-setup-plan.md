@@ -930,6 +930,30 @@ between them corrupts the Wayland portal — two separate problems:
   shell). Health check:
   `busctl --user introspect org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop | grep Screenshot`.
 
+### Removing window titlebars — autoproperties are dead; the theme is the lever (2026-06-15)
+
+Jim wanted titlebar-less windows (title shows in Polybar instead). This was a long
+fight worth recording so it isn't re-fought:
+
+- **The `Titlebar` / `Border` / `Decor` autoproperties are NON-FUNCTIONAL for NORMAL
+  windows in pekwm 0.4.4.** Verified five ways — `Property = ".*,.*"` single-line and
+  multi-line, a `NORMAL` TypeRule, a specific-class `Property = "^kitty,^kitty"`, and
+  a `Decor = "..."` assignment — none removed the titlebar, and pekwm loads them all
+  with **zero parse errors** (captured a fresh pekwm's stderr in a nested Xephyr).
+  The docs say these keys work; in this build they don't.
+- **What DOES work:** the runtime `Toggle DecorTitlebar` action (proved it:
+  `_NET_FRAME_EXTENTS` top `23 → 2`), and the **theme's `DEFAULT` decor**. Decoration
+  is owned by theme Decor-sets, not autoproperties.
+- **Fix:** vendored the default theme to `dotfiles/.pekwm-desktop/themes/godlike/` and
+  changed its `DEFAULT` decor from `@BaseDecor` (Height 24, titlebar) to
+  `@NoTitlebarDecor` (Height 0, thin border kept; `@EmptyDecor` for fully bare).
+  Repointed `config` → `Theme = "~/.pekwm/themes/godlike"`.
+- **Gotcha:** `pekwm_ctrl -a run Reload` reloads theme *content* but does NOT swap to a
+  different theme *path* — a theme-path change needs `Restart` (or a session relaunch).
+- **Debugging technique that cracked it:** `_NET_FRAME_EXTENTS` (top value = titlebar
+  height) as an objective decoration check, and a nested-Xephyr pekwm to load the theme
+  fresh + capture stderr without disturbing the live session.
+
 ### Commit trail
 dotfiles: `vendor baseline → config/keys/vars → autoproperties → polybar →
 session files → xorg TearFree → gitignore runtime`. i3-screen-manager: spec, plan,
