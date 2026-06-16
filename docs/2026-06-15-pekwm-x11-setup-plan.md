@@ -954,6 +954,31 @@ fight worth recording so it isn't re-fought:
   height) as an objective decoration check, and a nested-Xephyr pekwm to load the theme
   fresh + capture stderr without disturbing the live session.
 
+### Session-startup gotchas — keyring prompt, wallpaper, nm-applet (2026-06-15)
+
+Three first-real-use breakages, all from differences vs the Hyprland session:
+
+- **No keyring-unlock prompt.** The gnome-keyring daemon ran fine, but you were never
+  prompted to unlock the default keyring. Cause: **`start-pekwm` launches the session
+  `dbus-daemon` BEFORE X exists, so the bus has no `DISPLAY`.** When gnome-keyring
+  D-Bus-activates `gcr-prompter` (the unlock dialog), it inherits that display-less env
+  and can't draw. The Hyprland config calls `dbus-update-activation-environment`; the
+  PekWM session didn't. **Fix:** added
+  `dbus-update-activation-environment DISPLAY XAUTHORITY XDG_CURRENT_DESKTOP …` to
+  `.xinitrc-desktop` (runs under X, after `DISPLAY` is set). Also propagated live with
+  the same command. (Same fix unblocks the xdg portals' ability to draw.)
+- **Wallpaper not sticking.** `feh` set `earth.jpg`, but the **pekwm theme paints its
+  own root `Background`** (a `LinesAngle` gradient) on theme load — and `.xinitrc` runs
+  feh *then* `exec pekwm`, so pekwm wins the race. **Fix:** set the godlike theme's root
+  `Background { Texture = "Empty" }` so pekwm leaves the root window to feh.
+- **nm-applet permanently "angry."** This desktop has **no NetworkManager** — `eth0` is
+  carried by **dhcpcd** under OpenRC's `net.eth0`. `nm-applet` (copied from the Hyprland
+  autostart) just shows a "NM not running" tray icon. **Fix:** removed it from
+  `.xinitrc-desktop`; the Polybar `network` module already shows the link.
+- **Watch item:** `gnome-keyring-daemon` (like `xdg-desktop-portal`) accumulates stale
+  instances across WM-bounces — a reaper in the launchers (before the `--start`) would
+  stop the buildup, mirroring the portal reaper. Not yet added.
+
 ### Commit trail
 dotfiles: `vendor baseline → config/keys/vars → autoproperties → polybar →
 session files → xorg TearFree → gitignore runtime`. i3-screen-manager: spec, plan,
