@@ -975,9 +975,10 @@ Three first-real-use breakages, all from differences vs the Hyprland session:
   carried by **dhcpcd** under OpenRC's `net.eth0`. `nm-applet` (copied from the Hyprland
   autostart) just shows a "NM not running" tray icon. **Fix:** removed it from
   `.xinitrc-desktop`; the Polybar `network` module already shows the link.
-- **Watch item:** `gnome-keyring-daemon` (like `xdg-desktop-portal`) accumulates stale
-  instances across WM-bounces — a reaper in the launchers (before the `--start`) would
-  stop the buildup, mirroring the portal reaper. Not yet added.
+- **Stale keyring daemons (fixed):** `gnome-keyring-daemon` (like `xdg-desktop-portal`)
+  accumulates stale instances across WM-bounces. Both launchers now reap them by
+  executable **before** the `gnome-keyring-daemon --start` (mirrors the portal reaper).
+  Existing orphans clear on the next launch.
 
 ### Commit trail
 dotfiles: `vendor baseline → config/keys/vars → autoproperties → polybar →
