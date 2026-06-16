@@ -394,7 +394,35 @@ cd /home/jim/projects/dotfiles && git add .local/bin/start-icewm .xinitrc-icewm 
 
 - [ ] **Step 4: Finalize execution log** in this doc (gotchas, decisions, what diverged from the spec), commit, and push both repos **when the user asks**.
 
-**Task 7 — findings:** _(fill during execution)_
+**Task 7 — findings / live-tweak backlog (Xephyr pass, 2026-06-16):**
+
+Verified in nested Xephyr; full *keyboard* testing is blocked by the outer PekWM's
+`Super` grabs, so the OPEN items below finish in a real `start-icewm` boot.
+
+- ✅ click-to-focus; titlebarless (global `.dTitleBar: 0`, 4px border = cyan focus
+  cue); non-toggle maximize/restore via `icesh -f maximize`/`restore` honoring the
+  strut; send-to-workspace `icesh -f setWorkspace` (0-indexed) with **focus
+  surviving** (no helper needed); native half-tiling (`KeyWinTile*`); rofi launch;
+  close via `icesh -f close` (the `KeyWinClose="Super+q"` preference did NOT fire —
+  keys-file + icesh does).
+- ✅ Bar: moved to **TOP**, `Look="flat"`, near-black palette, **no boxes**
+  (text-colour state: cyan active workspace / white active window), window icons
+  off, CPU/net graph monitors off.
+- ✅ Quick-launch toolbar emptied (`~/.icewm/toolbar`) — kills the default xterm +
+  "Web browser" buttons.
+- ✅ `start-icewm` + `.xinitrc-icewm` (clones of the PekWM siblings): keyring
+  bootstrap + `dbus-update-activation-environment` carried over so the unlock
+  prompt draws; native taskbar (no Polybar), IceWM owns the wallpaper (no feh).
+- 🔧 OPEN: the categorized **application menu still pops up** despite
+  `TaskBarShowStartMenu=0` + `DesktopMenuButton=0` + `DesktopWinListButton=0`.
+  Trigger unidentified under Xephyr (input-grab). Re-check live with `icesh`.
+- ❓ OPEN: bar **system stats** (CPU/RAM/temp/net) — currently off; pick a minimal
+  subset vs. clock-and-tray clean.
+- ❓ OPEN (real session): mouse `Super`+drag move/resize parity; wallpaper fill vs.
+  scale; final flatness/colour pass.
+
+**Control CLI:** `icesh` (EWMH-aware, ships with IceWM) — drives the keybinds and
+is the live-debugging tool for the OPEN items. `icewmhint` for per-window hints.
 
 ---
 
