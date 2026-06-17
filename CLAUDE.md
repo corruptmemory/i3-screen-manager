@@ -38,44 +38,59 @@ anything compositor- or tooling-adjacent:
   gotcha: the native install must be finalized from a clean terminal, *not*
   from inside a Claude Code session.
 
-The PekWM and IceWM work is a *forward-looking experiment* (possibly leaving
-Hyprland for a stacking X11 WM), not a migration, but the docs live alongside:
+**IceWM is now the active X11 alternative on both machines.** PekWM was tried
+on the desktop and **declared over** (verdict: PekWM oddities read as bugs;
+IceWM noticeably more responsive and stable) — left installed and toggleable
+on the desktop but no longer the recommendation, and **not replicated to the
+laptop**. The full WM rotation:
+
+- **`godlike-artix` (desktop):** Hyprland (Wayland) · IceWM (X11, daily) · PekWM (X11, deprecated)
+- **`nomad-artix` (laptop):** Hyprland (Wayland) · IceWM (X11, scaffolded 2026-06-17 — pending first TTY-boot validation)
+
+Docs:
 
 - `docs/2026-06-15-x11-wm-research.md` — the "why PekWM" survey of living X11 WMs.
-- `docs/2026-06-15-pekwm-x11-setup.md` (+ `…-plan.md`) — design, build plan, and
-  execution log for a **PekWM-on-XLibre** session on `godlike-artix`, toggleable
-  against Hyprland (`start-pekwm` for X11 vs `start-hyprland` for Wayland). The
-  PekWM config lives in the **dotfiles repo** (`.pekwm-desktop/`,
-  `polybar/config-pekwm.ini`, `.xinitrc-desktop`, `.local/bin/start-pekwm`).
-  Built + booted 2026-06-15.
-- `docs/2026-06-16-icewm-x11-setup.md` (+ `…-plan.md`) — design + execution log for
-  an **IceWM 4.0-on-XLibre** session (`start-icewm`), same toggle pattern. Config
-  lives in dotfiles (`.icewm/`, `.xinitrc-icewm`, `.local/bin/start-icewm`), using
-  IceWM's **native taskbar** (no Polybar) and the **`icesh`** control CLI. **Now
-  the preferred X11 daily driver** — judged noticeably more responsive and stable
-  than PekWM (whose oddities read as bugs). Border quirk to know: IceWM
-  color-computes a Win95 bevel on every `Look`, so a perfectly flat/uniform window
-  border isn't achievable (settled on a 2px beveled cyan/slate border).
+- `docs/2026-06-15-pekwm-x11-setup.md` (+ `…-plan.md`) — PekWM-on-XLibre on
+  `godlike-artix`. **Trial over; setup retained but deprecated.** Config lives
+  in dotfiles (`.pekwm-desktop/`, `polybar/config-pekwm.ini`,
+  `.xinitrc-desktop`, `.local/bin/start-pekwm`).
+- `docs/2026-06-16-icewm-x11-setup.md` (+ `…-plan.md`) — **IceWM 4.0-on-XLibre
+  on the desktop** (`start-icewm`). Native taskbar (no Polybar), `icesh` control
+  CLI. Border quirk: IceWM color-computes a Win95 bevel on every `Look`, so
+  a uniform border isn't achievable — settled on 2px beveled cyan/slate.
+  Config: `dotfiles/.icewm/`, `dotfiles/.xinitrc-icewm`,
+  `dotfiles/.local/bin/start-icewm`.
+- `docs/2026-06-17-icewm-laptop-setup.md` — **IceWM on the laptop**
+  (`start-icewm-laptop`). Mirrors the desktop setup with hardware deltas:
+  NVIDIA PRIME via `xorg.conf.d/10-nvidia-prime.conf` (Intel modesetting
+  primary, NVIDIA secondary, externals bound via
+  `xrandr --setprovideroutputsource`), touchpad config, brightness keys,
+  battery widget. Config: `dotfiles/.icewm-laptop/`,
+  `dotfiles/.xinitrc-icewm-laptop`, `dotfiles/.local/bin/start-icewm-laptop`.
+  IceWM picks up the laptop config via `ICEWM_PRIVCFG` (no `~/.icewm`
+  symlink needed).
 
-All additive and reversible — Hyprland, PekWM, and IceWM are installed and
-toggleable from a TTY; nothing was removed.
+All additive and reversible — Hyprland, IceWM, and PekWM are installed and
+toggleable from a TTY on the desktop; nothing was removed. The laptop has
+Hyprland + IceWM only (no PekWM — trial declared over before reaching here).
 
 ## Architecture
 
 Scripts, no build step. All committed in this repo and symlinked from
 `~/.local/bin/`:
 
-**Display & input management:**
-- `i3-screen-manager` — CLI wrapping `hyprctl keyword monitor` + `wlr-randr` for display layout (extend/clamshell/mirror/disconnect/scale/status)
-- `i3-screen-rofi` — Rofi menu frontend that calls `i3-screen-manager`
-- `i3-mouse-setup` — Login-time script that applies saved mouse DPI via `solaar`
-- `i3-mouse-rofi` — Rofi menu for mouse DPI adjustment (saves choice for persistence)
-- `i3-keyboard-rofi` — Rofi toggle for laptop (Caps→Ctrl) vs external keyboard layout
+**Display & input management (compositor-aware — Wayland AND X11):**
+- `i3-screen-manager` — CLI for display layout (extend/clamshell/mirror/disconnect/scale/status). Dispatches internally on `$XDG_SESSION_TYPE`: Wayland uses `hyprctl dispatch 'hl.monitor({...})'` (Lua-mode-safe); X11 uses `xrandr`. Single source of truth; same UX both ways. (Until 2026-06-17 this was Hyprland-only and silently broken under Hyprland 0.55+ Lua mode.)
+- `i3-screen-rofi` — Rofi menu frontend that calls `i3-screen-manager` (compositor-agnostic)
+- `i3-keyboard-rofi` — Rofi toggle for laptop (Caps→Ctrl) vs external keyboard. Dispatches on `$XDG_SESSION_TYPE`: Wayland → `hyprctl keyword input:kb_options`; X11 → `setxkbmap -option`. Same UX both ways.
+- `i3-mouse-setup` — Login-time script that applies saved mouse DPI via `solaar`. Compositor-agnostic (HID-level).
+- `i3-mouse-rofi` — Rofi menu for mouse DPI adjustment (saves choice for persistence). Compositor-agnostic.
 - `i3-cmos-battery` — CMOS battery voltage monitor (CLI + waybar output, formerly polybar)
 
 **Hyprland session bring-up & maintenance:**
 - `start-hyprland` — Hyprland session launcher: env, gnome-keyring, ssh-agent at predictable socket, NVIDIA hybrid `AQ_DRM_DEVICES`, `exec /usr/bin/start-hyprland`
-- `laptop-monitor.sh` — Lid switch handler; checks the clamshell inhibitor PID before re-enabling eDP-1
+- `laptop-monitor.sh` — Hyprland lid-switch handler; checks the clamshell inhibitor PID before re-enabling eDP-1
+- `laptop-monitor-x11.sh` — X11/IceWM sibling of `laptop-monitor.sh`. **Not auto-wired** (no acpid hook by default); see `docs/2026-06-17-icewm-laptop-setup.md` for the manual-trigger pattern and the acpid wiring recipe.
 - `hyprland-clamshell-restore` — Re-applies clamshell eDP-1 disable after every Hyprland config reload (wired via `hl.on("config.reloaded")` under Lua, or `exec=` under hyprlang)
 - `screenshot.sh` — hyprshot + satty screenshot workflow (alternative path; main flow is flameshot via `Print`)
 - `flameshot.sh` — flameshot wrapper with `QT_SCREEN_SCALE_FACTORS="1;1"` for correct DPI
@@ -117,11 +132,18 @@ No automated tests. Test manually with an external monitor:
 
 ### Hyprland / Wayland
 
+- **`hyprctl keyword monitor` is dead under Lua mode (Hyprland 0.55+)** — returns "keyword can't work with non-legacy parsers. Use eval." The dual-compositor refactor of `i3-screen-manager` (2026-06-17) replaced it with `hyprctl dispatch 'hl.monitor({...})'`. The dispatch wrapper itself errors ("hl.dispatch: expected a dispatcher") but the `hl.monitor()` side effect runs first — verified during the 75Hz experiment 2026-06-13 and the `i3-screen-manager disconnect` smoke test 2026-06-17. The `hl_apply` helper quiets the wrapper error and accepts the side effect.
 - **Black screen on disconnect**: lid was closed and eDP-1 couldn't activate. The lid guard prevents this.
 - **External not detected**: `wlr-randr` should see it. NVIDIA outputs follow `*-N-N` naming (e.g. `HDMI-1-0`, `DP-1-0`).
-- **Phantom monitor after clamshell**: `hyprctl keyword monitor eDP-1,disable` is documented-unreliable. Always paired with `wlr-randr --output eDP-1 --off` in the scripts. If it ever recurs, rerun `i3-screen-manager clamshell`.
+- **Phantom monitor after clamshell**: `hl.monitor disabled=true` is unreliable like the hyprlang `keyword monitor X,disable` it replaced. Always paired with `wlr-randr --output X --off` in the scripts. If it ever recurs, rerun `i3-screen-manager clamshell`.
 - **Waybar workspace clicks do nothing under Lua mode**: known regression — waybar #5008. Hyprland 0.55+ tries to evaluate the IPC dispatch string as Lua, and waybar's old-style `dispatch workspace N` is not valid Lua. Workaround: `Super+N` keyboard shortcut (works), or mouse-wheel on the bar (works via configured `on-scroll-*`). See `docs/hyprland-lua-migration.md` § "Waybar workspace click regression".
 - **GTK file dialog hangs 25 seconds**: `gvfsd-trash` D-Bus backend times out. Root fix: remove `gvfs` entirely (`sudo pacman -R gvfs evince`) and use `xreader` instead of evince. Keep `export GIO_USE_VFS=local` in `start-hyprland` as a safety net. Diagnose with `time gio info trash:///` (slow) vs `time GIO_USE_VFS=local gio info trash:///` (instant).
+
+### X11 / IceWM (laptop-specific)
+
+- **NVIDIA PRIME provider not yet bound**: external monitors don't appear in `xrandr --query` until `xrandr --setprovideroutputsource modesetting NVIDIA-G0` runs. The xinitrc-icewm-laptop fires it at session start; `i3-screen-manager`'s X11 path fires it again before any external operation (`ensure_nvidia_provider_x11`) as belt-and-suspenders. Sources disagree on the argument order (`provider source` vs `modesetting NVIDIA-*`), so the helper tries four orderings silently.
+- **Scale under X11**: no Wayland-style per-output fractional scaling. `i3-screen-manager scale` under X11 applies a server-wide `Xft.dpi` via `xrdb -merge`, which only affects newly-launched apps (existing apps don't redraw). Different model from Hyprland's hot-applied scale.
+- **Lid handling is manual under IceWM**: no native lid binding; auto-handling would require `acpid` + a script that crosses the root-to-user boundary. The current plan: enter clamshell explicitly via `i3-screen-rofi → Clamshell`. The `elogind-inhibit` inhibitor works under both compositors and prevents suspend on lid close. See `docs/2026-06-17-icewm-laptop-setup.md` § "Lid handling, deferred".
 
 ### Hardware / kernel
 

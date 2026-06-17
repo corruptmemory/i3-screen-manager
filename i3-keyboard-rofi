@@ -1,19 +1,31 @@
 #!/usr/bin/env bash
 #
-# i3-keyboard-rofi — toggle keyboard remapping for laptop vs external keyboard
+# i3-keyboard-rofi — toggle keyboard remapping for laptop vs external keyboard.
+#
+# Laptop: Caps→Ctrl, both Shifts → CapsLock (cancel). External: no remapping
+# (default US layout, real Caps Lock).
+#
+# Compositor-aware: uses `hyprctl` under Wayland/Hyprland, `setxkbmap` under
+# X11/IceWM. Detection via $XDG_SESSION_TYPE with a $WAYLAND_DISPLAY fallback.
 #
 
 set -euo pipefail
 
-LAPTOP_OPTS="ctrl:nocaps,shift:both_capslock"
+LAPTOP_OPTS="ctrl:nocaps,shift:both_capslock_cancel"
 
-current_mode() {
+is_wayland() {
+    [[ "${XDG_SESSION_TYPE:-}" == "wayland" || -n "${WAYLAND_DISPLAY:-}" ]]
+}
+
+# --- Mode introspection (returns "laptop" or "external") ---
+
+current_mode_wayland() {
     local raw opts isset
     raw=$(hyprctl getoption input:kb_options)
     opts=$(echo "$raw" | grep "^str:" | awk '{print $2}')
     isset=$(echo "$raw" | grep "^set:" | awk '{print $2}')
-    # set: false = no keyword override, config value active (ctrl:nocaps = laptop)
-    # set: true  = keyword override active; check what it's set to
+    # set: false = no keyword override, config value (ctrl:nocaps = laptop) live.
+    # set: true  = keyword override active; inspect.
     if [[ "$isset" == "false" ]] || echo "$opts" | grep -q "ctrl:nocaps"; then
         echo "laptop"
     else
@@ -21,13 +33,38 @@ current_mode() {
     fi
 }
 
-set_laptop() {
-    hyprctl keyword input:kb_options "$LAPTOP_OPTS"
+current_mode_x11() {
+    # `setxkbmap -query` returns current state. If `ctrl:nocaps` is among the
+    # options, we're in laptop mode.
+    if setxkbmap -query 2>/dev/null | grep -q '^options:.*ctrl:nocaps'; then
+        echo "laptop"
+    else
+        echo "external"
+    fi
 }
 
-set_external() {
-    hyprctl keyword input:kb_options ""
+current_mode() {
+    if is_wayland; then current_mode_wayland; else current_mode_x11; fi
 }
+
+# --- Mode setters ---
+
+set_laptop_wayland()    { hyprctl keyword input:kb_options "$LAPTOP_OPTS" >/dev/null; }
+set_external_wayland()  { hyprctl keyword input:kb_options "" >/dev/null; }
+
+# `setxkbmap -option` (no value) clears all previously-set options; then a
+# second invocation applies the new option set in one shot.
+set_laptop_x11()    { setxkbmap -option ; setxkbmap -option "$LAPTOP_OPTS"; }
+set_external_x11()  { setxkbmap -option ; }
+
+set_laptop() {
+    if is_wayland; then set_laptop_wayland; else set_laptop_x11; fi
+}
+set_external() {
+    if is_wayland; then set_external_wayland; else set_external_x11; fi
+}
+
+# --- Rofi UI ---
 
 mode=$(current_mode)
 
@@ -43,6 +80,6 @@ choice=$(printf "%s\n%s" "● $current" "  $other" \
     | rofi -dmenu -i -p "Keyboard" -theme-str 'window {width: 300px;}')
 
 case "$choice" in
-    *"Laptop"*)  set_laptop ;;
+    *"Laptop"*)   set_laptop ;;
     *"External"*) set_external ;;
 esac

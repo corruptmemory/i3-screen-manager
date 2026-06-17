@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# i3-screen-manager — manage external displays on Hyprland/Wayland
+# i3-screen-manager — manage external displays on Hyprland (Wayland) and IceWM (X11)
 #
 # Usage:
 #   i3-screen-manager <command>
@@ -16,6 +16,19 @@
 #   scale [VALUE]   Set monitor scale (shows rofi picker if no value given)
 #   status          Show current display state
 #
+# Compositor support:
+#   - Wayland/Hyprland-Lua (0.55+): uses `hyprctl dispatch 'hl.monitor({...})'`
+#     because `hyprctl keyword` no longer works under the Lua config manager.
+#     The dispatch wrapper itself errors ("expected a dispatcher") but the
+#     hl.monitor() side effect applies first — verified during the 75Hz
+#     experiment on 2026-06-13. We quiet the error and accept the side effect.
+#   - X11/IceWM: uses xrandr. NVIDIA PRIME provider hookup is run before
+#     external operations because all external ports on this ThinkPad route
+#     through NVIDIA.
+#
+# Detection: $XDG_SESSION_TYPE (set by both start-hyprland and start-icewm-laptop)
+# with a $WAYLAND_DISPLAY fallback.
+#
 
 set -euo pipefail
 
@@ -24,13 +37,17 @@ INTERNAL_SCALE=1.25
 EXTERNAL_SCALE=1.0
 PIDFILE="/tmp/i3-screen-manager-inhibit.pid"
 
-# --- Detection ---
+# ============================================================================
+# Compositor detection
+# ============================================================================
 
-find_external() {
-    # wlr-randr lists all physically connected outputs (including Hyprland-disabled ones).
-    # hyprctl monitors -j only shows active ones — misses monitors disabled via keyword.
-    wlr-randr 2>/dev/null | grep -oP '^[A-Za-z0-9-]+' | grep -v "^${INTERNAL}$" | head -1
+is_wayland() {
+    [[ "${XDG_SESSION_TYPE:-}" == "wayland" || -n "${WAYLAND_DISPLAY:-}" ]]
 }
+
+# ============================================================================
+# Shared helpers (compositor-agnostic — kernel ACPI + elogind)
+# ============================================================================
 
 find_lid_state() {
     local f
@@ -53,64 +70,6 @@ inhibitor_is_active() {
     [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
 }
 
-# --- Monitor info helpers ---
-
-# Logical width/height account for scale (what Hyprland uses for layout)
-monitor_logical_width() {
-    hyprctl monitors -j | jq --arg n "$1" \
-        '.[] | select(.name==$n) | (.width / .scale) | floor'
-}
-
-monitor_logical_height() {
-    hyprctl monitors -j | jq --arg n "$1" \
-        '.[] | select(.name==$n) | (.height / .scale) | floor'
-}
-
-# Mode string for hyprctl keyword: "2560x1440@59.95" (no Hz suffix).
-# Tries hyprctl first (monitor is active); falls back to wlr-randr (monitor disabled).
-preferred_mode() {
-    local name="$1" mode
-    mode=$(hyprctl monitors -j 2>/dev/null | jq -r --arg n "$name" \
-        '.[] | select(.name==$n) | .availableModes[0]' | sed 's/Hz//')
-    if [[ -z "$mode" || "$mode" == "null" ]]; then
-        # Parse wlr-randr: find the line marked (preferred) under this output
-        mode=$(wlr-randr 2>/dev/null | awk -v out="$name" '
-            $0 ~ "^"out" " { found=1; next }
-            found && /preferred/ {
-                match($0, /([0-9]+)x([0-9]+) px, ([0-9.]+) Hz/, m)
-                printf "%sx%s@%s", m[1], m[2], m[3]
-                exit
-            }
-            found && /^[^ ]/ { exit }
-        ')
-    fi
-    echo "$mode"
-}
-
-preferred_width()  { preferred_mode "$1" | grep -oP '^\d+'; }
-preferred_height() { preferred_mode "$1" | grep -oP 'x\K\d+'; }
-
-# --- Desktop refresh ---
-
-refresh_desktop() {
-    # After monitor layout changes, swaybg and waybar don't auto-cover repositioned
-    # outputs (they only listen for new output events, not geometry changes).
-    # Restart swaybg with its current args, then reload waybar config.
-    local pid
-    pid=$(pgrep -o swaybg 2>/dev/null || true)
-    if [[ -n "$pid" ]]; then
-        local -a args
-        mapfile -d '' args < /proc/"$pid"/cmdline
-        pkill swaybg 2>/dev/null || true
-        sleep 0.2
-        "${args[@]}" &
-        disown
-    fi
-    pkill -SIGUSR2 waybar 2>/dev/null || true
-}
-
-# --- Inhibitor ---
-
 start_inhibitor() {
     stop_inhibitor
     elogind-inhibit --what=handle-lid-switch \
@@ -129,16 +88,85 @@ stop_inhibitor() {
     fi
 }
 
-# --- Workspace management ---
+# ============================================================================
+# Wayland (Hyprland-Lua) backend
+# ============================================================================
 
-move_workspaces_to() {
+# hl_apply wraps `hyprctl dispatch 'hl.monitor({...})'`. Under the Lua config
+# manager, the dispatch wrapper itself errors ("hl.dispatch: expected a
+# dispatcher (e.g. hl.dsp.window.close())") but the hl.monitor() side effect
+# applies before the wrapper fails. Quiet the error; accept the side effect.
+# Verified during the 75Hz experiment, 2026-06-13.
+hl_apply() {
+    hyprctl dispatch "hl.monitor({ $1 })" >/dev/null 2>&1 || true
+}
+
+find_external_wayland() {
+    # wlr-randr lists all physically connected outputs (including
+    # Hyprland-disabled ones). hyprctl monitors -j only shows active ones.
+    # `|| true` swallows the non-zero from grep -v when nothing matches —
+    # otherwise pipefail propagates and `set -e` exits the script silently.
+    wlr-randr 2>/dev/null | grep -oP '^[A-Za-z0-9-]+' | grep -v "^${INTERNAL}$" | head -1 || true
+}
+
+monitor_logical_width_wayland() {
+    hyprctl monitors -j | jq --arg n "$1" \
+        '.[] | select(.name==$n) | (.width / .scale) | floor'
+}
+
+monitor_logical_height_wayland() {
+    hyprctl monitors -j | jq --arg n "$1" \
+        '.[] | select(.name==$n) | (.height / .scale) | floor'
+}
+
+# Mode string: "2560x1440@59.95" (no Hz suffix).
+preferred_mode_wayland() {
+    local name="$1" mode
+    mode=$(hyprctl monitors -j 2>/dev/null | jq -r --arg n "$name" \
+        '.[] | select(.name==$n) | .availableModes[0]' | sed 's/Hz//')
+    if [[ -z "$mode" || "$mode" == "null" ]]; then
+        # Monitor is disabled — fall back to wlr-randr's preferred line.
+        mode=$(wlr-randr 2>/dev/null | awk -v out="$name" '
+            $0 ~ "^"out" " { found=1; next }
+            found && /preferred/ {
+                match($0, /([0-9]+)x([0-9]+) px, ([0-9.]+) Hz/, m)
+                printf "%sx%s@%s", m[1], m[2], m[3]
+                exit
+            }
+            found && /^[^ ]/ { exit }
+        ')
+    fi
+    echo "$mode"
+}
+
+preferred_width_wayland()  { preferred_mode_wayland "$1" | grep -oP '^\d+'; }
+preferred_height_wayland() { preferred_mode_wayland "$1" | grep -oP 'x\K\d+'; }
+
+refresh_desktop_wayland() {
+    # After monitor layout changes, swaybg and waybar don't auto-cover
+    # repositioned outputs. Restart swaybg with its current args, then reload
+    # waybar config.
+    local pid
+    pid=$(pgrep -o swaybg 2>/dev/null || true)
+    if [[ -n "$pid" ]]; then
+        local -a args
+        mapfile -d '' args < /proc/"$pid"/cmdline
+        pkill swaybg 2>/dev/null || true
+        sleep 0.2
+        "${args[@]}" &
+        disown
+    fi
+    pkill -SIGUSR2 waybar 2>/dev/null || true
+}
+
+move_workspaces_to_wayland() {
     local target="$1"
     hyprctl workspaces -j | jq -r '.[].id' | while read -r wsid; do
         hyprctl dispatch moveworkspacetomonitor "$wsid" "$target" 2>/dev/null || true
     done
 }
 
-move_workspaces_from() {
+move_workspaces_from_wayland() {
     local source="$1"
     local target="$2"
     hyprctl workspaces -j | jq -r --arg src "$source" \
@@ -147,7 +175,7 @@ move_workspaces_from() {
     done
 }
 
-ensure_workspace_on() {
+ensure_workspace_on_wayland() {
     local target="$1"
     local count
     count=$(hyprctl workspaces -j | jq --arg mon "$target" \
@@ -159,7 +187,53 @@ ensure_workspace_on() {
     fi
 }
 
-# --- Commands ---
+# ============================================================================
+# X11 (IceWM) backend
+# ============================================================================
+
+# PRIME provider hookup: on this ThinkPad all external display ports route
+# through NVIDIA, so its outputs need to be made visible to the modesetting
+# X server. The sources disagree on argument order (older docs say
+# `provider source`; the Arch Optimus wiki uses `modesetting NVIDIA-0`),
+# so try both forms. Idempotent — once bound, subsequent calls are no-ops.
+ensure_nvidia_provider_x11() {
+    xrandr --setprovideroutputsource modesetting NVIDIA-G0 2>/dev/null || \
+    xrandr --setprovideroutputsource modesetting NVIDIA-0  2>/dev/null || \
+    xrandr --setprovideroutputsource NVIDIA-G0 modesetting 2>/dev/null || \
+    xrandr --setprovideroutputsource NVIDIA-0  modesetting 2>/dev/null || true
+}
+
+find_external_x11() {
+    ensure_nvidia_provider_x11
+    # An xrandr "connected" line whose name is not the internal output.
+    # Grab the first such — i3-screen-manager has always assumed one external.
+    xrandr --query 2>/dev/null | awk -v internal="$INTERNAL" '
+        / connected/ && $1 != internal { print $1; exit }
+    '
+}
+
+refresh_desktop_x11() {
+    # IceWM owns the wallpaper (icewmbg) and tracks layout changes on its own.
+    # dunst gets a SIGUSR1 to re-detect screens for notification placement.
+    # Best-effort; absence is fine.
+    pkill -USR1 dunst 2>/dev/null || true
+}
+
+# ============================================================================
+# Top-level dispatchers (pick the backend)
+# ============================================================================
+
+find_external() {
+    if is_wayland; then find_external_wayland; else find_external_x11; fi
+}
+
+refresh_desktop() {
+    if is_wayland; then refresh_desktop_wayland; else refresh_desktop_x11; fi
+}
+
+# ============================================================================
+# Commands
+# ============================================================================
 
 cmd_extend() {
     local direction="$1"
@@ -172,28 +246,52 @@ cmd_extend() {
 
     stop_inhibitor
 
+    if is_wayland; then
+        cmd_extend_wayland "$direction" "$ext"
+    else
+        cmd_extend_x11 "$direction" "$ext"
+    fi
+}
+
+cmd_extend_wayland() {
+    local direction="$1" ext="$2"
     local int_lw int_lh ext_pw ext_ph
-    int_lw=$(monitor_logical_width "$INTERNAL")
-    int_lh=$(monitor_logical_height "$INTERNAL")
-    ext_pw=$(preferred_width "$ext")
-    ext_ph=$(preferred_height "$ext")
+    int_lw=$(monitor_logical_width_wayland "$INTERNAL")
+    int_lh=$(monitor_logical_height_wayland "$INTERNAL")
+    ext_pw=$(preferred_width_wayland "$ext")
+    ext_ph=$(preferred_height_wayland "$ext")
 
     # Ensure internal is active at its canonical position
-    hyprctl keyword monitor "$INTERNAL,preferred,0x0,$INTERNAL_SCALE"
+    hl_apply "output = \"$INTERNAL\", mode = \"preferred\", position = \"0x0\", scale = $INTERNAL_SCALE"
 
-    # Use "preferred" mode keyword — avoids decimal precision mismatches from wlr-randr
     case "$direction" in
-        right) hyprctl keyword monitor "$ext,preferred,${int_lw}x0,$EXTERNAL_SCALE" ;;
-        left)  hyprctl keyword monitor "$ext,preferred,-${ext_pw}x0,$EXTERNAL_SCALE" ;;
-        above) hyprctl keyword monitor "$ext,preferred,0x-${ext_ph},$EXTERNAL_SCALE" ;;
-        below) hyprctl keyword monitor "$ext,preferred,0x${int_lh},$EXTERNAL_SCALE" ;;
+        right) hl_apply "output = \"$ext\", mode = \"preferred\", position = \"${int_lw}x0\", scale = $EXTERNAL_SCALE" ;;
+        left)  hl_apply "output = \"$ext\", mode = \"preferred\", position = \"-${ext_pw}x0\", scale = $EXTERNAL_SCALE" ;;
+        above) hl_apply "output = \"$ext\", mode = \"preferred\", position = \"0x-${ext_ph}\", scale = $EXTERNAL_SCALE" ;;
+        below) hl_apply "output = \"$ext\", mode = \"preferred\", position = \"0x${int_lh}\", scale = $EXTERNAL_SCALE" ;;
     esac
 
     sleep 0.5
-    ensure_workspace_on "$ext"
+    ensure_workspace_on_wayland "$ext"
     sleep 0.5
-    refresh_desktop
-    echo "Extended $direction: $INTERNAL + $ext"
+    refresh_desktop_wayland
+    echo "Extended $direction (Wayland): $INTERNAL + $ext"
+}
+
+cmd_extend_x11() {
+    local direction="$1" ext="$2"
+
+    # Ensure internal is up at origin and primary; then place external.
+    xrandr --output "$INTERNAL" --auto --pos 0x0 --primary
+    case "$direction" in
+        right) xrandr --output "$ext" --auto --right-of "$INTERNAL" ;;
+        left)  xrandr --output "$ext" --auto --left-of  "$INTERNAL" ;;
+        above) xrandr --output "$ext" --auto --above    "$INTERNAL" ;;
+        below) xrandr --output "$ext" --auto --below    "$INTERNAL" ;;
+    esac
+    sleep 0.3
+    refresh_desktop_x11
+    echo "Extended $direction (X11): $INTERNAL + $ext"
 }
 
 cmd_clamshell() {
@@ -204,34 +302,50 @@ cmd_clamshell() {
         exit 1
     fi
 
+    if is_wayland; then
+        cmd_clamshell_wayland "$ext"
+    else
+        cmd_clamshell_x11 "$ext"
+    fi
+}
+
+cmd_clamshell_wayland() {
+    local ext="$1"
+
     # Enable external at a safe non-overlapping position first.
-    # moveworkspacetomonitor silently fails on disabled monitors, so ext must
-    # be active before we try to move workspaces to it.
-    hyprctl keyword monitor "$ext,preferred,auto,$EXTERNAL_SCALE"
+    # moveworkspacetomonitor silently fails on disabled monitors.
+    hl_apply "output = \"$ext\", mode = \"preferred\", position = \"auto\", scale = $EXTERNAL_SCALE"
     sleep 0.5
 
-    # Now move all workspaces off the internal — ext is live, move will succeed.
-    move_workspaces_to "$ext"
+    move_workspaces_to_wayland "$ext"
     sleep 0.3
 
-    # Disable internal first (ext is still active — no zero-display moment),
-    # then reposition external to origin. Doing it in the other order causes
-    # a brief overlap when both monitors occupy 0x0 simultaneously.
-    # Use both hyprctl and wlr-randr: hyprctl keyword monitor disable is known
-    # to be unreliable (can re-enable with a phantom monitor); wlr-randr --off
-    # cuts the physical DRM output and makes the disable stick.
-    hyprctl keyword monitor "$INTERNAL,disable"
+    # Disable internal first (ext still active — no zero-display gap).
+    # hl.monitor disable is unreliable like hyprlang's; pair with wlr-randr --off.
+    hl_apply "output = \"$INTERNAL\", disabled = true"
     sleep 0.2
     wlr-randr --output "$INTERNAL" --off 2>/dev/null || true
-    hyprctl keyword monitor "$ext,preferred,0x0,$EXTERNAL_SCALE"
+    hl_apply "output = \"$ext\", mode = \"preferred\", position = \"0x0\", scale = $EXTERNAL_SCALE"
 
     sleep 0.3
-    refresh_desktop
+    refresh_desktop_wayland
 
-    # Prevent suspend on lid close
     start_inhibitor
+    echo "Clamshell (Wayland): $ext only — lid-close safe"
+}
 
-    echo "Clamshell: $ext only — lid-close safe"
+cmd_clamshell_x11() {
+    local ext="$1"
+
+    # Bring external up at origin and primary, then disable internal.
+    xrandr --output "$ext" --auto --pos 0x0 --primary
+    sleep 0.2
+    xrandr --output "$INTERNAL" --off
+    sleep 0.3
+    refresh_desktop_x11
+
+    start_inhibitor
+    echo "Clamshell (X11): $ext only — lid-close safe"
 }
 
 cmd_mirror() {
@@ -244,12 +358,29 @@ cmd_mirror() {
 
     stop_inhibitor
 
-    hyprctl keyword monitor "$INTERNAL,preferred,0x0,$INTERNAL_SCALE"
-    hyprctl keyword monitor "$ext,preferred,0x0,$EXTERNAL_SCALE,mirror,$INTERNAL"
-    sleep 0.3
-    refresh_desktop
+    if is_wayland; then
+        cmd_mirror_wayland "$ext"
+    else
+        cmd_mirror_x11 "$ext"
+    fi
+}
 
-    echo "Mirror: $ext mirrors $INTERNAL"
+cmd_mirror_wayland() {
+    local ext="$1"
+    hl_apply "output = \"$INTERNAL\", mode = \"preferred\", position = \"0x0\", scale = $INTERNAL_SCALE"
+    hl_apply "output = \"$ext\", mode = \"preferred\", position = \"0x0\", scale = $EXTERNAL_SCALE, mirror = \"$INTERNAL\""
+    sleep 0.3
+    refresh_desktop_wayland
+    echo "Mirror (Wayland): $ext mirrors $INTERNAL"
+}
+
+cmd_mirror_x11() {
+    local ext="$1"
+    xrandr --output "$INTERNAL" --auto --pos 0x0 --primary
+    xrandr --output "$ext" --auto --same-as "$INTERNAL"
+    sleep 0.3
+    refresh_desktop_x11
+    echo "Mirror (X11): $ext mirrors $INTERNAL"
 }
 
 cmd_disconnect() {
@@ -263,28 +394,51 @@ cmd_disconnect() {
     local ext
     ext=$(find_external)
 
+    if is_wayland; then
+        cmd_disconnect_wayland "$ext"
+    else
+        cmd_disconnect_x11 "$ext"
+    fi
+}
+
+cmd_disconnect_wayland() {
+    local ext="$1"
     if [[ -n "$ext" ]]; then
-        # Enable internal with 'auto' so Hyprland places it to the right of the
-        # external — avoids the overlap warning that fires when both monitors
-        # occupy 0x0 simultaneously (common in clamshell mode where ext is at origin).
-        hyprctl keyword monitor "$INTERNAL,preferred,auto,$INTERNAL_SCALE"
+        # Bring internal up at 'auto' first (avoids the overlap warning when
+        # external is at 0x0); move workspaces back; disable external; then
+        # reposition internal to origin.
+        hl_apply "output = \"$INTERNAL\", mode = \"preferred\", position = \"auto\", scale = $INTERNAL_SCALE"
         sleep 0.3
-        move_workspaces_from "$ext" "$INTERNAL"
+        move_workspaces_from_wayland "$ext" "$INTERNAL"
         sleep 0.2
-        # hyprctl disable stops compositing; wlr-randr --off cuts the physical signal
-        hyprctl keyword monitor "$ext,disable"
+        hl_apply "output = \"$ext\", disabled = true"
         wlr-randr --output "$ext" --off 2>/dev/null || true
         sleep 0.2
-        # Reposition internal to origin now that external is gone
-        hyprctl keyword monitor "$INTERNAL,preferred,0x0,$INTERNAL_SCALE"
-        echo "Disconnected: $ext off, $INTERNAL restored"
+        hl_apply "output = \"$INTERNAL\", mode = \"preferred\", position = \"0x0\", scale = $INTERNAL_SCALE"
+        echo "Disconnected (Wayland): $ext off, $INTERNAL restored"
     else
-        hyprctl keyword monitor "$INTERNAL,preferred,0x0,$INTERNAL_SCALE"
+        hl_apply "output = \"$INTERNAL\", mode = \"preferred\", position = \"0x0\", scale = $INTERNAL_SCALE"
         echo "Internal display restored (no external was active)"
     fi
 
     sleep 0.3
-    refresh_desktop
+    refresh_desktop_wayland
+}
+
+cmd_disconnect_x11() {
+    local ext="$1"
+    if [[ -n "$ext" ]]; then
+        xrandr --output "$INTERNAL" --auto --pos 0x0 --primary
+        sleep 0.2
+        xrandr --output "$ext" --off
+        echo "Disconnected (X11): $ext off, $INTERNAL restored"
+    else
+        xrandr --output "$INTERNAL" --auto --pos 0x0 --primary
+        echo "Internal display restored (no external was active)"
+    fi
+
+    sleep 0.3
+    refresh_desktop_x11
 }
 
 cmd_scale() {
@@ -293,19 +447,36 @@ cmd_scale() {
 
     if [[ -z "$scale" ]]; then
         local current
-        current=$(hyprctl monitors -j | jq -r --arg n "$target" \
-            '.[] | select(.name==$n) | .scale')
+        if is_wayland; then
+            current=$(hyprctl monitors -j | jq -r --arg n "$target" \
+                '.[] | select(.name==$n) | .scale')
+        else
+            current=$(xrdb -query 2>/dev/null | awk -F: '/^Xft\.dpi:/ { gsub(/[[:space:]]/, "", $2); printf "%.2f", $2/96 }')
+            [[ -z "$current" ]] && current="1.00 (default)"
+        fi
         scale=$(printf "0.75\n1.00\n1.25\n1.50\n1.75\n2.00" \
             | rofi -dmenu -i -p "Scale for $target (current: ${current:-?})" \
                 -theme-str 'window {width: 300px;}')
     fi
 
-    if [[ -n "$scale" && "$scale" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
-        hyprctl keyword monitor "$target,preferred,auto,$scale"
-        echo "Scale set to $scale on $target"
-    else
+    if [[ -z "$scale" || ! "$scale" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
         echo "Invalid scale value: $scale" >&2
         return 1
+    fi
+
+    if is_wayland; then
+        hl_apply "output = \"$target\", mode = \"preferred\", position = \"auto\", scale = $scale"
+        echo "Scale set to $scale on $target (Wayland)"
+    else
+        # X11: scale → DPI via Xft.dpi (toolkit-level font scaling). The Wayland
+        # 'per-output scale factor' has no X11 equivalent; xrandr --scale exists
+        # but most apps don't honor it. Xft.dpi affects newly-launched apps only;
+        # existing apps don't redraw.
+        local dpi
+        dpi=$(awk -v s="$scale" 'BEGIN { printf "%d", s * 96 }')
+        printf "Xft.dpi: %d\n" "$dpi" | xrdb -merge
+        echo "Scale $scale (DPI $dpi) applied via Xft.dpi (X11)"
+        echo "Note: only affects newly-launched apps; existing apps don't redraw."
     fi
 }
 
@@ -313,17 +484,35 @@ cmd_status() {
     local ext
     ext=$(find_external)
 
-    echo "Internal: $INTERNAL"
-    if [[ -n "$ext" ]]; then
-        echo "External: $ext"
+    if is_wayland; then
+        echo "Compositor:  Wayland (Hyprland)"
     else
-        echo "External: none detected"
+        echo "Compositor:  X11"
+    fi
+    echo "Internal:    $INTERNAL"
+    if [[ -n "$ext" ]]; then
+        echo "External:    $ext"
+    else
+        echo "External:    none detected"
     fi
 
     echo ""
     echo "Active monitors:"
-    hyprctl monitors -j | jq -r \
-        '.[] | "  \(.name): \(.width)x\(.height)@\(.refreshRate | floor)Hz  pos=\(.x),\(.y)  scale=\(.scale)\(if .disabled then "  [disabled]" else "" end)"'
+    if is_wayland; then
+        hyprctl monitors -j | jq -r \
+            '.[] | "  \(.name): \(.width)x\(.height)@\(.refreshRate | floor)Hz  pos=\(.x),\(.y)  scale=\(.scale)\(if .disabled then "  [disabled]" else "" end)"'
+    else
+        xrandr --query 2>/dev/null | awk '
+            / connected/ {
+                out=$1
+                if (match($0, /([0-9]+)x([0-9]+)\+([0-9]+)\+([0-9]+)/, m)) {
+                    printf "  %s: %sx%s  pos=%s,%s\n", out, m[1], m[2], m[3], m[4]
+                } else {
+                    printf "  %s: [no geometry]\n", out
+                }
+            }
+        '
+    fi
 
     echo ""
     if inhibitor_is_active; then
@@ -333,7 +522,9 @@ cmd_status() {
     fi
 }
 
-# --- Main ---
+# ============================================================================
+# Main
+# ============================================================================
 
 usage() {
     sed -n '3,/^$/s/^# \?//p' "$0"
