@@ -334,7 +334,61 @@ external-monitor experiment.
 
 To be filled in after the first TTY boot.
 
-### Round-1 — first boot (TBD)
+### Round-1 — first boot, audio breakage (2026-06-17)
 
-- TBD after user runs `start-icewm-laptop` and validates the verification
-  plan above.
+**Symptom:** After `start-icewm-laptop` from a TTY, IceWM came up cleanly,
+but `pavucontrol` showed "output devices" with no sound. `wpctl status`
+showed only `Dummy Output` as a sink, plus the NVIDIA `GA107 High Definition
+Audio Controller` device (HDMI audio path, no real connector active) — the
+laptop's Alder Lake codec was completely absent.
+
+**Root cause:** I copy-pasted the desktop's `.xinitrc-icewm` audio block
+verbatim into `.xinitrc-icewm-laptop`:
+
+```sh
+# (the offending block, now removed)
+pipewire &
+sleep 0.5 && wireplumber &
+sleep 1   && pipewire-pulse &
+```
+
+The desktop *needs* that block because `godlike-artix` does not have the
+PipeWire stack as OpenRC user services. The laptop *does* —
+`rc-status --user` shows pipewire, wireplumber, and pipewire-pulse all
+started under the default runlevel (per `artix-laptop-setup.md` § Audio).
+PipeWire and pipewire-pulse self-deduplicate via D-Bus name registration
+(only the first to register the name wins; the second exits or is refused),
+but **WirePlumber doesn't have that protection**. So the live session ended
+up with two WirePlumbers fighting over the Alder Lake codec, neither was
+able to claim it cleanly, and WirePlumber's policy module fell back to
+publishing a `Dummy Output` sink.
+
+**Diagnosis path** (worth knowing next time):
+
+```sh
+pgrep -af 'pipewire|wireplumber'   # check for duplicate wireplumber procs
+wpctl status                        # sinks → Dummy Output is the smoking gun
+rc-status --user                    # confirm pipewire/wireplumber/pipewire-pulse
+                                    # ARE running (i.e. duplication, not absence)
+```
+
+**Live recovery** (no re-login needed):
+
+```sh
+pkill -f 'wireplumber'              # kill BOTH wireplumbers; OpenRC restarts the supervised one
+sleep 1
+wpctl status                        # Alder Lake codec + Speaker sink should appear
+wpctl set-default <speaker-sink-id> # the persistent saved default was a USB device not currently
+                                    # connected; wireplumber didn't auto-fall-back
+```
+
+**Durable fix** (committed as dotfiles `37cb2e5`):
+
+`.xinitrc-icewm-laptop` no longer launches the audio stack — comment in
+place explaining why (the asymmetry vs the desktop). The OpenRC user
+services cover it.
+
+**Watch item for the desktop:** the same fix logic applies if/when the
+desktop ever migrates to having those services as OpenRC user services.
+For now the desktop's `.xinitrc-icewm` block is correct *for the desktop*
+because that machine has no user services for the audio stack.
