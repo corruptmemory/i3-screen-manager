@@ -535,6 +535,37 @@ than the bar-clutter approach. **Leave `TaskBarShowAllWindows=0`.**
 Files: `.local/bin/x11-max-refresh` (new), `.xinitrc-icewm` (refresh call),
 `.icewm/preferences` (focus cluster + lean bar), `.icewm/winoptions` (Brave block).
 
+### Round-5 — the focus-steal fix that wasn't: WRONG WM_CLASS (2026-06-17)
+
+Round-4's Brave block **did not work** — the whisk-to-WS2 continued through a full
+IceWM restart. Systematic-debugging found the cause, and it was not the mechanism,
+it was the **match token**.
+
+- The winoption was keyed `brave.Brave.*`. But `icesh -c brave windows` and
+  `icesh -c Brave windows` both select **zero** windows. The visible browser
+  window's WM_CLASS is **`brave-browser` / `Brave-browser`** (role `browser`);
+  `icesh -c Brave-browser windows` → 1. The `(brave.Brave)` rows in plain
+  `icesh windows` are Chromium's tiny 10x10/200x200 **helper** windows, not the
+  browser. So `brave.Brave` matched nothing visible — and IceWM warns on nothing
+  for a winoption that matches no real window, so it *looked* applied.
+- **Mechanism, confirmed by `xprop -spy -root _NET_CURRENT_DESKTOP
+  _NET_ACTIVE_WINDOW` during a reproduced trigger** (`brave <serena-url>` from
+  WS3): Brave emits `_NET_ACTIVE_WINDOW` for its own window, and IceWM *follows*
+  the honored activation to that window's desktop (`…DESKTOP 2 → 1`). It is an
+  activation, NOT a `_NET_CURRENT_DESKTOP` request — so `ignoreActivationMessages`
+  is the right lever; it was simply aimed at the wrong class.
+- **Fix + A/B verification.** Re-keyed to `brave-browser.Brave-browser` (NAME.CLASS
+  per `man icewm-winoptions`), `icesh winoptions` to reload. Re-ran the identical
+  trigger: desktop **stayed on 2**, no activation hand-off in the spy. Before:
+  whisked 2→1. After: not whisked. Single variable changed (the class token).
+- **Lesson for next time:** validate a winoption match with `icesh -c <class>
+  windows` (does this string select a real window?) — don't trust the frame-level
+  class shown by bare `icesh windows`. Chromium/Electron apps especially run a
+  visible `*-browser` class plus throwaway helper classes.
+
+Config now: `brave-browser.Brave-browser.ignoreActivationMessages: 1`
+(+ `noFocusOnAppRaise: 1`) in `.icewm/winoptions`.
+
 ---
 
 ## Self-review (against the spec)
