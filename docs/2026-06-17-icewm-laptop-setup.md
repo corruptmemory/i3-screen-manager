@@ -54,6 +54,24 @@ Eight concerns the desktop's IceWM setup didn't have to think about:
 
 ## Architecture
 
+### One-time machine setup (symlinks)
+
+The dotfiles repo holds the files; the running machine needs symlinks into
+`~/.local/bin/` and `~/` for them to be picked up. Mirrors the pattern already
+in use for `start-hyprland` / `i3-screen-manager` / etc. Run once per new
+machine clone of dotfiles:
+
+```sh
+ln -sf "$HOME/projects/dotfiles/.local/bin/start-icewm-laptop" "$HOME/.local/bin/start-icewm-laptop"
+ln -sf "$HOME/projects/dotfiles/.xinitrc-icewm-laptop"          "$HOME/.xinitrc-icewm-laptop"
+```
+
+Verify: `which start-icewm-laptop` returns the symlink path, `ls -la
+~/.xinitrc-icewm-laptop` shows it pointing into the dotfiles repo.
+
+The IceWM config dir (`.icewm-laptop/`) does NOT need a symlink — the script
+sets `ICEWM_PRIVCFG` to point at the repo location directly.
+
 ### Session bring-up
 
 `start-icewm-laptop` (in dotfiles `.local/bin/`) is the TTY entry point.
