@@ -461,6 +461,26 @@ maturity shows. **IceWM adopted as the active X11 daily driver** in the toggle
 rotation (`start-icewm` / `start-pekwm` / `start-hyprland`). PekWM and Hyprland
 remain installed and toggleable; nothing was removed.
 
+### Round-3 — direct exit keybind (2026-06-16)
+
+Added **`Super+Shift+Escape` → exit IceWM straight to the TTY** (parity with the
+i3/Hyprland muscle-memory exit). Findings:
+
+- IceWM has **no native `KeySysLogout` key action** — the only built-in session
+  key is `KeySysDialog` (`Alt+Ctrl+Del`, the Logout/Restart/Cancel *chooser*). A
+  direct exit must come through the **`keys` file as a command**: `icesh logout`.
+- `icesh logout` runs `LogoutCommand` (empty here) and then **terminates the WM**;
+  `icewm-session` exits with it, `startx` returns, back at the TTY. With
+  `LogoutCommand` empty it doesn't exec anything external — it just quits.
+- By default `ConfirmLogout=1` would pop a "Logout / Cancel" dialog first. Set
+  **`ConfirmLogout=0`** for a no-prompt exit — the combo is deliberate enough that
+  a confirm is friction, not safety (user's call). Tested: works as advertised.
+- Live-apply was `icesh restart` (re-reads both `keys` and the `ConfirmLogout`
+  preference in place; windows survive).
+
+Config: `key "Super+Shift+Escape"  icesh logout` in `.icewm/keys`; `ConfirmLogout=0`
+in `.icewm/preferences`.
+
 ---
 
 ## Self-review (against the spec)
