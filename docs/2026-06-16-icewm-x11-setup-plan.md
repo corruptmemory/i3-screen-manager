@@ -481,6 +481,60 @@ i3/Hyprland muscle-memory exit). Findings:
 Config: `key "Super+Shift+Escape"  icesh logout` in `.icewm/keys`; `ConfirmLogout=0`
 in `.icewm/preferences`.
 
+### Round-4 — max refresh rate + browser focus-stealing (2026-06-17)
+
+Two live-session asks. Both are **X11-layer** concerns — a reminder that under
+IceWM the `i3-screen-manager` script (hyprctl/wlr-randr) does *not* apply;
+display/refresh is `xrandr`, focus is IceWM preferences.
+
+**(a) Default to the panel's max refresh at native resolution.** X came up at a
+conservative 59.95 Hz on DP-2 even though its preferred mode advertises 74.97.
+Rather than hardcode a rate (the laptop's native is 165), added a small helper
+that auto-picks the highest rate at the preferred (EDID `+`) resolution:
+
+- `~/.local/bin/x11-max-refresh` (dotfiles `.local/bin/`, symlinked) — parses
+  `xrandr --query`, finds each **active** output's preferred-mode line, takes the
+  numeric-max rate token (ignores interlaced `…i`, skips disabled-but-connected
+  outputs so it never enables one), and `xrandr --output … --mode … --rate …`.
+- Wired into `.xinitrc-icewm` **before** the WM maps windows. Auto-detect → same
+  script is correct on the 75 Hz desktop and a 165 Hz laptop, no per-machine edit.
+- This is the generalized form of the long-standing CLAUDE.md note ("use explicit
+  `xrandr --rate` in xinitrc; `TargetRefresh` is unreliable on amdgpu"). The
+  Hyprland path still sets refresh via its own monitor config, not this helper.
+- Note: `icesh restart` does **not** reset the mode (xrandr state is X-server
+  level), so the WM-restart tweak loop and the refresh are independent.
+
+**(b) Browser must not whisk you across workspaces.** `claude` start auto-opens
+Serena's web dashboard; web-OAuth redirects do the same. Brave was grabbing focus
+**and switching workspace** to wherever its window lived. Layered fix:
+
+- `.icewm/preferences` (mostly pinned defaults, explicit for stability):
+  `FocusOnAppRaise=0` (app-raise doesn't grab focus), `RequestFocusOnAppRaise=1`
+  (it flashes the taskbar entry instead), `FocusChangesWorkspace=0` /
+  `FocusCurrentWorkspace=0` (never follow/yank across workspaces),
+  `FocusRequestFlashTime=0` (blink until acknowledged).
+- **The decisive lever is per-window**: `.icewm/winoptions` →
+  `brave.Brave.ignoreActivationMessages: 1` (+ `noFocusOnAppRaise: 1`). The global
+  pref alone does **not** stop Chromium — it activates via a path that needs the
+  per-window "only the user can focus this window" block. The
+  `man icewm-winoptions` page documents this exact scenario for
+  `google-chrome.pop-up.*`. (Match token `brave.Brave` = WM_CLASS instance.class,
+  per `icesh windows`.)
+
+**Attention cue — `Ctrl+Alt+Esc` over `TaskBarShowAllWindows` (the better call).**
+First attempt set `TaskBarShowAllWindows=1` so a blocked browser's flash would be
+visible from another workspace — but the always-on all-workspaces window list made
+the bar too busy ("not a centerpiece" violated). **Reverted to `=0`.** The
+cross-workspace need is served on-demand instead by the **Window List**
+(`Ctrl+Alt+Esc` = `KeySysWindowList`, an IceWM default): every window grouped by
+workspace, Enter to jump. Pairs with `QuickSwitchToUrgent=1` (Alt+Tab prioritizes
+an urgent window) and the same-workspace taskbar flash. Net: don't-steal-focus
+*and* a clean bar *and* a "show me everything when I ask" tool — strictly better
+than the bar-clutter approach. **Leave `TaskBarShowAllWindows=0`.**
+
+Files: `.local/bin/x11-max-refresh` (new), `.xinitrc-icewm` (refresh call),
+`.icewm/preferences` (focus cluster + lean bar), `.icewm/winoptions` (Brave block).
+
 ---
 
 ## Self-review (against the spec)
