@@ -78,4 +78,29 @@ if ! SSH_AUTH_SOCK="$SSH_AUTH_SOCK" ssh-add -l >/dev/null 2>&1; then
     ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null
 fi
 
+# Reap stale xdg-desktop-portal processes left over from a previous session
+# (especially a previous IceWM session that didn't have portals). A leftover
+# frontend squats the org.freedesktop.portal.Desktop D-Bus name unresponsively
+# and hangs flameshot's Screenshot portal request. Match by EXECUTABLE, NOT
+# cmdline — a `pkill -f xdg-desktop-portal` would also kill this very shell
+# (the cmdline-match hazard). The Hyprland config's exec-once block will spawn
+# fresh portal processes after this. Mirrors what start-icewm-laptop does.
+for _pid in $(pgrep -f xdg-desktop-portal 2>/dev/null); do
+    case "$(readlink -f /proc/$_pid/exe 2>/dev/null)" in
+        */xdg-desktop-portal|*/xdg-desktop-portal-*) kill "$_pid" 2>/dev/null ;;
+    esac
+done
+
+# Flameshot config toggle: under Wayland, flameshot must NOT use the
+# useX11LegacyScreenshot path (it breaks capture); instead it uses the
+# xdg-desktop-portal Screenshot backend (xdg-desktop-portal-hyprland). Copy
+# (not symlink — Qt QSettings atomic-writes clobber symlinks) the wayland
+# variant of the config onto flameshot.ini before the WM autostarts flameshot.
+# The matching x11 variant carries useX11LegacyScreenshot=true and is cp'd by
+# start-icewm-laptop.
+# On the laptop, ~/.config/flameshot/flameshot-wayland.ini is a symlink into
+# dotfiles' flameshot-laptop-wayland.ini; on the desktop it's the file
+# directly. Both machines see the stable name here.
+cp -f "$HOME/.config/flameshot/flameshot-wayland.ini" "$HOME/.config/flameshot/flameshot.ini" 2>/dev/null || true
+
 exec /usr/bin/start-hyprland

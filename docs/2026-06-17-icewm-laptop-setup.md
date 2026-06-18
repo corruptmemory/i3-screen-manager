@@ -57,20 +57,61 @@ Eight concerns the desktop's IceWM setup didn't have to think about:
 ### One-time machine setup (symlinks)
 
 The dotfiles repo holds the files; the running machine needs symlinks into
-`~/.local/bin/` and `~/` for them to be picked up. Mirrors the pattern already
-in use for `start-hyprland` / `i3-screen-manager` / etc. Run once per new
-machine clone of dotfiles:
+`~/.local/bin/`, `~/`, and `~/.config/flameshot/` for them to be picked up.
+Mirrors the pattern already in use for `start-hyprland` / `i3-screen-manager`
+/ etc. Run once per new machine clone of dotfiles:
 
 ```sh
 ln -sf "$HOME/projects/dotfiles/.local/bin/start-icewm-laptop" "$HOME/.local/bin/start-icewm-laptop"
 ln -sf "$HOME/projects/dotfiles/.xinitrc-icewm-laptop"          "$HOME/.xinitrc-icewm-laptop"
+
+# Flameshot dual-WM variants (see "Flameshot under dual-WM" below). Each
+# machine has its own preferences (the desktop has a red drawColor + save
+# path; the laptop carries the GUI-tuned defaults from pre-dual-WM days).
+# Stable names at ~/.config/flameshot/ → laptop variants in dotfiles.
+ln -sf "$HOME/projects/dotfiles/.config/flameshot/flameshot-laptop-wayland.ini" \
+       "$HOME/.config/flameshot/flameshot-wayland.ini"
+ln -sf "$HOME/projects/dotfiles/.config/flameshot/flameshot-laptop-x11.ini" \
+       "$HOME/.config/flameshot/flameshot-x11.ini"
 ```
 
 Verify: `which start-icewm-laptop` returns the symlink path, `ls -la
-~/.xinitrc-icewm-laptop` shows it pointing into the dotfiles repo.
+~/.xinitrc-icewm-laptop` and `ls -la ~/.config/flameshot/flameshot-*.ini`
+show them pointing into the dotfiles repo.
 
 The IceWM config dir (`.icewm-laptop/`) does NOT need a symlink — the script
 sets `ICEWM_PRIVCFG` to point at the repo location directly.
+
+### Flameshot under dual-WM
+
+Two distinct problems, two fixes — both copied from the desktop's PekWM/IceWM
+work (see `docs/2026-06-15-pekwm-x11-setup-plan.md` § "Flameshot under dual-WM
++ the stale-portal trap"):
+
+1. **Per-session capture backend.** Bare X11 WMs have no
+   `xdg-desktop-portal` Screenshot backend; flameshot must bypass the portal
+   with `useX11LegacyScreenshot=true` (Qt native X11 grab). Hyprland/Wayland
+   needs the *opposite* — the portal — and the legacy flag breaks it.
+   Solution: two configs per machine; each launcher `cp`s the right one onto
+   `flameshot.ini` before exec.
+   * `cp` not symlink: Qt QSettings atomic-writes would clobber a symlink.
+   * Stable name at `~/.config/flameshot/flameshot-{wayland,x11}.ini` —
+     symlinked to per-machine variants in dotfiles
+     (`flameshot-{laptop-,}wayland.ini`). Lets the shared `start-hyprland`
+     script reference one name across both machines.
+2. **Stale-portal trap.** Every Hyprland start spawns `xdg-desktop-portal`
+   frontends; switching to IceWM and back leaves the old ones alive. A
+   leftover frontend squats `org.freedesktop.portal.Desktop` on D-Bus
+   unresponsively → flameshot hangs while `grim` still works (that asymmetry
+   is the diagnostic tell). Fix: both `start-hyprland` and
+   `start-icewm-laptop` reap stale `xdg-desktop-portal*` at start.
+   * **Match by executable, NOT cmdline.** A `pkill -f xdg-desktop-portal`
+     would also kill the launcher's own shell (cmdline includes the script
+     text). The reaper iterates `pgrep -f`'s PIDs and confirms via
+     `readlink /proc/<pid>/exe` before killing.
+
+Health check after a switch:
+`busctl --user introspect org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop | grep Screenshot`.
 
 ### Session bring-up
 
