@@ -1,5 +1,9 @@
 # PekWM + XLibre Desktop Session — Implementation Plan
 
+> **⛔ SUPERSEDED / REMOVED (2026-06-18).** The PekWM trial is over — IceWM won.
+> PekWM was uninstalled and all config artifacts removed on 2026-06-18. This
+> plan is retained as the historical record of the trial only; do NOT execute it.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Stand up a low-eye-candy PekWM session on XLibre on `godlike-artix`, toggleable against the existing Hyprland session, reproducing the current keybind/bar/launcher/notification workflow.

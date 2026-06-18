@@ -38,22 +38,26 @@ anything compositor- or tooling-adjacent:
   gotcha: the native install must be finalized from a clean terminal, *not*
   from inside a Claude Code session.
 
-**IceWM is now the active X11 alternative on both machines.** PekWM was tried
-on the desktop and **declared over** (verdict: PekWM oddities read as bugs;
-IceWM noticeably more responsive and stable) — left installed and toggleable
-on the desktop but no longer the recommendation, and **not replicated to the
-laptop**. The full WM rotation:
+**IceWM is now the only active X11 WM on both machines.** PekWM was tried on
+the desktop and **declared over** (verdict: PekWM oddities read as bugs; IceWM
+noticeably more responsive and stable). On **2026-06-18** PekWM was
+**uninstalled and all its config artifacts removed** — the `pekwm` package,
+`start-pekwm`, `pekwm-send-to-ws`, `.pekwm-desktop/`,
+`polybar/config-pekwm.ini`, and `.xinitrc-desktop` are all gone. It was never
+replicated to the laptop. The full WM rotation:
 
-- **`godlike-artix` (desktop):** Hyprland (Wayland) · IceWM (X11, daily) · PekWM (X11, deprecated)
+- **`godlike-artix` (desktop):** Hyprland (Wayland) · IceWM (X11, daily)
 - **`nomad-artix` (laptop):** Hyprland (Wayland) · IceWM (X11, scaffolded 2026-06-17 — pending first TTY-boot validation)
 
 Docs:
 
-- `docs/2026-06-15-x11-wm-research.md` — the "why PekWM" survey of living X11 WMs.
+- `docs/2026-06-15-x11-wm-research.md` — the survey of living X11 WMs that led
+  to trying PekWM, then settling on IceWM.
 - `docs/2026-06-15-pekwm-x11-setup.md` (+ `…-plan.md`) — PekWM-on-XLibre on
-  `godlike-artix`. **Trial over; setup retained but deprecated.** Config lives
-  in dotfiles (`.pekwm-desktop/`, `polybar/config-pekwm.ini`,
-  `.xinitrc-desktop`, `.local/bin/start-pekwm`).
+  `godlike-artix`. **Trial concluded; PekWM uninstalled and all config removed
+  2026-06-18.** Docs retained as the historical record only — the config they
+  reference (`.pekwm-desktop/`, `polybar/config-pekwm.ini`, `.xinitrc-desktop`,
+  `.local/bin/start-pekwm`) no longer exists in the repo.
 - `docs/2026-06-16-icewm-x11-setup.md` (+ `…-plan.md`) — **IceWM 4.0-on-XLibre
   on the desktop** (`start-icewm`). Native taskbar (no Polybar), `icesh` control
   CLI. Border quirk: IceWM color-computes a Win95 bevel on every `Look`, so
@@ -70,9 +74,10 @@ Docs:
   IceWM picks up the laptop config via `ICEWM_PRIVCFG` (no `~/.icewm`
   symlink needed).
 
-All additive and reversible — Hyprland, IceWM, and PekWM are installed and
-toggleable from a TTY on the desktop; nothing was removed. The laptop has
-Hyprland + IceWM only (no PekWM — trial declared over before reaching here).
+Hyprland and IceWM are both installed and toggleable from a TTY on each
+machine. PekWM was the lone exception to the "additive and reversible" rule —
+it was a trial and has now been fully removed from the desktop (2026-06-18); it
+never reached the laptop.
 
 ## Architecture
 

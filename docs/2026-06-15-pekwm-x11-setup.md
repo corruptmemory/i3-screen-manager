@@ -1,5 +1,12 @@
 # PekWM + XLibre desktop session — design & setup spec
 
+> **⛔ SUPERSEDED / REMOVED (2026-06-18).** The PekWM trial is over — IceWM won
+> (see `docs/2026-06-16-icewm-x11-setup.md`). On 2026-06-18 PekWM was uninstalled
+> and every config artifact described below (`.pekwm-desktop/`,
+> `polybar/config-pekwm.ini`, `.xinitrc-desktop`, `start-pekwm`,
+> `pekwm-send-to-ws`) was deleted from the repo. Retained as the historical
+> record of the trial only — nothing here is live.
+
 **Date:** 2026-06-15
 **Machine:** `godlike-artix` (desktop; single monitor `DP-2`; pure AMD Navi 31 / amdgpu).
 **Status:** design approved (brainstorming) — not yet implemented.
