@@ -33,10 +33,12 @@ anything compositor- or tooling-adjacent:
 - `docs/hyprland-first-boot.md` — Hyprland-specific first-boot checklist.
 - `docs/claude-code-aur-to-native-migration.md` — switching Claude Code itself
   off the AUR `claude-code` package onto Anthropic's native installer
-  (auto-updates, no more AUR exposure). Done on `godlike-artix` (2026-06-15);
-  **`nomad-artix` (laptop) still pending** — read before doing it there. Key
-  gotcha: the native install must be finalized from a clean terminal, *not*
-  from inside a Claude Code session.
+  (auto-updates, no more AUR exposure). **Done on both machines** —
+  `godlike-artix` 2026-06-15, `nomad-artix` 2026-06-18. Key gotcha: the native
+  install must be finalized from a clean terminal, *not* from inside a Claude
+  Code session. The laptop run uncovered one positive finding: recent Claude
+  versions (≥ 2.1.181) self-correct the `.desktop` deep-link handler during
+  `claude install`, so the manual step 4 is now a no-op verification.
 
 **IceWM is now the only active X11 WM on both machines.** PekWM was tried on
 the desktop and **declared over** (verdict: PekWM oddities read as bugs; IceWM

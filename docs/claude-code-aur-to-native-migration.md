@@ -1,6 +1,6 @@
 # Claude Code: AUR → native ("blessed upstream") migration runbook
 
-**Status:** `godlike-artix` (desktop) — **DONE 2026-06-15**. `nomad-artix` (laptop) — **PENDING**.
+**Status:** `godlike-artix` (desktop) — **DONE 2026-06-15**. `nomad-artix` (laptop) — **DONE 2026-06-18**.
 **Author:** the desktop's Claude Code, after doing this surgery on itself.
 **Audience:** the next Claude Code instance that runs this on the laptop. Read this
 first — it will save you the 3–4 wasted rounds the desktop run took to discover the
@@ -80,7 +80,16 @@ deep links (OAuth login callbacks, "open in Claude Code" links). On the desktop 
 the next time a browser login hands back to the CLI once the AUR package is gone. It is
 **not** package-owned (Claude itself wrote it), so removal leaves it stale. **Fix it to
 point at `~/.local/bin/claude`** — the stable launcher symlink, *not* the versioned path
-(see finding 6). On the laptop, read the file first; its hardcoded path may differ.
+(see finding 6).
+
+> **Update from the laptop run (2026-06-18):** the native `claude install` step now
+> **self-corrects** this `.desktop` handler. The laptop's pre-flight showed
+> `Exec="/opt/claude-code/bin/claude" --handle-uri %u`; after step 2, the same file read
+> `Exec="/home/jim/.local/bin/claude" --handle-uri %u` *without* the manual step 4 below.
+> The installer either rewrites the file directly or recreates it on first launch. Step 4
+> is therefore now a no-op verification — still worth running, but expect it to find
+> the path already correct. Sometime between Claude 2.1.177 (desktop date) and 2.1.181
+> (laptop date) the installer learned to do this.
 
 ### 6. Point things at the launcher symlink, never the versioned path
 The native install lays out as: `~/.local/bin/claude` → **symlink** →
@@ -211,3 +220,17 @@ auto-updates and the proper symlink layout. The proper installer overwrites the 
 - Deep-link handler `~/.local/share/applications/claude-code-url-handler.desktop`:
   `Exec="/opt/claude-code/bin/claude"` → fixed to `Exec="/home/jim/.local/bin/claude"`.
 - All MCP servers verified connecting under the native binary.
+
+## Reference: `nomad-artix` end-state (2026-06-18)
+
+- AUR package removed: `claude-code 2.1.181-2` (same 11-file shape as the desktop —
+  `/opt/claude-code/{,bin/claude}`, `/usr/bin/claude`, `/usr/share/licenses/claude-code/LICENSE`,
+  installed size 222.05 MiB).
+- Native: `~/.local/bin/claude` → `~/.local/share/claude/versions/2.1.181` (232830760 bytes).
+- Deep-link handler — **self-corrected by `claude install`** (new behavior since the desktop
+  run; see the boxed update on finding 5). Pre-flight read `Exec="/opt/claude-code/bin/claude"`;
+  post-install read `Exec="/home/jim/.local/bin/claude"` without manual step 4.
+- Items 1–5 of the verification checklist all PASS as inspected from inside this Claude session.
+- Items 6 & 7 (`claude doctor`, `claude mcp list`) timed out when invoked from inside the
+  running session — **a known footgun**, NOT a migration failure. Run them from a clean
+  terminal post-restart to close them out.
