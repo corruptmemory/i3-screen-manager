@@ -39,6 +39,14 @@ anything compositor- or tooling-adjacent:
   Code session. The laptop run uncovered one positive finding: recent Claude
   versions (≥ 2.1.181) self-correct the `.desktop` deep-link handler during
   `claude install`, so the manual step 4 is now a no-op verification.
+- `docs/codex-aur-to-native-migration.md` — the same AUR→native swap for the
+  Codex CLI: off `openai-codex-bin` onto OpenAI's official installer
+  (`curl -fsSL https://chatgpt.com/codex/install.sh | sh`, self-updating
+  standalone layout under `~/.codex/packages/standalone/`). Done on
+  `godlike-artix` (2026-06-19); **`nomad-artix` (laptop) still pending**. Unlike
+  the Claude Code swap, this one needs **no** clean-terminal hand-off — the Codex
+  installer has no nested-session detection, so it can be run from inside a Claude
+  Code session.
 
 **IceWM is now the only active X11 WM on both machines.** PekWM was tried on
 the desktop and **declared over** (verdict: PekWM oddities read as bugs; IceWM
