@@ -47,6 +47,17 @@ anything compositor- or tooling-adjacent:
   the Claude Code swap, this one needs **no** clean-terminal hand-off — the Codex
   installer has no nested-session detection, so it can be run from inside a Claude
   Code session.
+- `docs/brave-to-brave-origin-migration.md` — switching the daily browser off
+  `brave-bin` (CLI `brave`) onto the paid, stripped **Brave Origin**
+  (`brave-origin-bin`, CLI `brave-origin`). Done on `godlike-artix` 2026-06-23;
+  **`nomad-artix` (laptop) still pending** — runbook is written for it. Key
+  gotcha: Brave Origin's main window WM_CLASS is `brave-origin`/`Brave-origin`
+  (was `brave-browser`/`Brave-browser`), while its inner-Chromium helper windows
+  still report `brave`/`Brave` — so the WM window-rules and IceWM `winoptions`
+  focus-fix had to be repointed. Most config is inherited via `git pull`
+  (dotfiles `974c91f`); the profile-slot surgery, default-browser/mimeapps, and
+  native-messaging-host copy (marksnip) are machine-local. WebMCP confirmed
+  present in Origin 149.
 
 **IceWM is now the only active X11 WM on both machines.** PekWM was tried on
 the desktop and **declared over** (verdict: PekWM oddities read as bugs; IceWM
