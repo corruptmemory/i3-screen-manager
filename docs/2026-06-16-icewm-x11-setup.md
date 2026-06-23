@@ -96,7 +96,7 @@ IceWM splits keybinds two ways: built-in window/workspace actions live in
 | `Super+Shift+1..0` send-to-workspace | **native** `KeySysWorkspaceTakeWindow1..10` |
 | `Super+Q` close / `Super+Shift+F` fullscreen | **native** `KeyWinClose` / `KeyWinFullscreen` |
 | `Super+F` maximize-toggle | **native** `KeyWinMaximize` (toggle; `Super+Up`/`Down` map to the same toggle/restore actions — the always-max vs toggle nuance is a build-time tweak) |
-| `Super+Space` (rofi drun), `Super+Tab` (rofi window) | `keys` file → shell |
+| `Super+Space` (rofi drun), `Super+Tab` (`icewm-window-switcher`, see §4a) | `keys` file → shell |
 | `Super+Return` kitty, `Super+B` brave, `Super+E` emacs, lock, screenshot, audio keys | `keys` file → shell |
 | `Alt+Tab` MRU cycle | IceWM native **QuickSwitch** (kept) |
 
@@ -113,8 +113,66 @@ absolute-path workaround PekWM's `Exec` forced.
 - **Click-to-focus + raise**: `ClickToFocus=1`, `RaiseOnClickClient=1`.
 - **Wallpaper**: `DesktopBackgroundImage` (IceWM/`icewmbg` owns it; `feh`
   dropped from this session).
-- `Super+Tab` → `rofi -show window` retained for the cross-window picker
-  (complements native QuickSwitch).
+- `Super+Tab` → **`icewm-window-switcher`** for the cross-window picker
+  (complements native QuickSwitch). Originally `rofi -show window`; replaced
+  2026-06-22 to fix a raise bug and a taskbar-flash bug — see §4a.
+
+### 4a. Window switcher (`Super+Tab`) — `icewm-window-switcher`
+
+`Super+Tab` runs `~/.local/bin/icewm-window-switcher` (lives in the dotfiles repo
+at `.local/bin/icewm-window-switcher`, symlinked into `~/.local/bin/`, alongside
+`start-icewm`/`x11-max-refresh`). It replaced the original `rofi -show window` on
+**2026-06-22** after two bugs surfaced in daily use:
+
+1. **It didn't raise the chosen window.** `rofi -show window` activates purely by
+   sending the EWMH `_NET_ACTIVE_WINDOW` message and leaving the rest to the WM.
+   IceWM honored it only halfway — switched to the window's workspace but left the
+   window at its old stacking depth (the request bypasses IceWM's normal focus
+   path, so `RaiseOnFocus=1` never fired). You landed on the right workspace
+   staring at whatever was already on top.
+2. **Flashing taskbar entry.** The obvious native fix — `icesh activate`/`raise` —
+   raises an *unfocused* window by setting `_NET_WM_STATE_DEMANDS_ATTENTION` on it,
+   which IceWM renders as a taskbar button that flashes and follows you to **every**
+   workspace until clicked.
+
+The script steers IceWM explicitly, in three steps, to sidestep both:
+
+```text
+icesh goto <ws>            # 1. switch to the window's workspace
+icesh -window <id> raise   # 2. lift it to the top of the stacking order
+xdotool windowfocus <id>   # 3. real XSetInputFocus — focuses AND clears the
+                           #    demands-attention flag, so no flash
+```
+
+The explicit `goto` (step 1) is required because this machine runs
+`FocusChangesWorkspace=0`, so focusing alone won't follow a window across
+workspaces. The two stock paths are mirror images and neither does both jobs:
+rofi's `_NET_ACTIVE_WINDOW` switches workspace but won't raise; `icesh activate`
+raises but won't switch workspace. Step 3 uses `xdotool windowfocus`
+(low-level `XSetInputFocus`) rather than `icesh activate` precisely because a
+genuine input-focus is what makes IceWM clear demands-attention — it's also
+self-healing (clears a pre-existing flash on the target).
+
+Windows are picked from `icesh clients` (real client windows only — IceWM frames,
+the dock and the tray are filtered out for free) via `rofi -dmenu`, displayed as
+`WS<n>  <Class>  <title>`.
+
+**Dependencies** (all already present in this setup): `icesh` (ships with IceWM),
+`xdotool`, `rofi`.
+
+**Install (once per machine):**
+
+```bash
+# 1. Symlink the script into ~/.local/bin (already first on PATH).
+ln -s ~/projects/dotfiles/.local/bin/icewm-window-switcher \
+      ~/.local/bin/icewm-window-switcher
+
+# 2. The binding already lives in dotfiles' .icewm/keys (desktop) and
+#    .icewm-laptop/keys (laptop):
+#        key "Super+Tab"   /home/jim/.local/bin/icewm-window-switcher
+#    IceWM reads its keys file only at start/restart, so reload it once:
+killall -HUP icewm
+```
 
 ### 5. The focus-fallback bug — expected absent
 

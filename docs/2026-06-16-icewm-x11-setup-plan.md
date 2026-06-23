@@ -194,6 +194,12 @@ key "XF86AudioNext"        playerctl next
 key "XF86AudioPrev"        playerctl previous
 ```
 
+> **Superseded 2026-06-22:** the `Super+Tab` line above (`rofi -show window`) was
+> later rebound to `/home/jim/.local/bin/icewm-window-switcher` to fix a
+> window-raise bug and a flashing-taskbar (`_NET_WM_STATE_DEMANDS_ATTENTION`) bug.
+> See the design spec §4a (`2026-06-16-icewm-x11-setup.md`) for the rationale,
+> three-step mechanism, and install steps.
+
 - [ ] **Step 2: Write `winoptions`** for titlebarless on the apps in daily use (use the exact option key confirmed in Task 1; example assumes `noTitleBar`)
 
 ```text
