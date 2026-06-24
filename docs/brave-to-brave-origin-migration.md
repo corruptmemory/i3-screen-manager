@@ -279,6 +279,82 @@ smoke-tested.
 
 ---
 
+## 6. Post-migration gotcha: Privacy Badger breaks Gmail link clicks
+
+**Symptom.** Clicking a link *inside a Gmail message* opens a new tab that **hangs
+forever** on `about:blank` — title "Loading…", spinner that never resolves, address
+bar literally `about:blank`. Brave's **"Copy clean link" → paste into a new tab
+works fine.** (Not Brave-Origin-specific — any Brave + Privacy Badger machine; it
+just surfaced during the migration shakeout on `godlike-artix`, 2026-06-24.)
+
+**Root cause.** Privacy Badger (`pkehgijcmpdhfbdbbnkijodmdjhbjlgp`) ships a
+declarativeNetRequest rule that treats Gmail's `https://www.google.com/url?q=…`
+link-shim as a tracker and **307-redirects it to its own bundled forwarder page**:
+
+```
+GET https://www.google.com/url?q=<dest>                    (Gmail's safe-redirect)
+  └─307→ chrome-extension://<guid>/data/web_accessible_resources/redirect.html?url=<dest>
+```
+
+`redirect.html` loads `redirect.js`, which is just
+`window.location = new URLSearchParams(location.search).get("url")`. That forwards
+fine in a *normal* tab — but Gmail opens external links with
+`window.open(saferUrl, '_blank', 'noopener')` (you can see `canAccessOpener:false`
+on the new target), and the browser will not complete a redirect **into** an
+extension page for that orphaned no-opener navigation. The tab is stranded on its
+initial empty `about:blank` document → spinner forever, empty navigation history.
+"Copy clean link" works because it's a direct top-level navigation that never
+touches `google.com/url`, so the rule never fires.
+
+> The `chrome-extension://` origin in the trace is a randomized **GUID**, not the
+> real extension ID, because PB declares `"use_dynamic_url": true` on the resource.
+> Map it back to the extension:
+> ```bash
+> find ~/.config/BraveSoftware/Brave-Origin/Default/Extensions \
+>      -path '*web_accessible_resources/redirect.html'
+> # → …/Extensions/pkehgijcmpdhfbdbbnkijodmdjhbjlgp/<ver>/…   (Privacy Badger)
+> ```
+
+**The fix that works — allowlist the *request* domain:**
+
+> Privacy Badger options → **Disabled Sites** tab → add **`www.google.com`**.
+> PB now leaves the `google.com/url` redirect alone; Gmail link clicks work, and PB
+> stays active everywhere else.
+
+**The fix that does NOT work** — "Disable Privacy Badger for this site" on
+`mail.google.com`. That allowlists the *initiator* site, but the hijack is a
+**request-keyed** DNR rule matching `www.google.com` (a different host), evaluated
+at the network layer regardless of which tab fired the request. The new tab's
+"site" is `google.com`, not `mail.google.com`, so the `mail.google.com` entry is
+inert (remove it; it's dead weight). General rule worth remembering:
+
+> When an extension breaks a page via a **network-layer redirect/block**, allowlist
+> the domain of the **blocked request**, not the domain of the page you're looking
+> at. "Disable for this site" UIs operate on the visible tab's origin and silently
+> miss cross-domain request rules.
+
+What you give up with the `www.google.com` allowlist: PB no longer runs on
+`www.google.com` (Search + the `/url` redirector). Other Google hosts
+(`docs.google.com`, `drive.google.com`, …) are unaffected and stay protected.
+
+**Brave footnote.** Privacy Badger is largely **redundant under Brave Shields**,
+which already does tracker/ad blocking, fingerprint protection, query-param
+stripping, *and* bounce-tracker debouncing — the very `google.com/url` unwrap PB
+botches here. Removing PB entirely is also a clean fix on Brave with ≈zero
+protection loss; allowlist-vs-remove is taste.
+
+**Confirm it yourself (CDP).** With Brave Origin on `--remote-debugging-port=9222`,
+arm a browser-level CDP `Target.setAutoAttach` listener (`waitForDebuggerOnStart`),
+click a Gmail link, and watch the **new tab's** first navigation. The fingerprint
+is a `307` from `www.google.com/url?q=…` straight into a
+`chrome-extension://…/redirect.html?url=…` — that *is* the smoking gun, no extension
+bisecting needed. (A blocked request would instead show
+`net::ERR_BLOCKED_BY_CLIENT`; a lost `window.open` handle would show *no* request at
+all — the 307-to-extension-page is what distinguishes this redirect-hijack from
+those.)
+
+---
+
 ## Quick checklist (laptop)
 
 - [ ] `git pull` dotfiles + claude-stuff + home-servers
@@ -291,3 +367,4 @@ smoke-tested.
 - [ ] `killall -HUP icewm`; reload Hyprland next session
 - [ ] (optional) WebMCP probe
 - [ ] `pacman -Rsp brave-bin` (dry-run) → `sudo pacman -R brave-bin`
+- [ ] (if Gmail link clicks hang on `about:blank`) Privacy Badger → Disabled Sites → add `www.google.com` — see §6
