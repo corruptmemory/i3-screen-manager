@@ -7,7 +7,11 @@ build — Leo, Brave Wallet, the crypto/BAT ad system, and the VPN are all remov
 This runbook is the recipe so the second machine can replicate the first.
 
 - **`godlike-artix` (desktop):** DONE 2026-06-23.
-- **`nomad-artix` (laptop):** PENDING — follow this document.
+- **`nomad-artix` (laptop):** DONE 2026-06-25 (driven over SSH). `brave-bin` was
+  **intentionally kept as a fallback** — Brave Origin is verified working but
+  brave-bin is not yet uninstalled (see §4), because reinstalling it would need the
+  locked-down AUR. Two laptop-only wrinkles the desktop didn't surface: the
+  `dunstrc` copy trap (§1) and the MarkSnip Agent-Bridge toggle (§2f).
 
 Config dir moves with the CLI name:
 `~/.config/BraveSoftware/Brave-Browser/` → `~/.config/BraveSoftware/Brave-Origin/`.
@@ -73,6 +77,23 @@ What those commits already migrated (so the laptop does NOT re-edit them):
   (platform note, Playwright MCP `--executable-path`, playwright-cli
   `executablePath`) and the WebMCP section repointed + verified (see §8).
 - **home-servers** — `.playwright/cli.config.json` → Brave Origin.
+
+> ⚠️ **Laptop deviation — `dunstrc` is NOT symlinked, so `git pull` does *not*
+> apply it.** On `nomad-artix`, `~/.config/hypr/hyprland.{conf,lua}` are symlinks
+> *into* the dotfiles repo (`→ .config/hypr/hyprland-laptop.{conf,lua}`), so the
+> pull updates them in place. But `~/.config/dunst/dunstrc` is a **plain copy** —
+> the `git pull` updated the repo's `dunstrc` while the *live* file kept
+> `browser = /usr/bin/brave`. Sync it by hand (verify with `ls -l` /
+> `readlink -f` first — symlink vs copy decides whether you even need this):
+>
+> ```bash
+> cp ~/projects/dotfiles/.config/dunst/dunstrc ~/.config/dunst/dunstrc
+> dunstctl reload                              # live-apply, no daemon kill
+> grep browser ~/.config/dunst/dunstrc         # verify: /usr/bin/brave-origin
+> ```
+>
+> This matters **before** removing brave-bin (§4): otherwise dunst's
+> notification-click handler points at a `/usr/bin/brave` that no longer exists.
 
 ---
 
@@ -213,6 +234,18 @@ etc.) is unchanged — so they copy verbatim. **Restart Brave Origin**, then:
 ```bash
 marksnip status        # expect: chrome: connected on 127.0.0.1:<port> …
 ```
+
+> ⚠️ **The manifest + extension are necessary but NOT sufficient — MarkSnip's
+> "Agent Bridge" toggle does not sync.** The MarkSnip extension rides along via
+> Brave Sync (same ID `kcbaglhfgbkjdnpeokaamjjkddempipm`), and copying the manifest
+> wires the native host — but the per-browser **Agent Bridge enable** switch lives
+> in the extension's *local* storage, which Brave Sync does **not** replicate. So
+> after the restart, `marksnip status` still reports *"no MarkSnip bridge session is
+> connected; open Chrome or Firefox with Agent Bridge enabled"* until you open the
+> MarkSnip extension in Brave Origin and **flip Agent Bridge on** by hand. Then it
+> connects: `chrome: connected on 127.0.0.1:<port> (pid=…)`. (Diagnosed + fixed on
+> the laptop 2026-06-25 — the native-host binary, manifest `allowed_origins`, and
+> the installed extension were all already correct; only the toggle was off.)
 
 (`com.anthropic.claude_code_browser_extension` copies too, but Claude-in-Chrome
 won't bridge on Brave-family browsers regardless — server-side feature flag — so
@@ -363,8 +396,9 @@ those.)
 - [ ] Profile-slot surgery if home profile isn't in `Default` (browser closed)
 - [ ] Strip `"Brave "` name prefixes; dark mode (browser closed, optional)
 - [ ] `xdg-settings set default-web-browser brave-origin.desktop` + mimeapps sweep
-- [ ] Copy `NativeMessagingHosts/*.json` → Brave-Origin; restart browser; `marksnip status`
+- [ ] Copy `NativeMessagingHosts/*.json` → Brave-Origin; restart browser; **flip MarkSnip "Agent Bridge" on** (doesn't sync — §2f); `marksnip status`
+- [ ] **Sync `~/.config/dunst/dunstrc` by hand** if it's a copy, not a symlink (§1); `dunstctl reload`
 - [ ] `killall -HUP icewm`; reload Hyprland next session
 - [ ] (optional) WebMCP probe
-- [ ] `pacman -Rsp brave-bin` (dry-run) → `sudo pacman -R brave-bin`
+- [ ] `pacman -Rsp brave-bin` (dry-run) → `sudo pacman -R brave-bin` — *on the laptop this was deferred; brave-bin kept as fallback*
 - [ ] (if Gmail link clicks hang on `about:blank`) Privacy Badger → Disabled Sites → add `www.google.com` — see §6
