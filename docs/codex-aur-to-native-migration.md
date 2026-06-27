@@ -1,6 +1,6 @@
 # Codex CLI: AUR → native ("official upstream") migration runbook
 
-**Status:** `godlike-artix` (desktop) — **DONE 2026-06-19**. `nomad-artix` (laptop) — **PENDING** (assume it still has `openai-codex-bin`).
+**Status:** `godlike-artix` (desktop) — **DONE 2026-06-19**. `nomad-artix` (laptop) — **DONE 2026-06-27**.
 **Author:** the desktop's Claude Code, after performing the swap.
 **Audience:** the next instance that runs this on the laptop. Read this first.
 
@@ -194,3 +194,30 @@ codex completion fish > ~/.config/fish/completions/codex.fish
   unchanged).
 - Fish completions regenerated to `~/.config/fish/completions/codex.fish`.
 - Installer wrote no profile (`path_action=already`; `~/.local/bin` already on PATH).
+
+## Reference: `nomad-artix` end-state (2026-06-27)
+
+- AUR package removed: `openai-codex-bin 0.142.3-1` (had owned the same 19 files
+  as the desktop's older version — `/usr/bin/codex` plus bash/elvish/fish/
+  powershell/zsh completions under `/usr/share/...` — 273.49 MiB, nothing in
+  `/home`). Dry-run (`pacman -Rsp`) confirmed no cascade.
+- Native: `~/.local/bin/codex` → `~/.codex/packages/standalone/current/bin/codex`
+  → `releases/0.142.3-x86_64-unknown-linux-musl/bin/codex`. **Same version as
+  the AUR had** — the installer resolved 0.142.3 and went straight to it.
+- `codex --version`: `codex-cli 0.142.3`.
+- `codex login status`: **Logged in using ChatGPT** (existing `auth.json` from
+  May 3 read unchanged — mtime preserved across the migration, confirming
+  finding 1).
+- Fish completions regenerated to `~/.config/fish/completions/codex.fish`
+  (152905 bytes).
+- Installer reported `==> /home/jim/.local/bin is already on PATH` (matches the
+  desktop's `path_action=already` — finding 5 confirmed on laptop too).
+- Installer also reported `==> Current terminal: codex` / `==> Future terminals:
+  open a new terminal and run: codex` — a new message I didn't see in the
+  desktop run. Best interpretation: it's a hint about shell hash table caching
+  (the running shell still has a `codex` hash entry from the old `/usr/bin/codex`
+  lookup; a fresh shell re-resolves to the new `~/.local/bin/codex`). Not a
+  problem here because subsequent `command -v codex` checks already resolved
+  the new path. Worth knowing for the next migration on another machine.
+- Entire migration ran from inside this Claude Code session — no clean-terminal
+  hand-off needed (confirming the "no nested-session detection" key difference).

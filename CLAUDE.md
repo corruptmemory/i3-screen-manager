@@ -42,8 +42,8 @@ anything compositor- or tooling-adjacent:
 - `docs/codex-aur-to-native-migration.md` — the same AUR→native swap for the
   Codex CLI: off `openai-codex-bin` onto OpenAI's official installer
   (`curl -fsSL https://chatgpt.com/codex/install.sh | sh`, self-updating
-  standalone layout under `~/.codex/packages/standalone/`). Done on
-  `godlike-artix` (2026-06-19); **`nomad-artix` (laptop) still pending**. Unlike
+  standalone layout under `~/.codex/packages/standalone/`). **Done on both
+  machines** — `godlike-artix` 2026-06-19, `nomad-artix` 2026-06-27. Unlike
   the Claude Code swap, this one needs **no** clean-terminal hand-off — the Codex
   installer has no nested-session detection, so it can be run from inside a Claude
   Code session.
