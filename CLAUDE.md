@@ -94,6 +94,15 @@ Docs:
   `dotfiles/.xinitrc-icewm-laptop`, `dotfiles/.local/bin/start-icewm-laptop`.
   IceWM picks up the laptop config via `ICEWM_PRIVCFG` (no `~/.icewm`
   symlink needed).
+- `docs/2026-07-05-xlibre-versioning-artix-packaging.md` — **XLibre version
+  scheme + Artix packaging.** Why `world` ships `xlibre-xserver 25.0.0.x` while
+  upstream "stable" is `25.1.x`: they're *parallel branches*, and Artix stages the
+  whole `25.1.x` line in `world-gremlins` pending a normal soak+promote (not lag,
+  not a broken pin). Includes the verified ABI reality (both shipped pkgs provide
+  `VIDEODRV 28.0`), the security gap (`world`'s `25.0.0.23` predates the 2026-06-05
+  hardening — Artix skipped `25.0.0.24`), and a Watch List for the
+  `world-gremlins → world` promotion. Ties into the `25.0.0.21` vblank regression
+  under Common Issues → "X11 historical".
 
 Hyprland and IceWM are both installed and toggleable from a TTY on each
 machine. PekWM was the lone exception to the "additive and reversible" rule —
