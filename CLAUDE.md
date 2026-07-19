@@ -58,6 +58,18 @@ anything compositor- or tooling-adjacent:
   (dotfiles `974c91f`); the profile-slot surgery, default-browser/mimeapps, and
   native-messaging-host copy (marksnip) are machine-local. WebMCP confirmed
   present in Origin 149.
+- `docs/kitty-to-ghostty-terminal-swap.md` — making **Ghostty** the terminal on
+  `Super+Return` fleet-wide, plus aligning its palette to Kitty's. Desktop DONE
+  2026-07-19; **laptop config committed but NOT deployed** (Ghostty is
+  copy-deployed, so `git pull` alone does nothing — see the runbook §4). Kitty
+  stays installed; the swap is a one-line revert. Two gotchas worth knowing
+  before touching either terminal: Ghostty's `class` must be a valid GTK
+  application ID (**must contain a dot**) or it's silently ignored and the
+  floating terminal stops matching its float rule — so Hyprland uses `--class=`
+  while IceWM must use `--x11-instance-name=` (dots are `winoptions`' own field
+  separator); and Ghostty **drops malformed config lines silently**, including
+  any line with a *trailing* comment, so `ghostty +show-config` is the only
+  ground truth.
 
 **IceWM is now the only active X11 WM on both machines.** PekWM was tried on
 the desktop and **declared over** (verdict: PekWM oddities read as bugs; IceWM
