@@ -236,8 +236,9 @@ icewm --restart      # IceWM: `icesh` has NO restart verb — this is the comman
   `~/.config/kitty` is symlinked the same way (2026-07-19, same session). Kitty
   isn't the default terminal any more, but if you ever revisit it (rollback,
   palette tweak, whatever), a `git pull` on dotfiles goes live immediately with
-  no cp step. Backup at `~/.config/kitty.pre-symlink-2026-07-19/` retains the
-  original directory including an unrelated `kitty.conf~` editor-backup that
-  wasn't in dotfiles.
+  no cp step. The `~/.config/{ghostty,kitty}.pre-symlink-2026-07-19/` rollback
+  backups were retained briefly, verified byte-identical to dotfiles, then
+  removed the same day — the historical `kitty.conf~` editor-backup that had
+  never been in dotfiles was discarded with them (unused since March 2026).
 - **Kitty is still installed and fully configured.** Reverting is a one-line
   change to `terminal` / `$terminal` plus the float class in each config.
