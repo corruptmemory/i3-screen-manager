@@ -233,8 +233,11 @@ icewm --restart      # IceWM: `icesh` has NO restart verb — this is the comman
   ln -s ~/projects/dotfiles/.config/ghostty ~/.config/ghostty
   ghostty +show-config | grep -E '^(theme|background)'            # ground-truth check
   ```
-  Same argument still applies to `~/.config/kitty` — untouched here since Kitty
-  isn't the default terminal any more (also see the still-dead-weight
-  `themes/Dracula` note above).
+  `~/.config/kitty` is symlinked the same way (2026-07-19, same session). Kitty
+  isn't the default terminal any more, but if you ever revisit it (rollback,
+  palette tweak, whatever), a `git pull` on dotfiles goes live immediately with
+  no cp step. Backup at `~/.config/kitty.pre-symlink-2026-07-19/` retains the
+  original directory including an unrelated `kitty.conf~` editor-backup that
+  wasn't in dotfiles.
 - **Kitty is still installed and fully configured.** Reverting is a one-line
   change to `terminal` / `$terminal` plus the float class in each config.
