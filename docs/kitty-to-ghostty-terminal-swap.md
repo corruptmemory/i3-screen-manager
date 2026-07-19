@@ -6,9 +6,12 @@ invisible. Kitty stays installed — nothing was uninstalled and every change is
 one-line revert.
 
 - **`godlike-artix` (desktop):** DONE 2026-07-19.
-- **`nomad-artix` (laptop):** config committed, **not yet deployed** — needs the
-  §4 steps (`git pull` alone is not enough; Ghostty's config is copy-deployed,
-  not symlinked).
+- **`nomad-artix` (laptop):** DONE 2026-07-19 — §4 executed from an IceWM/X11
+  session (same live-WM confidence bracket as the desktop run). Palette
+  mechanically identical to Kitty (`diff /tmp/{k,g}.txt` returned no diff).
+  Symlinked configs (hypr, .icewm-laptop) were already live from an earlier
+  `git pull`; the deploy was just `cp` of `.config/ghostty/{config,themes/dracula-pro}`
+  followed by `icewm --restart`.
 
 Two independent problems were solved here. They're documented separately because
 they fail in completely different ways:
