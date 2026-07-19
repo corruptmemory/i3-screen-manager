@@ -222,9 +222,19 @@ icewm --restart      # IceWM: `icesh` has NO restart verb — this is the comman
 - **`themes/Dracula` is now dead weight** in the repo. It never applied (§1b) and
   it shadows a Ghostty built-in name, so it is actively confusing. Retained only
   because it predates this change; delete when convenient.
-- **Copy-deployment is the root cause of §1b and will bite again.** Symlinking
-  `~/.config/ghostty` → the repo (as `hypr` and `.icewm` already are) would make
-  the whole class of "committed but not live" bugs structurally impossible. Same
-  argument applies to `~/.config/kitty`.
+- **Copy-deployment is fixed on `nomad-artix` (2026-07-19).** `~/.config/ghostty`
+  is now a symlink into the repo — future `git pull`s go live immediately, no
+  second `cp` step. The "committed but not live" class of bug is structurally
+  impossible on the laptop now. Pattern to replicate on `godlike-artix` next
+  time you're there:
+  ```bash
+  diff -qr ~/.config/ghostty ~/projects/dotfiles/.config/ghostty  # must be empty
+  mv ~/.config/ghostty ~/.config/ghostty.pre-symlink-<date>       # rollback path
+  ln -s ~/projects/dotfiles/.config/ghostty ~/.config/ghostty
+  ghostty +show-config | grep -E '^(theme|background)'            # ground-truth check
+  ```
+  Same argument still applies to `~/.config/kitty` — untouched here since Kitty
+  isn't the default terminal any more (also see the still-dead-weight
+  `themes/Dracula` note above).
 - **Kitty is still installed and fully configured.** Reverting is a one-line
   change to `terminal` / `$terminal` plus the float class in each config.
