@@ -29,6 +29,36 @@
 
 Nothing becomes live in this task. Goal is a launchable session that starts, draws nothing surprising, and can be exited.
 
+> ### ⚠️ SUPERSEDED 2026-07-20 — every Xephyr gate below was abandoned
+>
+> The per-task Xephyr validation steps in Tasks 1–4 **were attempted and do not
+> work.** Xephyr cannot present more than one **RandR monitor**, and fvwm's
+> per-monitor mode is explicitly RandR-based (*"each RandR monitor has a
+> separate copy of desktops"*). Measured on `godlike-artix`, not assumed:
+>
+> | Attempt | Result |
+> | --- | --- |
+> | `-screen A -screen B +xinerama` | root becomes 2000x800, RandR still reports **one** output named `default` |
+> | `xrandr --setmonitor` (server reports RandR **1.6**, so it *is* supported) | silently no-ops |
+> | `xrandr --delmonitor default` | `BadValue` — `default` is an *automatic* monitor, undeletable |
+>
+> So a nested server can never exercise per-monitor desks, the per-monitor
+> pagers, or the monitor warp — i.e. everything that actually carries risk.
+> Tasks 2–6 were therefore written and committed together (dotfiles `9d17e05`),
+> and **all validation moved to a single real TTY session — Task 7.**
+>
+> What Xephyr *is* still good for, and what was done before shipping: a
+> **parse check**. `fvwm3 -f ~/.fvwm3/config` under a single-screen Xephyr
+> started clean, managed an `xterm`, and emitted zero errors — cheap insurance
+> against a typo costing a TTY boot. Worth repeating after any config edit:
+>
+> ```bash
+> Xephyr -screen 1400x900 :4 & sleep 4
+> timeout 12 env DISPLAY=:4 fvwm3 -f ~/.fvwm3/config 2>&1 | grep -iE "error|unknown|invalid"
+> ```
+>
+> The single-instance caveat further down remains true for any future Xephyr use.
+
 **Files:**
 - Create: `~/projects/dotfiles/.fvwm3/config`
 - Create: `~/projects/dotfiles/.fvwm3/styles` (empty placeholder — filled in Task 2)
