@@ -79,13 +79,25 @@ noticeably more responsive and stable). On **2026-06-18** PekWM was
 `polybar/config-pekwm.ini`, and `.xinitrc-desktop` are all gone. It was never
 replicated to the laptop. The full WM rotation:
 
-- **`godlike-artix` (desktop):** Hyprland (Wayland) · IceWM (X11, daily) · **FVWM3 (X11, on trial since 2026-07-20)**
+- **`godlike-artix` (desktop):** Hyprland (Wayland) · IceWM (X11, daily) · ~~FVWM3~~ (X11, **trial concluded 2026-07-20 — provisional failure**)
 - **`nomad-artix` (laptop):** Hyprland (Wayland) · IceWM (X11, scaffolded 2026-06-17 — pending first TTY-boot validation)
 
-**FVWM3 joined the desktop rotation 2026-07-20** — the only stacking X11 WM with
-genuinely independent per-monitor workspaces, which became a criterion the day
-the desktop went dual-head. It is *on trial*, not adopted: IceWM is untouched
-and `start-icewm` reverts. See `docs/2026-07-20-fvwm3-x11-setup.md`.
+**FVWM3 was tried and rejected on 2026-07-20**, the same day it was built. It
+was chosen as the only stacking X11 WM with genuinely independent per-monitor
+workspaces, and that part *worked* — the trial died on **window placement
+quirks** arriving faster than they could be fixed (Discord restoring itself to a
+remembered monitor; maximise-then-unmaximise teleporting a window back to the
+previous monitor; `xdg-open` silently stealing focus so the next window command
+hit the wrong window). Same failure mode that ended PekWM: not a missing
+feature, an accumulation of behaviours you have to hold in your head.
+
+Marked **provisional** because the diagnosis is incomplete — at least one of the
+three looks like a bug in the config rather than in fvwm. Config is left in
+place and is entirely additive; nothing needs undoing. See
+`docs/2026-07-20-fvwm3-x11-setup.md` §8.
+
+**Direction after this: back to i3** — accepting a tiling paradigm to get the
+per-monitor workspace model that the stacking world could not deliver reliably.
 
 Docs:
 
@@ -112,9 +124,12 @@ Docs:
   IceWM picks up the laptop config via `ICEWM_PRIVCFG` (no `~/.icewm`
   symlink needed).
 - `docs/2026-07-20-fvwm3-x11-setup.md` (+ `…-desktop-setup-plan.md` design,
-  `…-fvwm3-implementation-steps.md` build) — **FVWM3 on the desktop, on trial
-  since 2026-07-20.** Chosen as the only stacking X11 WM with independent
-  per-monitor workspaces (`DesktopConfiguration per-monitor`). Read the outcome
+  `…-fvwm3-implementation-steps.md` build) — **FVWM3 on the desktop: built and
+  REJECTED the same day, 2026-07-20 (provisional failure — see §8).** Chosen as
+  the only stacking X11 WM with independent per-monitor workspaces
+  (`DesktopConfiguration per-monitor`), which did work; it died on window
+  placement quirks. Docs retained because the diagnosis is reusable and the
+  config is still on disk. Read the outcome
   doc before touching it: the single biggest trap is that **fvwm3's user
   directory is `~/.fvwm`, not `~/.fvwm3`**, and the `Read` failures that causes
   are *silent*, so the first boot came up as stock 1992 FVWM with no error
