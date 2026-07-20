@@ -106,6 +106,18 @@ Docs:
   `dotfiles/.xinitrc-icewm-laptop`, `dotfiles/.local/bin/start-icewm-laptop`.
   IceWM picks up the laptop config via `ICEWM_PRIVCFG` (no `~/.icewm`
   symlink needed).
+- `docs/2026-07-20-desktop-dual-monitor-portrait.md` — **desktop went dual-head
+  2026-07-19**: ASUS PA248QV (1920x1200) pivoted to **portrait** on the right of
+  the PB328 (2560x1440), both native, vertical centers aligned (the *shorter*
+  panel carries the y-offset — X11 has no negative screen coordinates). Live and
+  verified under IceWM/X11; the Hyprland `transform` **direction** is written but
+  untested (if the panel comes up upside-down on the next Wayland boot, it's `3`,
+  not `1`). Also covers the `HDMI-1`(X11)/`HDMI-A-1`(DRM/Wayland) name split, a
+  defused Hyprland catch-all that used to force 2560x1440 onto *every* output,
+  and — separately from the layout — the research result that **IceWM cannot give
+  a monitor its own workspaces or its own bar**: `_NET_CURRENT_DESKTOP` is a
+  single global scalar, so it's architectural, and swapping in polybar fixes the
+  bar but provably cannot fix the workspaces.
 - `docs/2026-07-05-xlibre-versioning-artix-packaging.md` — **XLibre version
   scheme + Artix packaging.** Why `world` ships `xlibre-xserver 25.0.0.x` while
   upstream "stable" is `25.1.x`: they're *parallel branches*, and Artix stages the
@@ -182,6 +194,7 @@ No automated tests. Test manually with an external monitor:
 - **`hyprctl keyword monitor` is dead under Lua mode (Hyprland 0.55+)** — returns "keyword can't work with non-legacy parsers. Use eval." The dual-compositor refactor of `i3-screen-manager` (2026-06-17) replaced it with `hyprctl dispatch 'hl.monitor({...})'`. The dispatch wrapper itself errors ("hl.dispatch: expected a dispatcher") but the `hl.monitor()` side effect runs first — verified during the 75Hz experiment 2026-06-13 and the `i3-screen-manager disconnect` smoke test 2026-06-17. The `hl_apply` helper quiets the wrapper error and accepts the side effect.
 - **Black screen on disconnect**: lid was closed and eDP-1 couldn't activate. The lid guard prevents this.
 - **External not detected**: `wlr-randr` should see it. NVIDIA outputs follow `*-N-N` naming (e.g. `HDMI-1-0`, `DP-1-0`).
+- **A monitor rule silently matches nothing (X11 vs Wayland output names)**: xrandr and the kernel DRM layer name the *same physical port* differently — the desktop's second monitor is `HDMI-1` under xrandr but `HDMI-A-1` to wlroots/Hyprland. Copying a working xrandr layout into a Hyprland config verbatim therefore matches no output and falls through to the catch-all, with no error. `DP-2` is spelled the same in both, which makes the mismatch easy to miss. Ground truth for the Wayland-side name, readable from an X11 session: `for c in /sys/class/drm/card*-*; do [ "$(cat $c/status)" = connected ] && basename $c; done`.
 - **Phantom monitor after clamshell**: `hl.monitor disabled=true` is unreliable like the hyprlang `keyword monitor X,disable` it replaced. Always paired with `wlr-randr --output X --off` in the scripts. If it ever recurs, rerun `i3-screen-manager clamshell`.
 - **Waybar workspace clicks do nothing under Lua mode**: known regression — waybar #5008. Hyprland 0.55+ tries to evaluate the IPC dispatch string as Lua, and waybar's old-style `dispatch workspace N` is not valid Lua. Workaround: `Super+N` keyboard shortcut (works), or mouse-wheel on the bar (works via configured `on-scroll-*`). See `docs/hyprland-lua-migration.md` § "Waybar workspace click regression".
 - **GTK file dialog hangs 25 seconds**: `gvfsd-trash` D-Bus backend times out. Root fix: remove `gvfs` entirely (`sudo pacman -R gvfs evince`) and use `xreader` instead of evince. Keep `export GIO_USE_VFS=local` in `start-hyprland` as a safety net. Diagnose with `time gio info trash:///` (slow) vs `time GIO_USE_VFS=local gio info trash:///` (instant).
