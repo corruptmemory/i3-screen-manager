@@ -79,8 +79,13 @@ noticeably more responsive and stable). On **2026-06-18** PekWM was
 `polybar/config-pekwm.ini`, and `.xinitrc-desktop` are all gone. It was never
 replicated to the laptop. The full WM rotation:
 
-- **`godlike-artix` (desktop):** Hyprland (Wayland) · IceWM (X11, daily)
+- **`godlike-artix` (desktop):** Hyprland (Wayland) · IceWM (X11, daily) · **FVWM3 (X11, on trial since 2026-07-20)**
 - **`nomad-artix` (laptop):** Hyprland (Wayland) · IceWM (X11, scaffolded 2026-06-17 — pending first TTY-boot validation)
+
+**FVWM3 joined the desktop rotation 2026-07-20** — the only stacking X11 WM with
+genuinely independent per-monitor workspaces, which became a criterion the day
+the desktop went dual-head. It is *on trial*, not adopted: IceWM is untouched
+and `start-icewm` reverts. See `docs/2026-07-20-fvwm3-x11-setup.md`.
 
 Docs:
 
@@ -106,6 +111,20 @@ Docs:
   `dotfiles/.xinitrc-icewm-laptop`, `dotfiles/.local/bin/start-icewm-laptop`.
   IceWM picks up the laptop config via `ICEWM_PRIVCFG` (no `~/.icewm`
   symlink needed).
+- `docs/2026-07-20-fvwm3-x11-setup.md` (+ `…-desktop-setup-plan.md` design,
+  `…-fvwm3-implementation-steps.md` build) — **FVWM3 on the desktop, on trial
+  since 2026-07-20.** Chosen as the only stacking X11 WM with independent
+  per-monitor workspaces (`DesktopConfiguration per-monitor`). Read the outcome
+  doc before touching it: the single biggest trap is that **fvwm3's user
+  directory is `~/.fvwm`, not `~/.fvwm3`**, and the `Read` failures that causes
+  are *silent*, so the first boot came up as stock 1992 FVWM with no error
+  anywhere. Also records: `CurrentScreen` is NOT monitor-scoped (it is a synonym
+  for `CurrentPageAnyDesk`; `Screen <name>` is the real one); `StartFunction`
+  runs on every restart so daemons belong in `InitFunction`; polybar's
+  EWMH-correct screen-absolute strut is applied by fvwm as monitor-relative,
+  which broke maximise on the y-offset monitor; and **Xephyr cannot validate any
+  of this** — it exposes a single RandR output, so per-monitor behaviour is
+  untestable in a nested server.
 - `docs/2026-07-20-desktop-dual-monitor-portrait.md` — **desktop went dual-head
   2026-07-19**: ASUS PA248QV (1920x1200) pivoted to **portrait** on the right of
   the PB328 (2560x1440), both native, vertical centers aligned (the *shorter*
