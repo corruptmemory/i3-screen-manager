@@ -212,3 +212,91 @@ mv ~/.config/i3/config.pre-symlink-2026-07-21 ~/.config/i3/config
 # Or, easier: just log out and use start-hyprland / start-icewm-laptop from
 # the TTY. Neither was touched by this scaffold.
 ```
+
+## 9. Round-1 execution log (2026-07-21)
+
+First live boot from TTY. Working out of the gate:
+
+- i3 comes up, wallpaper renders, rofi menus (`Super+space`,
+  `Super+BackSpace`, `Super+Ctrl+BackSpace`) all resolve.
+- Ghostty on `Super+Return`.
+
+**Two issues found and fixed live:**
+
+### 9a. No bar (any bar) — copy-deployment trap, third instance in a month
+
+`~/.config/polybar/` was a real directory holding only the March
+`config.ini` — `config-i3-laptop.ini` sat in dotfiles but was never
+installed. Polybar's log made this obvious the moment we ran it in the
+foreground:
+
+```
+polybar|error: Uncaught exception, shutting down: Failed to open config file
+/home/jim/.config/polybar/config-i3-laptop.ini: No such file or directory
+```
+
+Same failure shape as ghostty (2026-07-19) and kitty (same day): file
+committed to dotfiles, not live on the machine. Fix: `mv` the live dir
+aside, `ln -s` dotfiles' `.config/polybar` into place. The old
+`config.ini` (drifted from dotfiles since March — same third occurrence
+during the desktop's own build recorded in
+`docs/2026-07-20-i3-x11-setup.md` §5a) is preserved in
+`~/.config/polybar.pre-symlink-2026-07-21/`.
+
+**Broader sweep done in the same session** — see §10.
+
+### 9b. `Super+y` opened the wrong Brave profile — profile-dir numbers are per-machine
+
+`config-laptop` inherited `--profile-directory="Profile 3"` from
+`config-desktop`. On the desktop that's the YouTube Premium account; on
+the laptop `Profile 3` is "Personal" and `Profile 1` is
+"Pennystinker@Gmail" (the actual YT Premium account here). Brave assigns
+profile-dir numbers in the order profiles are added, so the mapping is
+per-machine, not portable.
+
+Fix: bump the arg to `Profile 1` in `config-laptop` and reload i3. Now
+the config carries a comment explaining the trap plus the jq recipe to
+verify on future machines:
+
+```bash
+jq -r '.profile.info_cache | to_entries[] | "\(.key): \(.value.name)"' \
+    ~/.config/BraveSoftware/Brave-Origin/Local\ State
+```
+
+The laptop's IceWM keys file already had this right (`Profile 1`) — the
+lesson is to port from the same-machine sibling config when possible,
+not the different-machine sibling.
+
+## 10. Broader dotfile-symlink sweep (2026-07-21)
+
+After §9a, we did a full sweep of `~/.config/<subdir>` for anything else
+sitting in the copy-deployment failure mode.
+
+| Subdir | Before | Action | After |
+|---|---|---|---|
+| `ghostty` | symlink | none | symlink |
+| `kitty` | symlink | none | symlink |
+| `polybar` | copy-dir (drift) | mv aside, dir symlink | symlink |
+| `dunst` | copy-dir (no drift) | mv aside, dir symlink | symlink |
+| `mako` | copy-dir (no drift) | mv aside, dir symlink | symlink |
+| `rofi` | copy-dir (real drift) | mv aside, dir symlink | symlink (adopts desktop's `monitor: -4` fix + font 12→11) |
+| `waybar/style.css` | real file (no `style-laptop.css` in dotfiles) | copy live → dotfiles as `style-laptop.css`, symlink | symlink (matches the existing `config-laptop.jsonc` per-machine pattern) |
+| `hypr` | per-file symlinks (`hyprland.conf` → `-laptop.conf`, `hyprland.lua` → `-laptop.lua`) | none (correct pattern) | per-file symlinks |
+| `i3` | per-file symlink (`config` → `config-laptop`) | none (correct pattern) | per-file symlink |
+| `waybar` (config.jsonc) | per-file symlink → `config-laptop.jsonc` | none | per-file symlink |
+| `flameshot` | per-file symlinks (`flameshot-{wayland,x11}.ini`) + local `flameshot.ini` (per-session state) | none (correct pattern) | per-file symlinks |
+| `fish` | copy-dir with real per-machine content (`local.fish`, `conf.d/`, `functions/`, `completions/`) | none (deliberately) | copy-dir |
+
+**Result:** every `~/.config/<x>` that CAN be a symlink now is. The three
+copy-deployment traps that bit this month (ghostty, kitty, polybar) are
+now structurally impossible on the laptop — `git pull` on dotfiles
+suffices. Backups at `~/.config/{dunst,mako,rofi,polybar}.pre-symlink-2026-07-21/`
++ `~/.config/waybar/style.css.pre-symlink-2026-07-21` retained pending
+rollback confidence; delete when comfortable.
+
+**Deliberately not touched:**
+- `hypr`, `i3`, `waybar` (config.jsonc), `flameshot`: per-file symlink
+  is the correct pattern for the per-machine variant selection they do.
+- `fish`: real shell with per-machine `local.fish` / `completions/`
+  (which get auto-generated on-demand, e.g. by `codex completion fish`)
+  / `conf.d/` / `functions/`. Sharing via dotfiles would be a mistake.
