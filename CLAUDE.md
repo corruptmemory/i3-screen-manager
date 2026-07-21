@@ -79,7 +79,7 @@ noticeably more responsive and stable). On **2026-06-18** PekWM was
 `polybar/config-pekwm.ini`, and `.xinitrc-desktop` are all gone. It was never
 replicated to the laptop. The full WM rotation:
 
-- **`godlike-artix` (desktop):** Hyprland (Wayland) · IceWM (X11, daily) · ~~FVWM3~~ (X11, **trial concluded 2026-07-20 — provisional failure**)
+- **`godlike-artix` (desktop):** Hyprland (Wayland) · **i3 (X11, provisional complete success 2026-07-20)** · IceWM (X11) · ~~FVWM3~~ (X11, **rejected 2026-07-20 — provisional failure**)
 - **`nomad-artix` (laptop):** Hyprland (Wayland) · IceWM (X11, scaffolded 2026-06-17 — pending first TTY-boot validation)
 
 **FVWM3 was tried and rejected on 2026-07-20**, the same day it was built. It
@@ -98,6 +98,15 @@ place and is entirely additive; nothing needs undoing. See
 
 **Direction after this: back to i3** — accepting a tiling paradigm to get the
 per-monitor workspace model that the stacking world could not deliver reliably.
+
+**i3 was rebuilt and adopted the same day, 2026-07-20 — "provisional complete
+success."** Verdict: *"most things just work."* The tiling paradigm that was
+feared turned out to be the cure, not the compromise — deterministic window
+placement is exactly what the stacking WMs lacked. Standout: an auto-building
+comms stack on workspace 10 (Messages+WhatsApp / Discord+Slack+Keybase) via i3's
+`append_layout` + swallow criteria, reachable by `Super+F1..F5`, with a "Launch
+Chats" from-scratch rebuild. See `docs/2026-07-20-i3-x11-setup.md`. Only
+"provisional" pending daily-use time; nothing is broken.
 
 Docs:
 
@@ -123,6 +132,20 @@ Docs:
   `dotfiles/.xinitrc-icewm-laptop`, `dotfiles/.local/bin/start-icewm-laptop`.
   IceWM picks up the laptop config via `ICEWM_PRIVCFG` (no `~/.icewm`
   symlink needed).
+- `docs/2026-07-20-i3-x11-setup.md` (+ `…-i3-desktop-setup-plan.md` design,
+  `…-i3-implementation-steps.md` build) — **i3 4.25.1 on the desktop: rebuilt and
+  adopted 2026-07-20, "provisional complete success."** The return to i3 after
+  FVWM3 was rejected; tiling turned out to be the cure ("most things just work"),
+  not the compromise it was feared to be. Read the outcome doc for: the measured
+  `exec` vs `exec_always` truth (`exec_always` re-runs on *restart*, NOT reload —
+  the common belief is wrong); the Electron window-identity gotchas (Discord and
+  Slack present a lowercase `res_class` main window with capital-cased tray
+  helpers, so match case-insensitively; Brave PWAs share class `Brave-origin` and
+  must be matched by `instance`); the workspace-10 comms stack built from
+  `append_layout` + swallow criteria (`i3-chat-layout`, `i3-chat-rebuild` / "Launch
+  Chats", `Super+F1..F5`); and that `~/.config` copy-deployment drift was found
+  THREE times in one build (i3, rofi, polybar) — symlinking is the structural fix.
+  Unlike FVWM3, i3 ships `i3 -C` to validate a config without launching it.
 - `docs/2026-07-20-fvwm3-x11-setup.md` (+ `…-desktop-setup-plan.md` design,
   `…-fvwm3-implementation-steps.md` build) — **FVWM3 on the desktop: built and
   REJECTED the same day, 2026-07-20 (provisional failure — see §8).** Chosen as
