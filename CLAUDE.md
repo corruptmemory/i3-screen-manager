@@ -80,7 +80,7 @@ noticeably more responsive and stable). On **2026-06-18** PekWM was
 replicated to the laptop. The full WM rotation:
 
 - **`godlike-artix` (desktop):** Hyprland (Wayland) · **i3 (X11, provisional complete success 2026-07-20)** · IceWM (X11) · ~~FVWM3~~ (X11, **rejected 2026-07-20 — provisional failure**)
-- **`nomad-artix` (laptop):** Hyprland (Wayland) · IceWM (X11, scaffolded 2026-06-17 — pending first TTY-boot validation)
+- **`nomad-artix` (laptop):** Hyprland (Wayland) · IceWM (X11, live) · **i3 (X11, scaffolded 2026-07-21 — pending first TTY-boot validation)**
 
 **FVWM3 was tried and rejected on 2026-07-20**, the same day it was built. It
 was chosen as the only stacking X11 WM with genuinely independent per-monitor
@@ -146,6 +146,22 @@ Docs:
   Chats", `Super+F1..F5`); and that `~/.config` copy-deployment drift was found
   THREE times in one build (i3, rofi, polybar) — symlinking is the structural fix.
   Unlike FVWM3, i3 ships `i3 -C` to validate a config without launching it.
+- `docs/2026-07-21-i3-laptop-setup.md` — **i3 on the laptop, scaffolded
+  2026-07-21** (pending first TTY-boot validation). Sibling of the desktop's
+  i3 setup with the SKIP list applied for a dynamic-external-monitor life:
+  no `workspace N output` fixed pins, single-bar polybar with a battery
+  module (drops `cmos-battery` which is desktop-it87-only), brightness binds
+  added, no audio-stack launches in xinitrc (OpenRC user services own that
+  on the laptop), no `xdtpaste` bind (desktop-local script), and no
+  workspace-10 chat-wall auto-build (deferred while the user cooks on an
+  alternate design). Reuses the IceWM-laptop infrastructure verbatim:
+  `/etc/X11/xorg.conf.d/{10-nvidia-prime,40-touchpad}.conf`, HiDPI recipe,
+  `i3-screen-manager` X11 backend, `flameshot-laptop-{wayland,x11}.ini`
+  symlinks. Also lands the Ghostty user-level `.desktop` shadow that
+  prevents `--gtk-single-instance=true` re-entering via D-Bus activation.
+  Config: `dotfiles/.config/i3/config-laptop`,
+  `dotfiles/.local/bin/start-i3-laptop`, `dotfiles/.xinitrc-i3-laptop`,
+  `dotfiles/.config/polybar/config-i3-laptop.ini`.
 - `docs/2026-07-20-fvwm3-x11-setup.md` (+ `…-desktop-setup-plan.md` design,
   `…-fvwm3-implementation-steps.md` build) — **FVWM3 on the desktop: built and
   REJECTED the same day, 2026-07-20 (provisional failure — see §8).** Chosen as
