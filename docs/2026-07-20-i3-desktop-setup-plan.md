@@ -121,10 +121,19 @@ re-place workspaces afterwards.
 
 ### `config-desktop` (autostart)
 
-i3 distinguishes `exec` (startup only) from `exec_always` (startup **and
-reload**). That is the same distinction as fvwm's `InitFunction` vs
-`StartFunction`, which caused duplicate daemons on every reload there
-(`docs/2026-07-20-fvwm3-x11-setup.md` §2). Use it deliberately:
+i3 distinguishes `exec` from `exec_always`. **Measured on this machine
+2026-07-20** (nested Xephyr, `i3-msg` replies confirmed `{"success":true}`):
+
+| | `exec` | `exec_always` |
+| --- | --- | --- |
+| startup | runs | runs |
+| **reload** (`$mod+Shift+c`) | no | **no** |
+| **restart** (`$mod+Shift+r`) | no | **yes** |
+
+Note this **corrects the widespread belief** (and this doc's first draft) that
+`exec_always` re-runs on *reload*. It re-runs on **restart**. Either way, `exec`
+never re-runs, so the FVWM3 duplicate-daemon failure — where `StartFunction`
+fired on every restart — cannot happen with `exec`. Use it deliberately:
 
 ```
 exec        --no-startup-id polybar ... i3-dp2

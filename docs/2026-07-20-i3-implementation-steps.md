@@ -155,12 +155,30 @@ Expected: all present except possibly `subl`/`goland` (not checked — their bin
 > deleted in Task 3, not replaced: it only ran XDG autostart `.desktop` files,
 > and every daemon we want is launched explicitly instead.
 
-- [ ] **Step 3: VERIFY `exec` vs `exec_always` — do not skip**
+- [x] **Step 3: VERIFY `exec` vs `exec_always` — DONE, and the answer surprised us**
 
-```bash
-man 5 i3 | col -b | grep -B4 -A12 "exec_always" | head -30
+The shipped docs do NOT cover this: `man 5 i3` has no `exec_always` entry and
+`/usr/share/doc/i3/` ships only images and a refcard. So it was measured
+directly, in a nested Xephyr, with a config whose two exec lines append to
+separate files:
+
 ```
-Read it. Record the answer in the outcome doc. The expectation is `exec` = startup only, `exec_always` = startup **and** reload/restart — but **the FVWM3 build shipped a duplicate-daemon bug from exactly this assumption about `StartFunction`.** Task 7 proves it empirically regardless of what the man page says.
+exec        --no-startup-id sh -c 'echo tick >> /tmp/i3exec-once'
+exec_always --no-startup-id sh -c 'echo tick >> /tmp/i3exec-always'
+```
+
+Both `i3-msg` calls replied `[{"success":true}]`, so the actions really happened:
+
+| | `exec` | `exec_always` |
+| --- | --- | --- |
+| startup | 1 | 1 |
+| **reload** (`$mod+Shift+c`) | 1 | **1 — does NOT re-run** |
+| **restart** (`$mod+Shift+r`) | 1 | **2 — DOES re-run** |
+
+**This corrects the widespread belief that `exec_always` re-runs on reload.** It
+re-runs on **restart**. Either way `exec` never re-runs, so the FVWM3
+duplicate-daemon failure cannot happen with the daemon lines as written. Task 7
+Step 4 still re-counts on the real display as a belt-and-braces check.
 
 - [ ] **Step 4: Confirm `i3 -C` validates a config without starting a session**
 
