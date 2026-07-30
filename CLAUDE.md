@@ -200,6 +200,24 @@ Docs:
   hardening — Artix skipped `25.0.0.24`), and a Watch List for the
   `world-gremlins → world` promotion. Ties into the `25.0.0.21` vblank regression
   under Common Issues → "X11 historical".
+- `docs/2026-07-29-starling-desktop-investigation.md` — **code-level teardown of
+  Starling** (`starling.build`, the AI-written desktop) + a broader X11/Wayland
+  "structural vs folklore" audit. Not a WM-setup doc — a reference for revisiting
+  Starling and for the architecture arguments it surfaced. Headlines: Starling's
+  X11 is a **bespoke ~5.2K-line in-process C++ X server, NOT Xwayland** (compiled
+  into the same binary as its Wayland compositor; both feed Flutter's texture
+  registry; real Xwayland kept as the escape hatch for WeChat) — **reconstructed
+  from AI training exposure, not lifted** (zero X.Org tokens; NOTICE attributes it
+  to no-one; grown gap-by-gap per client). It runs **Flutter's *macOS* embedder on
+  Linux** across five languages, so Swift is inherited toll, not merit. Also a
+  **verified XLibre finding** (slots beside the XLibre doc above): XLibre ships
+  **TearFree by default + optional atomic modesetting + VariableRefresh**
+  (`README` + `modesetting.man`), and X has had every-frame-perfect presentation
+  since ~2013 via **Present + DRI3** — so "X structurally can't do tear-free/atomic
+  presentation" is folklore. The one real architectural Wayland win that survives
+  the audit is **client isolation** (X's ambient authority; portals re-grant it).
+  Closes with the **"where you put the seam" thesis** (draw-ops vs buffers vs
+  semantics) and why remote-dev tooling makes the X-vs-Wayland fight orthogonal.
 
 Hyprland and IceWM are both installed and toggleable from a TTY on each
 machine. PekWM was the lone exception to the "additive and reversible" rule —
