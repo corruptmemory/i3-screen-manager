@@ -218,6 +218,17 @@ Docs:
   the audit is **client isolation** (X's ambient authority; portals re-grant it).
   Closes with the **"where you put the seam" thesis** (draw-ops vs buffers vs
   semantics) and why remote-dev tooling makes the X-vs-Wayland fight orthogonal.
+- `docs/2026-07-29-rofi-emoji-picker-fix.md` — **`Super+Control+space` emoji picker
+  root-cause + fix.** It showed *"Do not launch rofi from inside rofi."* instead of
+  an emoji menu: the `emoji` "modi" was a launcher script written for the (AUR-only,
+  off-limits) **rofi-emoji plugin**, and rofi 2.0 **auto-discovers
+  `~/.config/rofi/scripts/<name>` as a script modi**, so `-modi emoji` ran that
+  script, which re-ran rofi → the `ROFI_OUTSIDE` nested-launch guard fired. Diagnosed
+  by `strace -f -e trace=execve` on the exec chain. Replaced with a self-contained
+  `rofi -dmenu` picker (`scripts/emoji` → `xclip`) over an offline-generated
+  1419-entry `emoji.txt` (`gen-emoji.py`, from texlive's UCD `emoji-data.txt`) with a
+  searchable list theme. **The laptop needs the redeploy in §5** — `~/.config/rofi`
+  is copy-deployed on both machines, so `git pull` alone won't move the rofi files.
 
 Hyprland and IceWM are both installed and toggleable from a TTY on each
 machine. PekWM was the lone exception to the "additive and reversible" rule —
