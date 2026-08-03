@@ -3,8 +3,10 @@
 **Date:** 2026-08-03
 **Machine:** `godlike-artix` (desktop). **`nomad-artix` (laptop) will hit the
 same bug and needs the same fix — see §5.**
-**Status:** TEMPORARY local override applied. Re-evaluate on the next
-`dbus-openrc` bump (see §6 Watch List).
+**Status:** TEMPORARY local override applied. Diagnosis + fix **independently
+confirmed on the Artix forum**, where an upstream `dbus-openrc` patch is already
+posted and maintainer-liked (§7) — so the resync is expected soon.
+Re-evaluate/remove on the next `dbus-openrc` bump (see §6 Watch List).
 
 ## 1. Symptom
 
@@ -168,6 +170,12 @@ written:**
 re-evaluated** — the desync may be gone, in which case the override now silently
 shadows a *correct* system hook and should be removed.
 
+**Heads-up: the upstream fix is already in flight.** The Artix forum patch (§7)
+reroutes `dbus-openrc` to source `dbus-reload.hook` from the shared `alpm-hooks`
+repo, and it's maintainer-liked — so expect a `dbus-openrc` rebuild (new
+`pkgrel`/`pkgver`) that makes the *system* hook call `dbus_reload` on its own.
+When that lands, check #2 below flips and the override comes out.
+
 **Re-evaluate on/after 2026-09-03** (≈ one month out) — or immediately whenever
 `dbus-openrc` changes version, whichever comes first. Check:
 
@@ -193,48 +201,25 @@ Then run one update to confirm the system hook fires clean on its own.
 
 (Passive doc-based reminder by preference — no cron / scheduled agent.)
 
-## 7. Bug report (filed upstream)
+## 7. Upstream status — already reported + patched (nothing to file)
 
-Filed at Artix Gitea — the OpenRC packages repo: **
-https://gitea.artixlinux.org/artixlinux/packages-openrc/issues **
+Artix's Gitea issue tracker is **closed** (issues disabled), so there is nowhere
+to file this — and it doesn't matter, because the bug is **already reported and
+patched on the Artix forum**, independently confirming this doc's diagnosis and
+fix.
 
-> **Title:** dbus-openrc 20260324-1: dbus-reload.hook calls `openrc-hook reload
-> dbus`, unsupported by openrc 0.63.3-2 dispatcher → "Invalid operation 'reload'"
->
-> **Body:**
->
-> Every post-transaction that touches a D-Bus system policy file fails the
-> dbus-reload hook:
->
-> ```
-> (5/5) Reloading system bus configuration...
->   Invalid operation 'reload'
-> error: command failed to execute correctly
-> ```
->
-> **Cause:** `dbus-reload.hook` (dbus-openrc 20260324-1) runs:
->
-> ```
-> Exec = /usr/share/libalpm/scripts/openrc-hook reload dbus
-> ```
->
-> but the `openrc-hook` dispatcher shipped by openrc 0.63.3-2 has no `reload`
-> operation. Its `case` implements only `sysctl | dbus_reload | reexec |
-> restart | add | del | uadd | udel`, so `reload` hits the `*)` catch-all and
-> exits 1.
->
-> **Reproduce:**
->
-> ```
-> $ /usr/share/libalpm/scripts/openrc-hook reload dbus
->   Invalid operation 'reload'   # exit 1
-> $ /usr/share/libalpm/scripts/openrc-hook dbus_reload
->   # exit 0 — this is the op the dispatcher actually supports
-> ```
->
-> Both packages are at the newest repo versions, so updating cannot resolve it —
-> the two packages are out of sync. Either dbus-openrc's hook should call
-> `dbus_reload` (matching the current dispatcher), or openrc's `openrc-hook`
-> needs a generic `reload` verb to match the hook.
->
-> **Versions:** openrc 0.63.3-2, dbus-openrc 20260324-1 (Artix, OpenRC).
+- **Thread:** https://forum.artixlinux.org/index.php/topic,10203.msg61127.html
+  — posted 2026-08-03 by `conlogic`, "liked" by `dr-kart` and `Dju`.
+- The poster's correction is verbatim ours: *"For the current version of the
+  `openrc` package this call should be `dbus_reload`."*
+- **Root-cause upstream fix (patch posted):** a `dbus-openrc` PKGBUILD change
+  that stops hard-wiring dbus-openrc's own copy of `dbus-reload.hook` and instead
+  pulls the shared hook from the `alpm-hooks` repo
+  (`git+https://gitea.artixlinux.org/artix/alpm-hooks.git#tag=3.0`) — the same
+  way the `openrc` package already sources its hooks. That de-duplication is what
+  stops the two packages drifting again. (The patch also notes `alpm-hooks`'
+  Makefile `.PHONY` list is missing `install_openrc_dbus`.)
+
+So: **do not file a bug** — the tracker is closed and the issue is already
+handled upstream. The only remaining action is to watch for the `dbus-openrc`
+rebuild that ships this patch, then remove our override per §6.

@@ -236,9 +236,12 @@ Docs:
   `dbus_reload` (no generic `reload` verb), so it exits 1. Harmless
   (PostTransaction; only skips a live dbus policy reload). Fixed with a
   **TEMPORARY** `/etc/pacman.d/hooks/dbus-reload.hook` override that calls
-  `dbus_reload`. **Laptop (`nomad-artix`) needs the same override** (§5). Pinned
-  to `dbus-openrc 20260324-1`; **re-evaluate/remove on any `dbus-openrc` bump, or
-  by 2026-09-03** — the doc's §6 Watch List has the check-and-remove steps.
+  `dbus_reload`. **Laptop (`nomad-artix`) needs the same override** (§5).
+  Diagnosis + fix confirmed on the Artix forum, where an upstream `dbus-openrc`
+  patch is already posted + maintainer-liked (§7) — so no bug to file (Gitea
+  issues closed), just watch for the rebuild. Pinned to `dbus-openrc
+  20260324-1`; **re-evaluate/remove on any `dbus-openrc` bump, or by 2026-09-03**
+  — the doc's §6 Watch List has the check-and-remove steps.
 
 Hyprland and IceWM are both installed and toggleable from a TTY on each
 machine. PekWM was the lone exception to the "additive and reversible" rule —
@@ -324,7 +327,7 @@ No automated tests. Test manually with an external monitor:
 
 ### Package management (pacman / Artix)
 
-- **`Invalid operation 'reload'` on the dbus-reload post-transaction hook** (`upc`/`pacman -Syu`): an Artix packaging desync — `dbus-openrc 20260324-1`'s hook calls `openrc-hook reload dbus`, unsupported by `openrc 0.63.3-2`'s dispatcher (which only has `dbus_reload`). **Harmless** (PostTransaction; packages install fine; only a live dbus policy reload is skipped). Not fixable by updating — both packages are newest. **TEMPORARY** fix: `/etc/pacman.d/hooks/dbus-reload.hook` override calling `dbus_reload`. Full write-up + Watch List + laptop note + the upstream bug report in `docs/2026-08-03-dbus-reload-hook-openrc-desync.md`. **Re-evaluate/remove the override on any `dbus-openrc` bump, or by 2026-09-03.**
+- **`Invalid operation 'reload'` on the dbus-reload post-transaction hook** (`upc`/`pacman -Syu`): an Artix packaging desync — `dbus-openrc 20260324-1`'s hook calls `openrc-hook reload dbus`, unsupported by `openrc 0.63.3-2`'s dispatcher (which only has `dbus_reload`). **Harmless** (PostTransaction; packages install fine; only a live dbus policy reload is skipped). Not fixable by updating — both packages are newest. **TEMPORARY** fix: `/etc/pacman.d/hooks/dbus-reload.hook` override calling `dbus_reload`. Full write-up + Watch List + laptop note in `docs/2026-08-03-dbus-reload-hook-openrc-desync.md`. **Already reported + patched upstream on the Artix forum** (Gitea issues are closed) — a `dbus-openrc` rebuild is expected, so **re-evaluate/remove the override on any `dbus-openrc` bump, or by 2026-09-03.**
 
 ### X11 historical (now mostly moot)
 
