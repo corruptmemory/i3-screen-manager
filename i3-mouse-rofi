@@ -5,6 +5,23 @@
 
 set -euo pipefail
 
+# Fail with a visible error rather than silently under `set -euo pipefail`.
+# Same pattern applied across all the rofi menu scripts here after the
+# emoji-picker vanish-silently-when-xclip-missing incident 2026-08-06.
+# solaar guarded further below with rofi -e; kept for the richer message.
+_require() {
+    local missing=() t name msg
+    for t in "$@"; do command -v "$t" >/dev/null 2>&1 || missing+=("$t"); done
+    [[ ${#missing[@]} -eq 0 ]] && return 0
+    name=$(basename "$0")
+    msg="required tool(s) not installed: ${missing[*]}"
+    command -v notify-send >/dev/null 2>&1 && notify-send -u critical -t 6000 "$name" "$msg" || true
+    echo "$name: $msg" >&2
+    exit 1
+}
+
+_require rofi
+
 CONFIG_DIR="$HOME/.config/i3-mouse-manager"
 DPI_FILE="$CONFIG_DIR/dpi"
 MOUSE_FILE="$CONFIG_DIR/mouse"

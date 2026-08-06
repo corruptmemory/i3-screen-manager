@@ -321,6 +321,10 @@ No automated tests. Test manually with an external monitor:
 - **Scale under X11**: no Wayland-style per-output fractional scaling. `i3-screen-manager scale` under X11 applies a server-wide `Xft.dpi` via `xrdb -merge`, which only affects newly-launched apps (existing apps don't redraw). Different model from Hyprland's hot-applied scale.
 - **Lid handling is manual under IceWM**: no native lid binding; auto-handling would require `acpid` + a script that crosses the root-to-user boundary. The current plan: enter clamshell explicitly via `i3-screen-rofi → Clamshell`. The `elogind-inhibit` inhibitor works under both compositors and prevents suspend on lid close. See `docs/2026-06-17-icewm-laptop-setup.md` § "Lid handling, deferred".
 
+### Scripts / shell
+
+- **Silent-failure trap on missing runtime deps**: any script running `set -euo pipefail` that pipes to a shelled-out tool will exit zero-visible-output when the tool isn't installed — `set -e` propagates the failed pipe, script dies, no stderr surfaces because the tool was never given a chance to write one. First hit on `nomad-artix` 2026-08-06 when `xclip` was missing from the emoji picker's `printf … | xclip` line: menu "vanished" after selection with no diagnostic. All rofi menu scripts in the fleet now guard their required tools at the top with a `_require` helper that emits `notify-send -u critical` + a stderr line. Pattern documented in `docs/2026-07-29-rofi-emoji-picker-fix.md` § 8. Apply the same guard to any new shell script that shells out to non-universal tools.
+
 ### Hardware / kernel
 
 - **Mouse poll rate config ignored**: on the stock kernel, `usbhid` is built-in (not a module), so `/etc/modprobe.d/` has no effect. Use `usbhid.mousepoll=1` in GRUB's `GRUB_CMDLINE_LINUX_DEFAULT` and `grub-mkconfig -o /boot/grub/grub.cfg`.

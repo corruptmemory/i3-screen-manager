@@ -138,3 +138,50 @@ Then test: `Super+Control+space` → searchable list → pick → glyph on the c
 round-trip (`${sel%% *}` → `xclip` → `xclip -o`) · `timeout 2 rofi -dmenu -theme …`
 opened with empty stderr (theme parses) · live `Super+Control+space` confirmed by
 the user (✌️).
+
+## 8. Follow-on: sibling rofi scripts all silent-fail the same way (2026-08-06)
+
+The **laptop** first-boot of the picker exposed the same class of silent
+failure differently: `xclip` was not installed on `nomad-artix`, so the
+`printf '%s' "$glyph" | xclip -selection clipboard` line failed under
+`set -euo pipefail` — the whole script exited zero-visible-output, the
+picker just "vanished" after selection. No stderr, no notification, no clue.
+
+**The fix scaled beyond this one script.** Every other rofi menu script in
+the fleet has the same failure mode by construction — `set -euo pipefail` +
+a shelled-out external tool = silent vanish on missing dep. Applied a small
+`_require` guard to each so a missing runtime dep produces a visible
+`notify-send` + a stderr line instead of nothing:
+
+| Script | Guards |
+|---|---|
+| `.config/rofi/scripts/emoji`                | `xclip` (post-selection copy) |
+| `i3-keyboard-rofi`                           | `rofi`; `hyprctl` in wayland branch; `setxkbmap` in x11 branch |
+| `i3-mouse-rofi`                              | `rofi` (kept existing `rofi -e` guard on `solaar` for its richer per-mouse message) |
+| `i3-screen-rofi`                             | `rofi` |
+| `i3-tailscale-rofi`                          | `rofi`, `jq`, `tailscale` |
+| `.config/rofi/scripts/powermenu.sh`         | `rofi`, `loginctl` |
+| `.local/bin/icewm-window-switcher`          | `rofi`, `icesh`, `xdotool` |
+
+Pattern (verbatim in each script):
+
+```bash
+_require() {
+    local missing=() t name msg
+    for t in "$@"; do command -v "$t" >/dev/null 2>&1 || missing+=("$t"); done
+    [[ ${#missing[@]} -eq 0 ]] && return 0
+    name=$(basename "$0")
+    msg="required tool(s) not installed: ${missing[*]}"
+    command -v notify-send >/dev/null 2>&1 && notify-send -u critical -t 6000 "$name" "$msg" || true
+    echo "$name: $msg" >&2
+    exit 1
+}
+_require rofi …
+```
+
+**Reusable takeaway:** any shell script that runs under `set -euo pipefail`
+and shells out to non-universal tools should guard those tools at the top.
+The `set -eu` discipline gives you crash-on-bug for logic errors but silently
+converts missing-tool errors into empty output. `command -v` guards + a visible
+side channel (notify-send / rofi -e) turn "menu vanishes" back into a
+diagnosable event.
