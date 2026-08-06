@@ -110,9 +110,11 @@ Assumes `git pull` on both `i3-screen-manager` and `dotfiles` is already done
 
 ```sh
 # Prerequisites (installed by this run):
-#   sudo pacman -S i3-wm polybar network-manager-applet
+#   sudo pacman -S i3-wm polybar network-manager-applet xclip
 # (network-manager-applet is the correct package name for `nm-applet`;
-#  don't be misled by the binary name.)
+#  don't be misled by the binary name. xclip is the copy target for the
+#  rofi emoji picker under X11 — without it the picker vanishes silently
+#  after selection; diagnosed on nomad-artix 2026-08-06.)
 
 # Machine-local symlinks (one-time). ~/.config/i3/config gets moved aside
 # rather than overwritten so the pre-Hyprland config from March is recoverable.
