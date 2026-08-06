@@ -144,17 +144,36 @@ Exec = /usr/share/libalpm/scripts/openrc-hook dbus_reload
 EOF
 ```
 
-## 5. Laptop (`nomad-artix`) needs the same fix
+## 5. Laptop (`nomad-artix`) — upstream fix has already landed here (2026-08-06)
 
-The laptop is the same Artix/OpenRC stack and will hit the identical error the
-first time it updates a package that ships a dbus system policy file. Apply the
-exact same override there (the `install -Dm644` block in §4). Before applying,
-sanity-check the versions still match §2:
+**No override needed on the laptop.** Confirmed 2026-08-06 that the upstream
+patch (§7) has shipped in the laptop's `dbus-openrc` package:
 
-```sh
-pacman -Q openrc dbus-openrc
-grep Exec /usr/share/libalpm/hooks/dbus-reload.hook   # still `reload dbus`?
 ```
+pacman -Q openrc dbus-openrc
+  openrc 0.63.3-2
+  dbus-openrc 20260804-2                # ↑ from the broken 20260324-1
+
+grep Exec /usr/share/libalpm/hooks/dbus-reload.hook
+  Exec = /usr/share/libalpm/scripts/openrc-hook dbus_reload
+                                                ^^^^^^^^^^^ underscore, not `reload`
+```
+
+The rewritten hook calls `dbus_reload` (the verb openrc's dispatcher
+actually implements), matching what §4's override does — so the local shim
+would silently shadow a *correct* system hook. Leave the laptop without
+the `/etc/pacman.d/hooks/dbus-reload.hook` override.
+
+This is the "closure" the Watch List (§6) was waiting for: whichever machine
+now updates to `dbus-openrc 20260804-2` or later can drop its local override.
+When the desktop next runs a full upgrade, the same removal applies there.
+
+*Original prescription (kept for the historical record — was correct at
+20260324-1 time):*
+
+> The laptop is the same Artix/OpenRC stack and will hit the identical error
+> the first time it updates a package that ships a dbus system policy file.
+> Apply the exact same override there (the `install -Dm644` block in §4).
 
 ## 6. TEMPORARY — Watch List / re-evaluate
 
