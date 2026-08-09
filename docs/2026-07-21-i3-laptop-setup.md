@@ -125,6 +125,14 @@ ln -sf ~/projects/dotfiles/.xinitrc-i3-laptop               ~/.xinitrc-i3-laptop
 ln -sf ~/projects/dotfiles/.local/share/applications/com.mitchellh.ghostty.desktop \
        ~/.local/share/applications/com.mitchellh.ghostty.desktop
 
+# Shared _require helper for the rofi scripts (silent-failure guard).
+# See docs/2026-07-29-rofi-emoji-picker-fix.md § 8. Bootstrap failure
+# (missing symlink) crashes loudly with `bash: … No such file or directory`,
+# so this is a REQUIRED per-machine step for any rofi menu (Super+space,
+# Super+BackSpace, Super+Control+space, Super+Ctrl+BackSpace, etc.) to work.
+mkdir -p ~/.local/lib/sh
+ln -sf ~/projects/i3-screen-manager/lib/require.sh ~/.local/lib/sh/require.sh
+
 # Validate before booting:
 i3 -C  # must exit 0
 

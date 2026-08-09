@@ -149,35 +149,57 @@ picker just "vanished" after selection. No stderr, no notification, no clue.
 
 **The fix scaled beyond this one script.** Every other rofi menu script in
 the fleet has the same failure mode by construction — `set -euo pipefail` +
-a shelled-out external tool = silent vanish on missing dep. Applied a small
-`_require` guard to each so a missing runtime dep produces a visible
-`notify-send` + a stderr line instead of nothing:
+a shelled-out external tool = silent vanish on missing dep. Every script
+below now guards its required tools at the top so a missing runtime dep
+produces a visible `notify-send` + a stderr line instead of nothing:
 
-| Script | Guards |
-|---|---|
-| `.config/rofi/scripts/emoji`                | `xclip` (post-selection copy) |
-| `i3-keyboard-rofi`                           | `rofi`; `hyprctl` in wayland branch; `setxkbmap` in x11 branch |
-| `i3-mouse-rofi`                              | `rofi` (kept existing `rofi -e` guard on `solaar` for its richer per-mouse message) |
-| `i3-screen-rofi`                             | `rofi` |
-| `i3-tailscale-rofi`                          | `rofi`, `jq`, `tailscale` |
-| `.config/rofi/scripts/powermenu.sh`         | `rofi`, `loginctl` |
-| `.local/bin/icewm-window-switcher`          | `rofi`, `icesh`, `xdotool` |
+| Script | Repo | Guards |
+|---|---|---|
+| `.config/rofi/scripts/emoji`                | dotfiles          | `rofi`, `xclip` |
+| `.config/rofi/scripts/powermenu.sh`         | dotfiles          | `rofi`, `loginctl` |
+| `.local/bin/icewm-window-switcher`          | dotfiles          | `rofi`, `icesh`, `xdotool` |
+| `i3-keyboard-rofi`                           | i3-screen-manager | `rofi`; `hyprctl` / `setxkbmap` per compositor branch |
+| `i3-mouse-rofi`                              | i3-screen-manager | `rofi` (existing `rofi -e` guard on `solaar` retained for its richer per-mouse message) |
+| `i3-screen-rofi`                             | i3-screen-manager | `rofi` |
+| `i3-tailscale-rofi`                          | i3-screen-manager | `rofi`, `jq`, `tailscale` |
 
-Pattern (verbatim in each script):
+### The shared helper (added 2026-08-09)
 
-```bash
-_require() {
-    local missing=() t name msg
-    for t in "$@"; do command -v "$t" >/dev/null 2>&1 || missing+=("$t"); done
-    [[ ${#missing[@]} -eq 0 ]] && return 0
-    name=$(basename "$0")
-    msg="required tool(s) not installed: ${missing[*]}"
-    command -v notify-send >/dev/null 2>&1 && notify-send -u critical -t 6000 "$name" "$msg" || true
-    echo "$name: $msg" >&2
-    exit 1
-}
-_require rofi …
-```
+The 12-line `_require` function was originally inlined verbatim into each of
+the 7 scripts. Refactored to a shared library sourced by all consumers:
+
+- **Source of truth:** `i3-screen-manager/lib/require.sh` — 12 lines, one
+  function definition, well-commented.
+- **Machine-local install:** `~/.local/lib/sh/require.sh` → the repo file.
+  One-time symlink per machine; recorded in each setup doc's "one-time
+  machine setup (symlinks)" section.
+- **Consumer pattern** (verbatim in every consumer script):
+  ```bash
+  . "$HOME/.local/lib/sh/require.sh"
+  _require rofi …
+  ```
+- **Bootstrap failure mode:** if the symlink is missing (or broken), a
+  script that sources the file will crash with
+  `bash: /home/…/require.sh: No such file or directory` and (under
+  `set -euo pipefail`) exit non-zero. Scripts without pipefail
+  (`powermenu.sh`) surface the same bash error and then hit
+  `_require: command not found` on the next line. Either way, no silent
+  vanish — the bootstrap failure is at least as visible as the
+  missing-tool-arg failure it exists to prevent.
+
+**Why not relative-source from the script's own location?** The scripts
+live in two different repos and are invoked via symlinks in
+`~/.local/bin/` / `~/.config/rofi/scripts/`. `$0` at run time points at
+the symlink, not the source file, so a relative-source lookup would need
+`readlink -f "$0"` + a `$(dirname …)/../lib/require.sh` chain — brittle
+and different in each repo's directory structure. A stable machine-local
+absolute path is the simplest thing that could possibly work.
+
+**Why not source into dotfiles?** i3-screen-manager owns 4 of the 7
+consumers and is more of a "toolkit" than dotfiles, which is more of a
+general bin/config store. i3-screen-manager was the natural home. Either
+would have worked; the pattern is that ONE of the two repos owns it and
+the other sources through the stable machine-local path.
 
 **Reusable takeaway:** any shell script that runs under `set -euo pipefail`
 and shells out to non-universal tools should guard those tools at the top.

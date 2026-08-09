@@ -73,6 +73,12 @@ ln -sf "$HOME/projects/dotfiles/.config/flameshot/flameshot-laptop-wayland.ini" 
        "$HOME/.config/flameshot/flameshot-wayland.ini"
 ln -sf "$HOME/projects/dotfiles/.config/flameshot/flameshot-laptop-x11.ini" \
        "$HOME/.config/flameshot/flameshot-x11.ini"
+
+# Shared _require helper for the rofi menu scripts (silent-failure guard —
+# icewm-window-switcher on Super+Tab and the emoji picker on Super+Ctrl+space
+# both source it). See docs/2026-07-29-rofi-emoji-picker-fix.md § 8.
+mkdir -p "$HOME/.local/lib/sh"
+ln -sf "$HOME/projects/i3-screen-manager/lib/require.sh" "$HOME/.local/lib/sh/require.sh"
 ```
 
 Verify: `which start-icewm-laptop` returns the symlink path, `ls -la
