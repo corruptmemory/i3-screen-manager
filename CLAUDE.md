@@ -242,6 +242,23 @@ Docs:
   issues closed), just watch for the rebuild. Pinned to `dbus-openrc
   20260324-1`; **re-evaluate/remove on any `dbus-openrc` bump, or by 2026-09-03**
   — the doc's §6 Watch List has the check-and-remove steps.
+- `docs/2026-08-10-aur-supply-chain-assessment.md` — **decision-grade
+  assessment of AUR supply-chain risk (Feb–Aug 2026)**, the security-research
+  companion to the `aur-malware-check` script. Primary-source-first (official
+  Arch news, `aur-general`/`aur-requests`, the `aurweb` GitLab MRs/issues) plus
+  trusted vendors (Truesec, Sonatype, BleepingComputer, Phoronix). Timeline of
+  the 2026 waves (May `@onionmail` crypto-wallet precursor → the June
+  `atomic-lockfile`/`js-digest` "Atomic Arch" campaign, ~400–1500 pkgs, Rust
+  infostealer + optional root-only eBPF rootkit → the late-July `openconnect-sso`
+  relapse), the **shipped-vs-proposed mitigation ledger** (aurweb `!914`
+  PM-reviewed adoption merged 2026-07-31; adoption+pushes frozen 2026-07-30/08-01;
+  2FA `#514` still open since 2024), and the verdict: **keep Arch, treat the AUR
+  as hostile-by-default — build in a clean chroot, read every `PKGBUILD` diff,
+  distrust freshly-adopted orphans.** Built via a multi-lane research pass
+  (Codex hit the GitLab API for the ledger; Perplexity + `marksnip` for primary
+  timeline/quotes); the doc records that the `agy` (Google-grounded) lane
+  fabricated specifics, so nothing from it is load-bearing. Published Artifact:
+  <https://claude.ai/code/artifact/1e67b264-50b4-4755-8bd2-2830ac2f614e>.
 
 Hyprland and IceWM are both installed and toggleable from a TTY on each
 machine. PekWM was the lone exception to the "additive and reversible" rule —
