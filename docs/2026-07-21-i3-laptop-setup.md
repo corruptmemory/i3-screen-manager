@@ -277,6 +277,55 @@ The laptop's IceWM keys file already had this right (`Profile 1`) — the
 lesson is to port from the same-machine sibling config when possible,
 not the different-machine sibling.
 
+### 9c. Bitwarden PWA (passkey provider) tiles instead of floating (2026-08-11)
+
+**Symptom (screenshot):** during GitHub 2FA "Authenticate using your passkey",
+a "Log in with passkey?" panel appeared as a half-screen tiled slab beside
+the initiating tab — obviously a dialog that wants to float.
+
+**Investigation:** first looked like a Chromium OS-level passkey UI (a whole
+class of window that needs its own float rule), but `i3-msg -t get_tree`
+during a live prompt showed it's the **Bitwarden PWA window** itself acting
+as a passkey provider:
+
+```
+{
+  "name": "Bitwarden",
+  "window_properties": {
+    "class": "Brave-origin",
+    "instance": "crx_nngceckbapebfimnlniiiahkandclblb",
+    "window_role": "pop-up",
+    "title": "Bitwarden"
+  },
+  "floating": "auto_off",
+  "rect": "1280x1568"
+}
+```
+
+Bitwarden was installed as a Progressive Web App (its own top-level Brave
+window with a `crx_<extension-id>` instance) rather than as a Chrome/Brave
+extension popup, so it lands under i3's management like any other window
+and gets tiled by default.
+
+**Fix (dotfiles 00604a9):** one-line `for_window` rule matched by INSTANCE,
+same idiom the F1/F2 Messages/WhatsApp focus binds use (all Brave PWAs
+share `class="Brave-origin"`, so class-matching would over-catch):
+
+```
+for_window [instance="^crx_nngceckbapebfimnlniiiahkandclblb$"] floating enable
+```
+
+**Live-toggle for the currently-open Bitwarden window:** `for_window` rules
+fire only on window creation, so the already-open Bitwarden stays tiled after
+an `i3-msg reload`. Force it now with `i3-msg '[instance=...] floating enable'`;
+subsequent opens pick up the rule automatically.
+
+**Diagnosis tools worth remembering:** `xdotool search` returned zero windows
+in this environment (something's off with its DISPLAY in some shells) and
+`xwininfo` wasn't installed. `i3-msg -t get_tree | jq` was the ground truth
+and the fastest path — always first stop for "what does i3 think this window
+is." Added `xdotool` to the runtime-deps set and rerun the survey later.
+
 ## 10. Broader dotfile-symlink sweep (2026-07-21)
 
 After §9a, we did a full sweep of `~/.config/<subdir>` for anything else
