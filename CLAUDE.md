@@ -259,6 +259,17 @@ Docs:
   timeline/quotes); the doc records that the `agy` (Google-grounded) lane
   fabricated specifics, so nothing from it is load-bearing. Published Artifact:
   <https://claude.ai/code/artifact/1e67b264-50b4-4755-8bd2-2830ac2f614e>.
+- `docs/install-paths-cheatsheet.md` — **decision tree for "AUR is sus, where
+  should I install X from instead?"** Six-rung table (Artix repos → vendor
+  native installer → pipx → docker → local PKGBUILD fork → AUR-with-audit)
+  with the trust story, update model, uninstall model, and best-fit case for
+  each; the trap classes that look like a rung but aren't (`sudo pip install`,
+  `sudo npm install -g`, random Docker Hub images); worked examples that
+  shaped the doc (Claude Code + Codex + Brave Origin at rung 2, Odin at
+  rung 5, hypothetical Semgrep re-install at rung 3). Written after the
+  semgrep-bin uninstall pass on `nomad-artix` 2026-08-11 which surfaced that
+  the AUR lockdown wasn't just about Semgrep — every new install now needs a
+  decision, and the decision was worth capturing.
 
 Hyprland and IceWM are both installed and toggleable from a TTY on each
 machine. PekWM was the lone exception to the "additive and reversible" rule —
