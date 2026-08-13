@@ -277,6 +277,18 @@ Docs:
   hits signed), NOT an `odin-git-local`-style fork. Worked on `godlike-artix`
   2026-08-13 for `git-delta`/`azure-cli`/`rbw`; **`nomad-artix` still needs the
   same pass** (machine-local — `/etc/pacman.conf` isn't in the dotfiles repo).
+- `docs/2026-08-13-keybase-tray-popup-i3.md` — **Keybase tray-icon popup lands
+  off-screen (bottom-right) under i3 and can't be moused into.** Root cause:
+  Keybase's Electron tray popup is a fixed-size 360x640 window that Electron
+  anchors to the *bottom* of the screen (assuming a bottom systray) while polybar
+  is at the *top*; being far from the pointer it blur-hides before you reach it.
+  i3 auto-floats + manages it, so a `for_window [class="Keybase" title="^Keybase$"]`
+  rule (title excludes the main `"Keybase: Chat"` window) can re-anchor it under
+  the tray. **Desktop DONE** (`config-desktop`, hardcoded `move position 2200 272`);
+  **laptop PENDING** — the doc deliberately steers the laptop AWAY from hardcoded
+  coords because clamshell + dynamic `i3-screen-manager scale` move the whole
+  coordinate space, toward `move position mouse` (anchor to the click) or a
+  recompute-from-live-output watcher. Includes the full diagnostic command set.
 
 Hyprland and IceWM are both installed and toggleable from a TTY on each
 machine. PekWM was the lone exception to the "additive and reversible" rule —
