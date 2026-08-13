@@ -1,6 +1,6 @@
 # Install-paths cheat sheet — where to get software when AUR is sus
 
-**Date:** 2026-08-11 · **Applies to:** both machines (Artix, `godlike-artix` desktop + `nomad-artix` laptop) · **Related:** `docs/2026-08-10-aur-supply-chain-assessment.md` (the "why AUR is under scrutiny" primary-source assessment) · `aur-malware-check` (the audit script) · `docs/claude-code-aur-to-native-migration.md`, `docs/codex-aur-to-native-migration.md`, `docs/brave-to-brave-origin-migration.md` (worked examples of AUR → native migrations)
+**Date:** 2026-08-11 (updated 2026-08-13: added *Reclaiming an AUR-graduate*) · **Applies to:** both machines (Artix, `godlike-artix` desktop + `nomad-artix` laptop) · **Related:** `docs/2026-08-10-aur-supply-chain-assessment.md` (the "why AUR is under scrutiny" primary-source assessment) · `aur-malware-check` (the audit script) · `docs/claude-code-aur-to-native-migration.md`, `docs/codex-aur-to-native-migration.md`, `docs/brave-to-brave-origin-migration.md` (worked examples of AUR → native migrations)
 
 ## The problem this doc exists for
 
@@ -30,7 +30,7 @@ The rest of this doc is the *why* behind each rung, plus the trade-off table.
 
 | Rung | Trust story | Update model | Uninstall model | Best fit |
 |---|---|---|---|---|
-| 1. Repo | Artix packagers curate + sign; pacman verifies. Highest trust surface available. | `pacman -Syu` | `pacman -R` | Anything the distro packages. **First check every time.** |
+| 1. Repo | Artix packagers curate + sign; pacman verifies. Highest trust surface available. | `pacman -Syu` | `pacman -R` | Anything the distro packages. **First check every time** — and on Artix "the distro" includes the Arch `extra` overlay, which ships *disabled*; enabling it is part of a complete rung-1 check (see *Reclaiming an AUR-graduate*). |
 | 2. Vendor native installer | Direct-from-vendor binary, vendor-published checksums (some vendors publish signed manifests). Removes all repackagers from the trust chain. | Self-update from vendor's own channel — no package manager involved. | Vendor-specific (usually `~/.local/…` tree + a symlink; `rm -rf` works). | Big single-vendor tools with active release cadence: Claude Code, Codex, Brave Origin. All three took this path. |
 | 3. `pipx` | PyPI + vendor's own PyPI publication. Isolated per-tool venv under `~/.local/pipx/venvs/<name>/`. Trust surface widening = PyPI, but that's already in the trust set (via other Python tools + the fact that pip/pipx are themselves trusted). | `pipx upgrade <name>` per-tool. | `pipx uninstall <name>` — zero collateral, entire venv goes. | Python tools, especially security/lint tools where isolation matters. |
 | 4. Docker | Vendor-published image, digest-pinnable, zero host install. Trust surface is Docker Hub / vendor registry + the image's own supply chain. | `docker pull <image>:<tag>` when you want the update. | `docker rmi <image>` — nothing on the host to clean up. | Occasional-use tools; tools with pathological dep chains; tools where you actively don't want the host to know about them (dev-only linters, one-shot audits). |
@@ -46,6 +46,7 @@ The rest of this doc is the *why* behind each rung, plus the trade-off table.
 | Brave browser | AUR `brave-bin` | paid Brave Origin (`brave-origin-bin`) | 2 (was 6, moved for a different reason — paid feature) | Vendor tier with self-update |
 | Odin | AUR `odin-git` | private fork at `github.com/corruptmemory/odin-git-local` | 5 | Daily-use, pacman integration wanted, vendor doesn't ship a native installer, AUR recipe went stale against upstream anyway |
 | Semgrep (hypothetical re-install) | AUR `semgrep-bin` (uninstalled 2026-08-11 for non-use, not for trust) | **`pipx install semgrep`** would be the right rung | 3 | Vendor publishes to PyPI directly, isolation is real, uninstall is one `pipx uninstall` (vs the 34-package `-Rs` cascade the AUR install left) |
+| `git-delta`, `azure-cli`, `rbw` | self-built AUR copies, orphaned when they moved to `extra` | official `extra`, Arch-signed | 1 | Exact name resolves in `extra` once the overlay is on — **reclaim, don't fork**. Worked on `godlike-artix` 2026-08-13; see *Reclaiming an AUR-graduate* |
 
 ## Trap classes — things that *look* like a rung but aren't
 
@@ -84,6 +85,98 @@ this graduated to a rung-1-through-5 install path yet?** Two examples that did:
 - **`claude-code`** → native installer (rung 2). `claude-code` no longer appears
   in `pacman -Qm`; it lives in `~/.local/share/claude/`.
 - **`openai-codex-bin`** → native installer (rung 2). Same migration shape.
+
+## Reclaiming an AUR-graduate — when a foreign package already has a rung-1 home
+
+Sometimes a package you built from the AUR *graduates into the official repos*.
+When that happens the AUR entry is deleted, so `pacman -Qm` still shows your
+self-built copy but it has no upstream to update from. The tell is unmistakable:
+
+> `yay` reports the package under **"Packages not in AUR"** while it still sits in
+> `pacman -Qm` (foreign). That combination means "graduated," not "abandoned."
+
+The fix is **not** a rung-5 fork — it's a **rung-1 reclaim**: re-point the package
+at its now-official, distro-signed source. On Artix there's one catch: first-party
+Arch packages live in the **Arch `extra` overlay**, which is *not enabled by
+default* (base `pacman.conf` ships only `system`/`world`/`galaxy`/`lib32`). So a
+complete rung-1 check on Artix is a two-parter — enable the overlay, then look:
+
+```sh
+# After the overlay is enabled (procedure below): every foreign package whose
+# EXACT name now resolves in a sync repo is a reclaim candidate.
+for p in $(pacman -Qmq); do
+    pacman -Si "$p" >/dev/null 2>&1 && echo "reclaimable: $p"
+done
+```
+
+If `pacman -Si <name>` resolves it graduated (reclaim it); if it doesn't it's
+either genuinely AUR-only (leave it) or a real rung-5 candidate. That one loop
+partitions the whole foreign list.
+
+### Reproducible procedure (Artix) — enable the `extra` overlay + reclaim
+
+Prerequisite (already true on `godlike-artix`; **verify on the laptop**):
+`artix-archlinux-support` installed — it provides `archlinux-keyring` and
+`/etc/pacman.d/mirrorlist-arch`. Check with `pacman -Q artix-archlinux-support`.
+
+```sh
+# 1. Back up, then enable the Arch 'extra' overlay BELOW the Artix repos, so
+#    Artix's init-agnostic forks always win a name collision (pacman is
+#    first-listed-wins, regardless of version number).
+sudo cp -av /etc/pacman.conf /etc/pacman.conf.bak-$(date +%F)
+sudo tee -a /etc/pacman.conf >/dev/null <<'CONF'
+
+[extra]
+Include = /etc/pacman.d/mirrorlist-arch
+CONF
+
+# 2. Trust the Arch signing keys (idempotent).
+sudo pacman-key --populate archlinux
+
+# 3. Preview first — refreshes dbs (incl. the new extra.db), commits nothing.
+#    On a daily-synced box this should list ONLY the graduates with a newer
+#    version in extra. If it wants to replace/remove anything Artix-core, STOP.
+sudo pacman -Syu --print
+
+# 4. Commit the upgrade.
+sudo pacman -Syu
+
+# 5. Same-version graduates aren't caught by -Syu (nothing to upgrade). Flip
+#    their provenance foreign -> extra with an explicit reinstall:
+sudo pacman -S extra/<pkg>        # e.g. extra/rbw
+```
+
+Verify: `pacman -Qm` no longer lists them; `pacman -Qn <pkg>` now does; the
+binary still runs.
+
+**Why this beats forking:** a rung-5 fork exists to get the AUR *out* of the trust
+path when nothing better exists. A distro-signed `extra` package is *already* out
+of the AUR trust path, *and* signed by Arch developers, *and* auto-updating —
+strictly better than a self-attested fork. Forking something the distro already
+builds and signs is pure make-work. (Contrast Odin: no official Arch package
+exists, so rung 5 is genuinely the only option — that's what earns the fork.)
+
+### Worked example — `godlike-artix`, 2026-08-13
+
+`git-delta`, `azure-cli`, and `rbw` were all self-built AUR packages that had
+graduated to `extra` (yay flagged all three under "Packages not in AUR"). Enabling
+the overlay and reclaiming took them from foreign/self-built to Arch-signed:
+
+- `git-delta` 0.19.2-1 (foreign) → `extra` 0.19.2-2
+- `azure-cli` 2.85.0-1 (foreign) → `extra` 2.87.0-1
+- `rbw` 1.15.0-2 (foreign) → `extra` 1.15.0-2 (identical version — needed the
+  explicit `-S extra/rbw` from step 5)
+
+The follow-up `pacman -Si` scan over the whole foreign list confirmed these three
+were the *only* reclaimable packages; the other 35 are genuinely AUR-only
+(`brave-origin-bin`, `discord-latest-bin`, the `-git`/`-bin` builds, `spotify`,
+`zoom`, …) and correctly stay on their current rungs. Note `rofi-rbw-git` (the
+rofi frontend to rbw) is one of those — AUR-only, not in `extra`, leave it.
+
+**`nomad-artix` still needs this pass.** Run the procedure above on the laptop;
+its foreign list may differ, so re-run the `pacman -Si` scan there rather than
+assuming the same three. This is machine-local — `/etc/pacman.conf` is not in the
+dotfiles repo, so `git pull` will not carry the overlay change across.
 
 ## When to just... not install it
 

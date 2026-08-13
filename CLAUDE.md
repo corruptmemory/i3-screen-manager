@@ -269,7 +269,14 @@ Docs:
   rung 5, hypothetical Semgrep re-install at rung 3). Written after the
   semgrep-bin uninstall pass on `nomad-artix` 2026-08-11 which surfaced that
   the AUR lockdown wasn't just about Semgrep — every new install now needs a
-  decision, and the decision was worth capturing.
+  decision, and the decision was worth capturing. **Updated 2026-08-13** with a
+  *Reclaiming an AUR-graduate* section: when `yay` flags an installed foreign
+  package as "not in AUR," it usually *graduated to the official repos* — the fix
+  is a rung-1 reclaim (enable the Arch `extra` overlay, which ships disabled on
+  Artix, then `pacman -Si`-scan the whole `pacman -Qm` list and reinstall the
+  hits signed), NOT an `odin-git-local`-style fork. Worked on `godlike-artix`
+  2026-08-13 for `git-delta`/`azure-cli`/`rbw`; **`nomad-artix` still needs the
+  same pass** (machine-local — `/etc/pacman.conf` isn't in the dotfiles repo).
 
 Hyprland and IceWM are both installed and toggleable from a TTY on each
 machine. PekWM was the lone exception to the "additive and reversible" rule —
