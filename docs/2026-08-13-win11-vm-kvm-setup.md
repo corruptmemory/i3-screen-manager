@@ -6,15 +6,24 @@ data before a trip — it never worked under Wine, so run it in a real Windows 1
 guest with the Garmin plugged through via **USB passthrough**. VirtualBox
 deliberately avoided; this is the QEMU/KVM + libvirt + virt-manager stack.
 
-## STATUS (as of 2026-08-13)
+## STATUS (2026-08-13 — HOST SETUP COMPLETE, guest install pending)
 
 - **§1 Hardware/BIOS verification — DONE** (below; nothing to change in UEFI).
 - **§2 Package plan — DONE** (analysis below).
-- **§3 Automation script — WRITTEN, NOT YET RUN.** The install/config in
-  `win11-vm-setup.sh` (repo root) has **not** been executed. Nothing is installed
-  yet: no `qemu`/`libvirt`, no services, no `libvirt` group, no `/data/vms`.
-- **Next action:** run `bash win11-vm-setup.sh`, then log out/in for the group,
-  then build the VM in virt-manager (§4). Update this STATUS line when done.
+- **§3 Automation script — RUN, exit 0, verified.** `win11-vm-setup.sh` installed
+  the 93-package stack; started + enabled `libvirtd` + `virtlogd` (OpenRC); added
+  `jim` to `libvirt` + `kvm`; started the `default` NAT network and the `vms`
+  storage pool on `/data`; fetched `virtio-win.iso` (754 MB). Independently
+  confirmed: `libvirt:x:962:jim`, both services `started`, `default` + `vms`
+  active/autostart.
+- **btrfs nodatacow:** `/data` is btrfs, so `/data/vms` was set `chattr +C`
+  (nodatacow) so the qcow2 virt-manager creates there inherits it and avoids
+  copy-on-write fragmentation. The script now does this automatically when the
+  pool dir is on btrfs (step 6).
+- **Next action (you):** the reboot happened *before* the install, so the newly
+  created `libvirt` group isn't in your current session — **log out/in once more**
+  (or `newgrp libvirt`), then build the VM in virt-manager (§4) and pass the
+  Garmin through (§5). The Windows 11 guest itself is not yet installed.
 
 ## §1 — Virtualization is enabled (no BIOS change needed)
 

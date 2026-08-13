@@ -298,10 +298,12 @@ Docs:
   `swtpm`/`dnsmasq`/`usbredir`/`spice-gtk`, all official repos — OVMF=Win11's UEFI,
   swtpm=its TPM 2.0) with the verified "no systemd init pulled, just `systemd-libs`"
   finding; storage pool on `/data` (930 GB free) not the tight `/`; and the
-  idempotent `win11-vm-setup.sh`. **STATUS: investigation + script done; the install
-  itself is NOT yet run** (the script had not been executed as of 2026-08-13 —
-  update the doc's STATUS line when it is). Also carries the virt-manager
-  VM-build + Garmin USB-passthrough runbook.
+  idempotent `win11-vm-setup.sh`. **STATUS: host setup COMPLETE + verified
+  2026-08-13** (script ran exit 0 — 93 pkgs, `libvirtd`/`virtlogd` up, `jim` in
+  `libvirt`, `default` net + `vms` pool active, `virtio-win.iso` fetched, `/data/vms`
+  set btrfs-nodatacow); the **Win11 guest itself is not yet installed** and needs
+  one more log-out/in for the `libvirt` group (reboot predated the install). Also
+  carries the virt-manager VM-build + Garmin USB-passthrough runbook.
 
 Hyprland and IceWM are both installed and toggleable from a TTY on each
 machine. PekWM was the lone exception to the "additive and reversible" rule —

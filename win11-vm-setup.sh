@@ -81,6 +81,11 @@ ok "NAT network ready"
 # ---------------------------------------------------------------------------
 log "6. Storage pool '$POOL_NAME' on $POOL_DIR (avoids the tight 65G /)"
 sudo mkdir -p "$POOL_DIR"
+# btrfs: disable copy-on-write on the image dir so qcow2 files don't fragment.
+# New files created under a +C dir inherit nodatacow; existing files don't.
+if [ "$(stat -f -c %T "$POOL_DIR" 2>/dev/null)" = btrfs ]; then
+    sudo chattr +C "$POOL_DIR" 2>/dev/null && ok "nodatacow (+C) set on $POOL_DIR (btrfs)"
+fi
 if ! sudo virsh pool-info "$POOL_NAME" >/dev/null 2>&1; then
     sudo virsh pool-define-as "$POOL_NAME" dir --target "$POOL_DIR"
     sudo virsh pool-build "$POOL_NAME"
