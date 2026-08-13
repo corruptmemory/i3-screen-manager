@@ -289,6 +289,19 @@ Docs:
   coords because clamshell + dynamic `i3-screen-manager scale` move the whole
   coordinate space, toward `move position mouse` (anchor to the click) or a
   recompute-from-live-output watcher. Includes the full diagnostic command set.
+- `docs/2026-08-13-win11-vm-kvm-setup.md` (+ `win11-vm-setup.sh` at repo root) —
+  **Windows 11 VM on Artix via QEMU/KVM + libvirt, for running Garmin Express with
+  USB passthrough** (it never worked under Wine; VirtualBox deliberately avoided).
+  Records: the virtualization check (AMD-V `svm` flag present → enabled in BIOS,
+  `/dev/kvm` live, 72 IOMMU groups — no UEFI change needed); the 10-package stack
+  (`qemu-desktop`/`libvirt`/`libvirt-openrc`/`virt-manager`/`virt-viewer`/`edk2-ovmf`/
+  `swtpm`/`dnsmasq`/`usbredir`/`spice-gtk`, all official repos — OVMF=Win11's UEFI,
+  swtpm=its TPM 2.0) with the verified "no systemd init pulled, just `systemd-libs`"
+  finding; storage pool on `/data` (930 GB free) not the tight `/`; and the
+  idempotent `win11-vm-setup.sh`. **STATUS: investigation + script done; the install
+  itself is NOT yet run** (the script had not been executed as of 2026-08-13 —
+  update the doc's STATUS line when it is). Also carries the virt-manager
+  VM-build + Garmin USB-passthrough runbook.
 
 Hyprland and IceWM are both installed and toggleable from a TTY on each
 machine. PekWM was the lone exception to the "additive and reversible" rule —
