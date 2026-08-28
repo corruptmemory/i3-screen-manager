@@ -264,7 +264,9 @@ Hyprland by discovering `HYPRLAND_INSTANCE_SIGNATURE` + `WAYLAND_DISPLAY` from
 
 ## Open items / watch list
 
-- [ ] **Phase A gate:** run the qs bar under Hyprland, decide keep-vs-Waybar.
+- [x] **Phase A gate:** DONE 2026-08-28 — chose Quickshell (working Lua-mode
+  workspace clicks Waybar lacks under #5008); MVP built inline and Waybar
+  retired. Full build: `2026-08-28-quickshell-bar-plan.md`.
 - [x] **Portrait transform** — RESOLVED: `transform=3` (see above).
 - [ ] `screen: modelData` warning — confirm it's gone under real Wayland (A).
 - [ ] `workspace = "special:silent"` — confirm the "silent" (don't-switch) hl form (B1).
