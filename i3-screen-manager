@@ -101,6 +101,17 @@ hl_apply() {
     hyprctl dispatch "hl.monitor({ $1 })" >/dev/null 2>&1 || true
 }
 
+# hl_ws_to_monitor moves workspace $1 to monitor $2. The legacy form
+# `hyprctl dispatch moveworkspacetomonitor <ws> <mon>` is DEAD under the Lua
+# config manager: the args are parsed as Lua, i.e. `hl.dispatch(
+# moveworkspacetomonitor 3 DP-2)` -> "')' expected", so every call here was
+# silently no-op'ing behind `|| true` (clamshell/disconnect never actually
+# migrated workspaces). hl.dsp.workspace.move is the working equivalent.
+# Verified live on godlike-artix, 2026-08-28.
+hl_ws_to_monitor() {
+    hyprctl dispatch "hl.dsp.workspace.move({ workspace = \"$1\", monitor = \"$2\" })" >/dev/null 2>&1 || true
+}
+
 find_external_wayland() {
     # wlr-randr lists all physically connected outputs (including
     # Hyprland-disabled ones). hyprctl monitors -j only shows active ones.
@@ -162,7 +173,7 @@ refresh_desktop_wayland() {
 move_workspaces_to_wayland() {
     local target="$1"
     hyprctl workspaces -j | jq -r '.[].id' | while read -r wsid; do
-        hyprctl dispatch moveworkspacetomonitor "$wsid" "$target" 2>/dev/null || true
+        hl_ws_to_monitor "$wsid" "$target"
     done
 }
 
@@ -171,7 +182,7 @@ move_workspaces_from_wayland() {
     local target="$2"
     hyprctl workspaces -j | jq -r --arg src "$source" \
         '.[] | select(.monitor == $src) | .id' | while read -r wsid; do
-        hyprctl dispatch moveworkspacetomonitor "$wsid" "$target" 2>/dev/null || true
+        hl_ws_to_monitor "$wsid" "$target"
     done
 }
 
@@ -183,7 +194,7 @@ ensure_workspace_on_wayland() {
     if [[ "$count" -eq 0 ]]; then
         local next
         next=$(hyprctl workspaces -j | jq '[.[].id] | max + 1')
-        hyprctl dispatch moveworkspacetomonitor "$next" "$target" 2>/dev/null || true
+        hl_ws_to_monitor "$next" "$target"
     fi
 }
 
