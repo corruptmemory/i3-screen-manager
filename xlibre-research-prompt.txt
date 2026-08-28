@@ -1,0 +1,33 @@
+Research question (today's date is 2026-07-05):
+
+The XLibre X server is a fork of X.Org's xserver by Enrico Weigelt, hosted at
+github.com/X11Libre/xserver (project site https://xlibre.net/). Its current
+upstream "stable release" appears to be 25.1.8.
+
+On Artix Linux (which packages XLibre as its default X11 server in the "world"
+repo), the current package is xlibre-xserver 25.0.0.23-1, built 2026-05-25.
+Artix has NOT moved the core server to the 25.1.x line, even though some of its
+XLibre *driver* packages are already on 25.1.x (e.g. xlibre-video-amdgpu 25.1.1).
+
+Please answer, with sources and dates:
+
+1. VERSION SCHEME: How do XLibre's "25.0.0.x" and "25.1.x" version lines relate?
+   Is 25.0.0.x a stable/maintenance branch and 25.1.x a newer feature branch, or
+   is it a linear progression? What does each number mean? When was 25.1.0
+   first released and when was 25.1.8 released? When was the 25.0.0.x line's last
+   release (e.g. 25.0.0.23)?
+
+2. WHAT CHANGED / WHY HOLD BACK: Between 25.0.0.23 and 25.1.8, were there ABI
+   breaks, driver-compat breaks, notable regressions, security fixes, or project
+   controversy (the XLibre project has had governance/community friction) that
+   would make a distro deliberately keep users on the 25.0.0.x line?
+
+3. ARTIX SPECIFICALLY: Why would Artix's world repo still ship 25.0.0.23 as of
+   July 2026 rather than 25.1.8 — is this known packaging lag, a deliberate pin
+   to a stable branch, a build failure, a maintainer bandwidth issue, or an
+   upstream-instability decision? Is there an Artix bug/issue/forum thread or
+   git commit about updating xlibre-xserver?
+
+Be concrete about dates and cite primary sources (XLibre GitHub releases/tags,
+Artix package tracker packages.artixlinux.org, Artix gitea PKGBUILD history,
+Artix forum/news, mailing lists). Distinguish verified facts from inference.
