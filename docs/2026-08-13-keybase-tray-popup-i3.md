@@ -2,8 +2,8 @@
 
 **Date:** 2026-08-13 · **Applies to:** i3/X11, both machines · **Desktop
 (`godlike-artix`): DONE** (rule in `dotfiles/.config/i3/config-desktop`) ·
-**Laptop (`nomad-artix`): PENDING** — this doc is written so a future session
-can reproduce the diagnosis and land a *layout-robust* fix there.
+**Laptop (`nomad-artix`): DONE 2026-08-14** (rule in
+`dotfiles/.config/i3/config-laptop`) — Option A landed, see below.
 
 ## Symptom
 
@@ -87,7 +87,7 @@ origin/width; a dynamic scale change (`i3-screen-manager scale`) moves everythin
 again. A fixed `move position X Y` cannot track that. Pick one of the two
 layout-aware options below instead.
 
-### Option A (try first, cheapest): anchor to the pointer
+### Option A (try first, cheapest): anchor to the pointer — LANDED on the laptop
 
 You open the popup by *clicking the tray icon*, so the pointer is on the tray at
 that instant. Move the popup to the mouse — layout-independent, survives clamshell
@@ -98,15 +98,34 @@ and DPI changes for free:
 i3-msg '[class="Keybase" title="^Keybase$"] floating enable, move position mouse'
 ```
 
-**Verify the right edge.** i3 does NOT reliably clamp floating windows on-screen
-(that is *why* the bug clips off the bottom in the first place), so with the
-pointer at the extreme top-right the 360px popup may hang off the right edge. If
-it sits cleanly, promote it to a `for_window` rule in `config-laptop` next to the
-other `for_window` floating rules, then validate + reload:
+**Verify the right edge.** The concern going in was that i3 might not clamp
+floating windows on-screen (that's *why* the bug clips off the bottom in the
+first place), so with the pointer at the extreme top-right the popup could hang
+off the right edge.
+
+**Verified live on the laptop 2026-08-14 — it's fine.** `move position mouse`
+specifically (not a plain absolute `move position X Y`) **does** clamp: it
+centers the window at the pointer, then keeps the whole window on-screen. Live
+test at the tray icon (2544,15 on a 2560-wide eDP-1), popup 400×589: intended
+center-anchored top-left would be off-screen negative/overflowing, and i3
+clamped it to `{x:2160, y:0}` — right edge flush with the screen edge, top
+clamped to 0. A second run with a *different* popup size (459×809 — the
+Keybase popup turned out not to be truly fixed-size on this Electron build)
+clamped just as cleanly. So the right-edge worry from the design phase didn't
+pan out in practice; no extra edge-handling needed.
+
+One remaining wrinkle: `y` clamped to `0`, which sits *behind* the always-on-top
+32px polybar bar rather than under it. Fixed with one more relative move:
 
 ```sh
-i3 -C -c ~/.config/i3/config && i3-msg reload
+for_window [class="Keybase" title="^Keybase$"] floating enable, move position mouse, move down 32px
 ```
+
+(`32` = `height` in `polybar/config-i3-laptop.ini` — bump this if that value
+ever changes.) This is the rule now live in `config-laptop`, verified end-to-end
+after `i3-msg reload`: closed the popup, clicked the tray icon fresh, and the
+persisted rule placed it at `{x:2101, y:32}` with no manual `i3-msg` needed.
+Option B was not needed.
 
 ### Option B (robust for dynamic layouts): recompute from the live output
 
