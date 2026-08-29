@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# keybase-popup-anchor — pin Keybase's tray-icon popup flush-right under the
+# top bar under Hyprland/Wayland. Auto-launched from Hyprland autostart.lua.
+#
+# WHY A DAEMON AND NOT A WINDOWRULE
+# ---------------------------------
+# Keybase is Electron; its tray popup is placed assuming a BOTTOM systray
+# (Windows/GNOME/KDE default). On a top-bar layout the popup lands wherever
+# the compositor's default float placement puts it — screen center under
+# Hyprland — far from the tray icon the user just clicked.
+#
+# Hyprland CANNOT fix this declaratively via windowrulev2. Both the popup
+# and the main Keybase window map with class=Keybase, title=Keybase,
+# initialTitle=Keybase (the main renames to "Keybase: People" AFTER map,
+# too late for the rule to see), and windowrulev2 has no `size:` selector
+# to distinguish the ~360x640 popup from the ~2000-wide main window by
+# footprint. Any rule that matches the popup ALSO matches the main — a
+# `move = {"100%-w", "28"}` rule was tried 2026-08-29 and floated the
+# main window, jamming it to (-3, 23) because 100%-w went NEGATIVE when
+# main's ~2054 width exceeded the 2048 logical monitor width.
+#
+# So we filter programmatically: subscribe to Hyprland's socket2 event
+# stream, filter openwindow events by class AND observed size, then
+# dispatch an address-scoped move using scale-aware coords.
+#
+# Full post-mortem, alternatives, and shrink path (if Hyprland ever grows
+# a size: selector): docs/2026-08-13-keybase-tray-popup-i3.md § "Hyprland
+# port". Silent-failure caveats and Lua-mode dispatch shape rules live in
+# CLAUDE.md § "Common Issues → Hyprland/Wayland".
+
+set -euo pipefail
+. "$HOME/.local/lib/sh/require.sh"
+_require socat python3 hyprctl
+
+# Discover the live instance. Env if valid, else hyprctl, else socket-scan.
+runtime_dir=/run/user/$UID/hypr
+if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] \
+   && [ -S "$runtime_dir/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock" ]; then
+    :
+else
+    HYPRLAND_INSTANCE_SIGNATURE=$(hyprctl instances -j 2>/dev/null \
+        | python3 -c 'import sys,json;print(json.load(sys.stdin)[0]["instance"])' 2>/dev/null) \
+      || HYPRLAND_INSTANCE_SIGNATURE=$(for d in "$runtime_dir"/*/; do
+             sig=$(basename "$d"); [ -S "$d/.socket.sock" ] && { echo "$sig"; break; }
+         done)
+    export HYPRLAND_INSTANCE_SIGNATURE
+fi
+[ -n "$HYPRLAND_INSTANCE_SIGNATURE" ] \
+    || { echo "$(basename "$0"): no live Hyprland instance" >&2; exit 1; }
+
+sock=$runtime_dir/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock
+[ -S "$sock" ] \
+    || { echo "$(basename "$0"): no event socket at $sock" >&2; exit 1; }
+
+# Popup-vs-main filter: observed popup widths are 360 / 400 / 459 across
+# Keybase builds; main is 2000+ on typical monitors. 1000 divides safely.
+POPUP_MAX_W=1000
+
+# When socat exits (Hyprland restart, socket death), so do we — autostart
+# will re-launch us on the next Hyprland session start.
+socat -u UNIX-CONNECT:"$sock" - | while IFS= read -r line; do
+    case "$line" in openwindow*) ;; *) continue ;; esac
+    payload=${line#openwindow>>}
+    addr=$(cut -d, -f1 <<< "$payload")
+    cls=$(cut -d, -f3 <<< "$payload")
+    [ "$cls" = "Keybase" ] || continue
+
+    # Window size + monitor id (one hyprctl+python fork per Keybase open).
+    read pw ph pmon <<< "$(hyprctl -j clients | python3 -c "
+import sys, json
+for c in json.load(sys.stdin):
+    if c.get('address') == '0x$addr':
+        w, h = c.get('size', [0, 0])
+        print(f'{w} {h} {c.get(\"monitor\", -1)}')
+        break
+else:
+    print('0 0 -1')
+")"
+    [ "$pw" -gt 0 ] && [ "$pw" -le "$POPUP_MAX_W" ] && [ "$pmon" -ge 0 ] || continue
+
+    # Compute target on the popup's OWN monitor, in LOGICAL coords.
+    read x y <<< "$(hyprctl -j monitors | python3 -c "
+import sys, json
+for m in json.load(sys.stdin):
+    if m.get('id') == $pmon:
+        lw   = round(m['width'] / m['scale'])
+        rt   = m['reserved'][2]  # right reserve (0 on our top-bar layouts)
+        top  = m['reserved'][1]  # bar height (28 with the Quickshell/Waybar bar)
+        print(f'{lw - rt - $pw} {top}')
+        break
+else:
+    print('')
+")"
+    [ -n "$x" ] || continue
+    hyprctl dispatch "hl.dsp.window.move({window=\"address:0x$addr\", x=$x, y=$y})" \
+        >/dev/null
+done

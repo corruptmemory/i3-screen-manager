@@ -188,36 +188,105 @@ depends on whether the workspace-10 comms stack is wired there yet (it was
 deferred — see `docs/2026-07-21-i3-laptop-setup.md`); this fix applies whenever
 Keybase runs under i3.
 
-## Hyprland port (2026-08-29 desktop, 2026-08-29 laptop)
+## Hyprland port (2026-08-29): windowrules can't do it — daemon instead
 
-Ported to the unified Hyprland config as a window rule in
-`dotfiles/.config/hypr/rules.lua`, with **different shapes per machine** — same
-divide as under i3 (desktop hardcoded coords / laptop layout-robust):
+The first Hyprland port attempted the same trick as the i3 rule: a
+`hl.window_rule` matching class+title="Keybase" with a `float=true, move={x,y}`
+action. It looked plausible. It broke Keybase.
+
+### What was tried (and broken same day, 2026-08-29)
 
     if m.type == "desktop" then
-      -- absolute pixel coords: 2560-360-popup-width = 2200; y past the 28px bar
-      hl.window_rule({ name = "keybase-popup",
-        match = { class = "^(Keybase)$", title = "^(Keybase)$" },
-        float = true, move = { 2200, 272 } })
+      hl.window_rule({ name = "keybase-popup", match = { class = "^(Keybase)$",
+        title = "^(Keybase)$" }, float = true, move = { 2200, 272 } })
     elseif m.type == "laptop" then
-      -- windowrulev2 expression: right edge minus window width, computed per
-      -- placement — no monitor width in the rule, survives clamshell/docking/
-      -- any external the laptop drives, and self-corrects if the popup's size
-      -- changes (Keybase's Electron popup varies: 360x640, 400x589, 459x809).
-      hl.window_rule({ name = "keybase-popup",
-        match = { class = "^(Keybase)$", title = "^(Keybase)$" },
-        float = true, move = { "100%-w", "28" } })
+      hl.window_rule({ name = "keybase-popup", match = { class = "^(Keybase)$",
+        title = "^(Keybase)$" }, float = true, move = { "100%-w", "28" } })
     end
 
-Same idea as the i3 rule under X11: match the bare-"Keybase"-titled popup (the
-main windows are "Keybase: Chat"/"Keybase: People") and re-anchor it flush-right
-under the tray. The laptop variant uses Hyprland's windowrulev2 expression
-syntax (same form as the pip rule below it) so the rule works for any monitor
-width without a coord hardcode — parallel to the i3 laptop rule's
-`move position mouse; move down 32px`, which anchored to the cursor rather than
-the screen edge. Either approach clamps on-screen; the Hyprland version does it
-by construction rather than by relying on i3's clamp behavior. 28 is literal —
-it tracks `Theme.qml`'s `barHeight`, same as the rest of the QML shell.
+Live smoke test on the laptop caught it: the rule fired for the MAIN Keybase
+window at map time, floated it, and jammed it to `(-3, 23)` — because
+`100%-w = 2048 − 2054 = -6` on a 2048-logical-px monitor when the main window
+is 2054 wide. Screenshot in the desktop's screen showed the popup landing at
+screen center instead (Electron re-races the popup's position **after** the
+map, undoing the rule's move — only the wrecked-main effect stuck). Same
+latent bug on the desktop's hardcoded-coord form: `{2200, 272}` would have
+jammed the main window off the right of DP-2 the next time Keybase restarted.
+It just hadn't been triggered yet — Keybase there had been running since
+before the rule landed 2026-08-13, so no map event ever fired against it.
 
-Aside: Keybase's tray-icon churn is also what triggered a rare Quickshell SNI
-crash — see `docs/2026-08-28-quickshell-bar-plan.md` § Update 2026-08-29.
+### Why no windowrule can solve this
+
+    both windows have  class=Keybase, title=Keybase, initialTitle=Keybase
+                       initialClass=Keybase, xdgTag="", xdgDescription=""
+
+Verified by `hyprctl clients` on the popup and main side-by-side. The main
+window's title renames from `"Keybase"` → `"Keybase: People"` (or whatever
+tab is active) a beat AFTER map, too late for the rule to see. **And
+windowrulev2 has no `size:` selector** — the one property that DOES separate
+them (popup ~360x640 vs main ~2054x1263) can't be matched declaratively. So
+any rule that catches the popup also catches the main. This is the whole
+reason a daemon is needed here.
+
+### The daemon — `keybase-popup-anchor`
+
+Ships in this repo (`~/projects/i3-screen-manager/keybase-popup-anchor`,
+symlinked into `~/.local/bin/`) and auto-launched from Hyprland's
+`autostart.lua` shared-daemons block alongside `ydotoold`:
+
+    hl.exec_cmd("keybase-popup-anchor")
+
+Shape (~60 lines of bash):
+
+1. Discover the live `HYPRLAND_INSTANCE_SIGNATURE` (env if valid → `hyprctl
+   instances` → socket-file scan).
+2. `socat -u UNIX-CONNECT:.../.socket2.sock -` — read the event stream.
+3. Filter `openwindow>>address,workspace,class,title` where `class=Keybase`.
+4. `hyprctl -j clients` → look up the window's `size` and `monitor`.
+5. If `size.width > 1000` skip (main window). Popup widths observed:
+   360, 400, 459 — 1000 divides safely.
+6. `hyprctl -j monitors` → for that window's own monitor, compute
+   `logical_width = round(width / scale)`, then target
+   `x = logical_width − reserved[2] − popup.width`,
+   `y = reserved[1]` (top-bar height).
+7. `hyprctl dispatch 'hl.dsp.window.move({window="address:0x…", x=X, y=Y})'`.
+
+Event-through-move measured at same-millisecond timestamps in the socat
+buffer; no visible flash. Electron doesn't re-race the move (unlike its
+map-time positioning) so a single dispatch sticks. If Hyprland restarts,
+socat exits on EOF, this script exits, and autostart re-launches it on the
+next `hyprland.start`.
+
+### Why the raw pixel/logical distinction matters
+
+`hyprctl -j monitors` reports `width` and `height` in **raw** pixels but no
+`logical_width`. Coordinates in `at` / dispatch calls are in **logical**
+pixels. So on `eDP-1` at 2560×1600 raw with `scale=1.25`, the logical width
+is `round(2560/1.25) = 2048`. Skipping the scale division caused the
+prototype to send the popup to `(2200, 28)` on a screen whose right edge is
+at `x=2048` — Hyprland clamped it back to a position ~500px shy of flush-right,
+which is exactly what the "better, but perhaps a bit more to the right?"
+feedback in the visual smoke test showed. `reserved` is already in logical
+pixels (matches the Quickshell bar's `Theme.barHeight = 28`), no conversion
+there.
+
+### If Hyprland ever grows a `size:` selector
+
+Rip the whole daemon out — replace with:
+
+    hl.window_rule({ name = "keybase-popup",
+      match = { class = "^(Keybase)$", size_lt = { 1000, 1000 } },
+      float = true, move = { "100%-w", "28" } })
+
+Kill it from `autostart.lua` too. Track the Hyprland-plugin/upstream
+issue for a size selector; this is the primary shrink path.
+
+### Sibling reads
+
+- `docs/2026-08-28-quickshell-bar-plan.md` § Update 2026-08-29 — Keybase's
+  tray-icon churn is also what triggered the rare Quickshell SNI segfault.
+- CLAUDE.md § "Common Issues → Hyprland/Wayland" — the sibling silent-fail
+  gotcha for `hyprctl dispatch <verb>` under Lua mode (same gotcha class as
+  why the un-float during diagnosis needed
+  `hl.dsp.window.float({window="address:0x…", action="toggle"})` not
+  `settiled address:0x…`).
