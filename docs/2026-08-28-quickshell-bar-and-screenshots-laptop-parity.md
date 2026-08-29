@@ -113,6 +113,12 @@ NOT ship the Ridgewood hardcode. The calendar needs no laptop change (pure local
 date math); its future "upcoming events" pane is meant to come from
 `~/projects/life-dashboard/`'s local JSON, not a bar-local cache.
 
+**Tray context menus — SHARED, nothing to do.** `Tray.qml` now opens the SNI
+context menu on right-click (`display()`; left = activate, middle = secondary),
+which is the only way to fully quit apps like Discord. It arrives with the pull
+and works as-is on the laptop (the shell already declares `//@ pragma
+UseQApplication`, the requirement for platform menus).
+
 ---
 
 ## Step 3 — Screenshot flow on the laptop

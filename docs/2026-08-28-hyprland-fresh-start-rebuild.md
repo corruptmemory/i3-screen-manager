@@ -174,6 +174,19 @@ hl.window_rule({ name="jetbrains-nofollowmouse", match={ class="^(jetbrains-.*)$
 
 (DaVinci Resolve opacity rules from Omarchy are moot — you keep everything opaque anyway.)
 
+**Executed / refined (2026-08-28, popouts session).** A later Omarchy window-rule
+mine found most of the above already shipped (PiP tag+treatment, XWayland-ghost
+`no_focus`, portal-dialog float, Bitwarden no-screenshare). What actually changed
+that session:
+- **`msg-apps` re-pinned workspace 1 -> 10.** The chat apps
+  (`^(Slack|Keybase|discord)$`) now land on workspace 10 (the HDMI-A-1 pool),
+  matching the intended chat-wall location.
+- **Screen-share-indicator rule landed as `workspace = "special:sharing"`.** A
+  special-workspace assignment is silent by nature — Hyprland does not switch to
+  it — which resolves the "verify the silent (don't-switch) nuance" TODO in the
+  `special:silent` note above. Toggle into `special:sharing` to reach "Stop
+  sharing".
+
 ### B2. Portal — "screen-share just works"
 
 Core recipe (all **rung-1 / already present**, NO AUR needed):

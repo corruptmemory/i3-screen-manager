@@ -337,6 +337,19 @@ git -C ~/projects/dotfiles add .config/quickshell/Widgets/Tray.qml .config/quick
 git -C ~/projects/dotfiles commit -m "feat(quickshell): system tray widget"
 ```
 
+> **Update (2026-08-28): tray context menus (Discord "Quit").** The first cut
+> mapped right-click to `secondaryActivate()` — but in the SNI spec that's the
+> *middle*-click action, so an app whose only full-exit is a tray **context-menu**
+> item (Discord) had an unreachable menu and the icon looked dead on every button.
+> Fix: right-click -> `modelData.display(window, x, y)` (the item's own native
+> menu), middle -> `secondaryActivate()`, and menu-only items (`onlyMenu`) open on
+> left too. `display()` renders a *platform* menu, which Quickshell **refuses
+> unless the shell root declares `//@ pragma UseQApplication`** — ours does (Task
+> 1), so no extra work was needed. Verified live (probe logged `hasMenu=true`,
+> `display at 2508,23`): right-click Discord -> Open/Quit. The `display()` signature
+> was confirmed against the installed qmltypes before use
+> (`SystemTrayItem.display(parentWindow, relativeX, relativeY)`).
+
 ---
 
 ### Task 4: Workspaces widget with per-monitor pools (left) — the #5008 fix
