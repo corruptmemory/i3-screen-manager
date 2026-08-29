@@ -896,3 +896,27 @@ title (left), clock (center), tray (right); landscape panels keep the full set.
 Orientation-based, not name-based, so it auto-applies to any portrait monitor
 (incl. laptop externals). Verified via `hyprctl layers`: HDMI-A-1's `qs-bar` reports
 w=1200 (rotated/logical), so `compact` resolves true there and false on DP-2 (w=2560).
+
+## Update (2026-08-29): qs-kill restart + a rare SNI tray crash
+
+Two things surfaced reviewing the bar on the desktop:
+
+**Restart must use `qs kill`, not `pkill -f '^qs '`.** The bar-restart bind
+(`Super+Shift+W`) and any manual relaunch previously did `pkill -f '^qs '; qs -p …`.
+That pattern does NOT kill a running bar: once launched, `qs` re-execs and its command
+line becomes `/usr/bin/quickshell`, so `pkill -f '^qs '` matches nothing and the
+relaunch spawns a SECOND bar (visible as two stacked bars per monitor). Fixed by
+switching the bind to **`qs kill; qs -p ~/.config/quickshell`** — `qs kill` is
+Quickshell's native "kill every instance"; `qs list` shows what's running. (And
+`pkill -f quickshell` is NOT a safe substitute in a *tool/agent* shell — it
+self-matches any command line containing "quickshell", including the shell running the
+pkill, so it kills itself mid-command.)
+
+**Rare SNI tray crash (upstream Quickshell 0.3.1).** Quickshell segfaulted once with
+the stacktrace in Qt6Core I/O (`QIOVectoredWriteOperation`) and the last log line
+`quickshell.service.sni.watcher: Unregistered StatusNotifierItem … from watcher` — it
+died tearing down a tray item as **Keybase's flaky Electron tray icon** churned. QML is
+memory-safe (can't segfault), so this is a Quickshell/Qt bug, not the config. Rare (one
+crash observed). If it recurs: file upstream with the report under
+`~/.cache/quickshell/crashes/<id>/`, and/or wrap the autostart in a restart loop so the
+bar self-heals.

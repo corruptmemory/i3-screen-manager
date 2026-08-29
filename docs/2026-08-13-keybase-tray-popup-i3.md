@@ -187,3 +187,21 @@ close and reopen the popup to test. Whether Keybase even runs on the laptop
 depends on whether the workspace-10 comms stack is wired there yet (it was
 deferred — see `docs/2026-07-21-i3-laptop-setup.md`); this fix applies whenever
 Keybase runs under i3.
+
+## Hyprland port (2026-08-29)
+
+Ported to the unified Hyprland config as a window rule in
+`dotfiles/.config/hypr/rules.lua`, DESKTOP-guarded (the `2200,272` coords are
+DP-2-specific; laptop handling still deferred):
+
+    if m.type == "desktop" then
+      hl.window_rule({ name = "keybase-popup",
+        match = { class = "^(Keybase)$", title = "^(Keybase)$" },
+        float = true, move = { 2200, 272 } })
+    end
+
+Same idea as the i3 rule: match the bare-"Keybase"-titled 360x640 popup (the main
+windows are "Keybase: Chat"/"Keybase: People") and anchor it flush-right under the tray
+(x = 2560 - 360 popup width; y just below the 28px bar). Aside: Keybase's tray-icon
+churn is also what triggered a rare Quickshell SNI crash — see
+`docs/2026-08-28-quickshell-bar-plan.md` § Update 2026-08-29.
