@@ -152,8 +152,8 @@ The `screenshot` script is SHARED (symlink `~/.local/bin/screenshot` →
 `i3-screen-manager/screenshot`) — no change. Just:
 - Install `tensaku` + `hyprpicker` (Step 1).
 - Port the Print-family binds into `hyprland-laptop.lua` (copy the block from
-  `hyprland-desktop.lua`): `Print`=region+annotate, `Shift+Print`=full+annotate,
-  `Ctrl+Print`=region copy-only, `Super+Print`=flameshot fallback,
+  `hyprland-desktop.lua`): `Print`=flameshot (primary — FLIPPED 2026-08-29), `Super+Print`=region+annotate,
+  `Shift+Print`=full+annotate, `Ctrl+Print`=region copy-only,
   `Super+Ctrl+Print`=annotate clipboard.
 - Add the **tensaku float rule**: `hl.window_rule({ match = { class =
   "^(dev\\.tensaku\\.Tensaku)$" }, float = true, center = true })`.
