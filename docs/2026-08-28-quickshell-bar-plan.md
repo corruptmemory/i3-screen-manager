@@ -920,3 +920,39 @@ memory-safe (can't segfault), so this is a Quickshell/Qt bug, not the config. Ra
 crash observed). If it recurs: file upstream with the report under
 `~/.cache/quickshell/crashes/<id>/`, and/or wrap the autostart in a restart loop so the
 bar self-heals.
+
+## Update (2026-08-29): Network + Temperature widgets go cross-machine
+
+Both widgets were originally desktop-hardcoded — the laptop bar showed `down`
+in Network and just `°C` (no number) in Temperature after graduation. Root
+cause was single-source assumptions:
+
+- `Network.qml`: probed only `/sys/class/net/eth*` + `/en*` (wired). Laptop
+  has no wired link when undocked, so all probes failed → `down`.
+- `Temperature.qml`: matched only the hwmon `name == k10temp` (AMD Ryzen —
+  the desktop's CPU sensor). Laptop is Intel and exposes CPU package temp
+  via `coretemp` (hwmon8 on this X1E Gen 5), so the loop found nothing and
+  emitted an empty string → just `°C`.
+
+Fix is runtime auto-detection, kept in a single QML source per widget:
+
+- `Network.qml` now scans `eth* → en* → wl*` in preference order. Wired
+  wins when both are up (docked laptop future), wireless is the fallback.
+  Both machines display the same "first up interface" semantic; the
+  interface *name* naturally differs (`eth0` / `wlp5s0` / `wlan0` / …).
+- `Temperature.qml` accepts either `k10temp` or `coretemp` as the hwmon
+  name; a machine has one or the other (never both), so first hit wins.
+  Both machines display the same "CPU package temp" semantic; the
+  underlying sensor is whichever this box exposes.
+
+No `machine.lua` branching, no per-machine widget variant. The alternative
+(one widget file per machine, or a QML singleton reading machine identity)
+was rejected as premature: both machines want the same *semantic* metric,
+and the sysfs abstraction already differentiates by what the kernel exposes.
+Reach for the structural per-machine path if a future need is something
+stronger — e.g., laptop wants **battery** temp instead of CPU temp, or
+desktop wants a specific mobo sensor over the CPU package.
+
+Live-verified on the laptop 2026-08-29 (`wlan0` in Network, `51°C` in
+Temperature). The desktop keeps its `eth0` / `k10temp` readings unchanged
+after pull because those pattern-match first in the same scans.

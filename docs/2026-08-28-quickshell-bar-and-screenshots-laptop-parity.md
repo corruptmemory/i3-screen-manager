@@ -140,6 +140,22 @@ on orientation, not monitor name, so any portrait external the laptop drives get
 the reduced bar automatically — nothing to configure. Landscape panels keep the
 full cluster.
 
+**Network + Temperature widgets — SHARED, auto-detects (fixed 2026-08-29).**
+Both widgets initially showed nothing useful on the laptop — `Network` said
+`down` (only probed `eth*`/`en*`, no wired link when undocked) and `Temperature`
+said just `°C` (only matched `k10temp`, but this is Intel and exposes CPU package
+temp via `coretemp`). Now both scan runtime-adaptively:
+- `Network.qml` walks `eth* → en* → wl*` in preference order (wired preferred),
+  emits the first `up` interface name.
+- `Temperature.qml` accepts `k10temp | coretemp` as the hwmon name (whichever
+  the running box loads — no machine has both).
+
+No per-machine variant, no `machine.lua` branching — the same widget files
+serve both boxes and the sysfs abstraction picks the right source. Full
+rationale (and the "escape hatch" for genuinely different per-machine
+metrics) in the plan doc's `## Update (2026-08-29): Network + Temperature
+widgets go cross-machine`.
+
 Also note: **`morgen` was removed fleet-wide** (2026-08-29) — the laptop no longer
 autostarts it and `morgen-bin` is uninstalled; don't expect a morgen window rule
 or `Super+m`.
