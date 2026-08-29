@@ -1,8 +1,16 @@
 # Hyprland single adaptive config — design spec (2026-08-29)
 
-**Status:** EXECUTED on `godlike-artix` 2026-08-29 (desktop cold-boot verified —
-zero config errors, monitors/pins/binds/autostart all correct via the unified
-config). Laptop (`nomad-artix`) cutover pending — see §10.
+**Status:** EXECUTED on BOTH machines 2026-08-29 — `godlike-artix` (desktop
+cold-boot verified, zero config errors, monitors/pins/binds/autostart all
+correct) AND `nomad-artix` (laptop, same day; live `hyprctl reload` from within
+the running session, zero configerrors, laptop-branch invariants verified —
+eDP-1 scale 1.25, nm-applet 1, no hypr-owned pipewire, brightness/tailscale/
+touchpad-natural-scroll binds present, clamshell reload hook wired). Laptop
+also **graduated the compatibility bridge** the same session: Quickshell +
+tensaku parity landed (Battery widget + eDP-1 pool + machine-local
+weather-location.json), then `machine.lua` flipped `bar = "quickshell"` /
+`screenshot = "tensaku"`; waybar retired live. §10 kept as the historical
+runbook.
 **Repos touched:** `dotfiles` (the config), `i3-screen-manager` (this doc).
 **Goal:** collapse `hyprland-desktop.lua` + `hyprland-laptop.lua` into ONE adaptive
 Lua config that detects the machine at load time and branches, so every shared

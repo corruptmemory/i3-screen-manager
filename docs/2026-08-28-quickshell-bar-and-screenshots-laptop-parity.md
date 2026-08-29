@@ -1,5 +1,17 @@
 # Laptop parity guide — Quickshell bar + tensaku screenshots
 
+**STATUS: EXECUTED on `nomad-artix` 2026-08-29** — quickshell + hyprpicker
+(rung-1) + tensaku (rung-2 GitHub-release prebuilt) installed; `shell.qml`
+pools gained an eDP-1 entry (all 10 workspaces); new `Widgets/Battery.qml`
+(BAT* poll, self-hides on machines without a battery); `Weather.qml`
+de-hardcoded to read machine-local `~/.config/quickshell/weather-location.json`
+with a Ridgewood fallback (the file lives inside the symlinked dotfiles dir
+and is **gitignored**); `machine.lua` bridge flipped
+`bar="quickshell"`/`screenshot="tensaku"`; waybar retired live via `pkill`.
+End state: 1 qs-bar layer at y=0 (reserved 28px), zero configerrors, offline
+suite still all-green from both machine branches. Doc kept as the historical
+runbook + reference for the design decisions.
+
 **For a future Claude session on `nomad-artix` (the laptop).** The 2026-08-28
 desktop session (`godlike-artix`) built two things the laptop will want: a
 hand-written **Quickshell bar** (replacing Waybar) and a **grim/slurp/tensaku

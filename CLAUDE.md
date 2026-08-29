@@ -339,8 +339,13 @@ Docs:
   calendars), NOT a second bar-local cache.
 - `docs/2026-08-29-hyprland-unified-config-design.md` (+ `…-plan.md`) — **the
   single adaptive Hyprland config** that replaced the two drifting per-machine
-  files (`hyprland-{desktop,laptop}.lua`). EXECUTED on `godlike-artix`
-  2026-08-29 (cold-boot verified); **laptop cutover pending** (design §10). One
+  files (`hyprland-{desktop,laptop}.lua`). **EXECUTED on BOTH machines
+  2026-08-29** — desktop cold-boot verified same morning; laptop live-reloaded
+  from within its running Hyprland session that afternoon, then **graduated its
+  compatibility bridge the same session** (installed quickshell + hyprpicker +
+  tensaku, built the laptop-specific Battery widget, de-hardcoded Weather to a
+  machine-local JSON file, flipped `machine.lua` `bar="quickshell"` /
+  `screenshot="tensaku"`, retired waybar). One
   `hyprland.lua` entry `require()`s ~9 modules; `machine.lua` detects the box by
   `/etc/hostname` and returns a hybrid record — `traits` (STATIC hardware
   capabilities: `displays`/`clamshell`/`battery`/`trackpad`/`backlight`/`wifi`/
