@@ -188,20 +188,36 @@ depends on whether the workspace-10 comms stack is wired there yet (it was
 deferred — see `docs/2026-07-21-i3-laptop-setup.md`); this fix applies whenever
 Keybase runs under i3.
 
-## Hyprland port (2026-08-29)
+## Hyprland port (2026-08-29 desktop, 2026-08-29 laptop)
 
 Ported to the unified Hyprland config as a window rule in
-`dotfiles/.config/hypr/rules.lua`, DESKTOP-guarded (the `2200,272` coords are
-DP-2-specific; laptop handling still deferred):
+`dotfiles/.config/hypr/rules.lua`, with **different shapes per machine** — same
+divide as under i3 (desktop hardcoded coords / laptop layout-robust):
 
     if m.type == "desktop" then
+      -- absolute pixel coords: 2560-360-popup-width = 2200; y past the 28px bar
       hl.window_rule({ name = "keybase-popup",
         match = { class = "^(Keybase)$", title = "^(Keybase)$" },
         float = true, move = { 2200, 272 } })
+    elseif m.type == "laptop" then
+      -- windowrulev2 expression: right edge minus window width, computed per
+      -- placement — no monitor width in the rule, survives clamshell/docking/
+      -- any external the laptop drives, and self-corrects if the popup's size
+      -- changes (Keybase's Electron popup varies: 360x640, 400x589, 459x809).
+      hl.window_rule({ name = "keybase-popup",
+        match = { class = "^(Keybase)$", title = "^(Keybase)$" },
+        float = true, move = { "100%-w", "28" } })
     end
 
-Same idea as the i3 rule: match the bare-"Keybase"-titled 360x640 popup (the main
-windows are "Keybase: Chat"/"Keybase: People") and anchor it flush-right under the tray
-(x = 2560 - 360 popup width; y just below the 28px bar). Aside: Keybase's tray-icon
-churn is also what triggered a rare Quickshell SNI crash — see
-`docs/2026-08-28-quickshell-bar-plan.md` § Update 2026-08-29.
+Same idea as the i3 rule under X11: match the bare-"Keybase"-titled popup (the
+main windows are "Keybase: Chat"/"Keybase: People") and re-anchor it flush-right
+under the tray. The laptop variant uses Hyprland's windowrulev2 expression
+syntax (same form as the pip rule below it) so the rule works for any monitor
+width without a coord hardcode — parallel to the i3 laptop rule's
+`move position mouse; move down 32px`, which anchored to the cursor rather than
+the screen edge. Either approach clamps on-screen; the Hyprland version does it
+by construction rather than by relying on i3's clamp behavior. 28 is literal —
+it tracks `Theme.qml`'s `barHeight`, same as the rest of the QML shell.
+
+Aside: Keybase's tray-icon churn is also what triggered a rare Quickshell SNI
+crash — see `docs/2026-08-28-quickshell-bar-plan.md` § Update 2026-08-29.
