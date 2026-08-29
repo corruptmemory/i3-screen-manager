@@ -1,5 +1,11 @@
 # rofi emoji picker — root-cause + fix (2026-07-29)
 
+> **Superseded in part 2026-08-29.** The xclip pipe described below is now a
+> session dispatch (xclip on X11, wl-copy on Wayland) so the picker works
+> under Hyprland too. See `docs/2026-08-29-hyprland-rofi-parity-and-ydotool.md`
+> §4. Everything else in this doc (the rofi-inside-rofi diagnosis, the
+> generator script, the fix architecture) is unchanged.
+
 `Super+Control+space` showed a rofi window whose only row was **"Do not launch rofi
 from inside rofi."** instead of an emoji menu. Diagnosed on `godlike-artix`
 (i3/X11); the fix is in the shared dotfiles, so **the laptop (`nomad-artix`) needs

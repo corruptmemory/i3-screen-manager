@@ -345,7 +345,9 @@ Docs:
   compatibility bridge the same session** (installed quickshell + hyprpicker +
   tensaku, built the laptop-specific Battery widget, de-hardcoded Weather to a
   machine-local JSON file, flipped `machine.lua` `bar="quickshell"` /
-  `screenshot="tensaku"`, retired waybar). One
+  `screenshot="tensaku"`, retired waybar). Rofi parity audit +
+  `rofi-rbw --typer ydotool` cleanup that followed → see
+  `docs/2026-08-29-hyprland-rofi-parity-and-ydotool.md`. One
   `hyprland.lua` entry `require()`s ~9 modules; `machine.lua` detects the box by
   `/etc/hostname` and returns a hybrid record — `traits` (STATIC hardware
   capabilities: `displays`/`clamshell`/`battery`/`trackpad`/`backlight`/`wifi`/

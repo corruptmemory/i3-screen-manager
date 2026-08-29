@@ -214,7 +214,7 @@ rbw unlock                              # unlock agent, sync vault
 - `Super+Shift+B` opens a rofi menu of your whole vault — type to filter, Enter to copy
 - `rbw-agent` starts on demand and caches the unlock for 1h (`rbw config set lock_timeout <s>`)
 - When the lock expires, the next call pops `pinentry-gtk`
-- For fields that reject paste, `rofi-rbw --action type` types the credential (via `wtype` on Wayland)
+- For fields that reject paste, `rofi-rbw --action type` types the credential (via `xdotool` on X11, `ydotool` on Wayland — the Hyprland bind explicitly passes `--typer ydotool` to bypass rofi-rbw's default `wtype` autopick, which mangles layout-dependent characters; see `docs/2026-08-29-hyprland-rofi-parity-and-ydotool.md`)
 
 For vault management use the browser extension or web vault. **Applies to both machines.**
 
