@@ -304,6 +304,28 @@ Docs:
   set btrfs-nodatacow); the **Win11 guest itself is not yet installed** and needs
   one more log-out/in for the `libvirt` group (reboot predated the install). Also
   carries the virt-manager VM-build + Garmin USB-passthrough runbook.
+- `docs/2026-08-28-hyprland-fresh-start-rebuild.md` — **the "return to Hyprland"
+  fresh-start on `godlike-artix` (2026-08-28)**: design + decisions for shopping
+  Omarchy (lift ideas, not machinery), the no-frills aesthetic, and what landed
+  live — the portrait monitor rescued (`transform=3` upright + `vrr=0` to kill the
+  aquamarine adaptive-sync flicker), per-monitor workspace confinement (DP-2 1-6 /
+  HDMI-A-1 7-10), and the `i3-screen-manager` clamshell dispatch fix
+  (`hl.dsp.workspace.move`, replacing the Lua-mode-dead `moveworkspacetomonitor`).
+- `docs/2026-08-28-quickshell-bar-plan.md` — **the hand-written Quickshell bar that
+  replaced Waybar** (13-task build, EXECUTED). Lightly-modular QML shell in
+  `dotfiles/.config/quickshell/`: per-monitor workspace pools with working
+  Lua-mode clicks (fixes the #5008 Waybar regression), window title, clock, tray,
+  and the system cluster (cpu/mem/temp/net/audio/idle) with `Symbols Nerd Font`
+  icons. Records every QML gotcha (`Layout.preferredWidth`, `font.family` not
+  `families`, `format` not the FINAL `transform`, cpu `iowait`-as-idle). Waybar
+  retired but kept for a one-line revert; `mako` still owns notifications.
+- `docs/2026-08-28-quickshell-bar-and-screenshots-laptop-parity.md` — **the laptop
+  replication guide** for the Quickshell bar + tensaku screenshot flow. What to
+  install (rungs), what's SHARED (quickshell config, `screenshot` script) vs
+  machine-specific (monitor pools, bind locations), the laptop adaptations (its
+  own pool map, a battery widget), and what to deliberately NOT copy (the
+  nm-applet drop, the portrait transform/VRR, desktop workspace confinement).
+  **Read this first when doing the laptop.**
 
 Hyprland and IceWM are both installed and toggleable from a TTY on each
 machine. PekWM was the lone exception to the "additive and reversible" rule —
@@ -328,7 +350,8 @@ Scripts, no build step. All committed in this repo and symlinked from
 - `laptop-monitor.sh` — Hyprland lid-switch handler; checks the clamshell inhibitor PID before re-enabling eDP-1
 - `laptop-monitor-x11.sh` — X11/IceWM sibling of `laptop-monitor.sh`. **Not auto-wired** (no acpid hook by default); see `docs/2026-06-17-icewm-laptop-setup.md` for the manual-trigger pattern and the acpid wiring recipe.
 - `hyprland-clamshell-restore` — Re-applies clamshell eDP-1 disable after every Hyprland config reload (wired via `hl.on("config.reloaded")` under Lua, or `exec=` under hyprlang)
-- `screenshot.sh` — hyprshot + satty screenshot workflow (alternative path; main flow is flameshot via `Print`)
+- `screenshot` — grim/slurp capture + tensaku annotate; **the main screenshot flow on the desktop as of 2026-08-28** (flameshot demoted to the `Super+Print` fallback). Layered `Print` family: `Print`=region+annotate, `Shift+Print`=full+annotate, `Ctrl+Print`=region copy-only, `Super+Ctrl+Print`=annotate clipboard image. Uses `hyprpicker` freeze-during-select; capture → `~/Pictures` + `wl-copy`; `--annotate` → `tensaku-edit` (annotate → back to clipboard). Needs `tensaku` (rung-2 prebuilt binary) + `hyprpicker` (rung-1). Laptop replication: `docs/2026-08-28-quickshell-bar-and-screenshots-laptop-parity.md`.
+- `screenshot.sh` — hyprshot + satty screenshot workflow (older alternative path; superseded by `screenshot` above)
 - `flameshot.sh` — flameshot wrapper with `QT_SCREEN_SCALE_FACTORS="1;1"` for correct DPI
 - `volumecontrol.sh` — pavucontrol wrapper that forces Intel Vulkan ICD to avoid NVIDIA VA-API conflicts
 
