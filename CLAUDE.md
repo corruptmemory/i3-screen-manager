@@ -337,6 +337,26 @@ Docs:
   and — the important future seam — that calendar *events* should eventually come
   from `~/projects/life-dashboard/`'s local JSON (it already caches Google+MS
   calendars), NOT a second bar-local cache.
+- `docs/2026-08-29-hyprland-unified-config-design.md` (+ `…-plan.md`) — **the
+  single adaptive Hyprland config** that replaced the two drifting per-machine
+  files (`hyprland-{desktop,laptop}.lua`). EXECUTED on `godlike-artix`
+  2026-08-29 (cold-boot verified); **laptop cutover pending** (design §10). One
+  `hyprland.lua` entry `require()`s ~9 modules; `machine.lua` detects the box by
+  `/etc/hostname` and returns a hybrid record — `traits` (STATIC hardware
+  capabilities: `displays`/`clamshell`/`battery`/`trackpad`/`backlight`/`wifi`/
+  `audio_openrc`; modules branch on the capability, not on `type`), a `location`
+  SSOT seed, and `bar`/`screenshot` **selector fields** (the "compatibility
+  bridge" — the laptop rides `waybar`/`flameshot` and graduates by flipping one
+  value when its Quickshell+tensaku parity lands). `~/.config/hypr` is now a
+  whole-dir symlink into dotfiles (retired the per-machine selection symlink).
+  Refactor was **behavior-preserving** (zero observable change on either box);
+  the design doc's §6 records every per-machine disposition. Ships an offline
+  test harness (`dotfiles/.config/hypr/tests/`, `hl_stub.lua` records `hl.*`
+  calls) that verifies BOTH machine branches from either box — this is how the
+  laptop branch is validated from the desktop. Verified Hyprland-runtime facts
+  in the design doc §2 (config dir auto on `package.path`; reload rebuilds a
+  fresh `lua_State`; **config runs TWICE per reload** so `machine.lua` stays
+  cheap + side-effect-free).
 
 Hyprland and IceWM are both installed and toggleable from a TTY on each
 machine. PekWM was the lone exception to the "additive and reversible" rule —
