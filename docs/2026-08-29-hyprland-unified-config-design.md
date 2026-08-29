@@ -262,6 +262,27 @@ A cleanup pass right after the cutover (recorded so the delta map stays accurate
 - Net: the only per-machine window rule left is `msg-apps` (ws10/ws1); the only
   special workspaces are `special:volume` and `special:sharing`.
 
+### Review pass (2026-08-29, reviewing the laptop session's changes on the desktop)
+
+Pulling the laptop session's parity work back to the desktop surfaced fixes + a few
+i3-config ports:
+- **`ydotool` brought to the desktop.** The laptop session moved `rofi-rbw` to
+  `--typer ydotool` + a shared `ydotoold` autostart, but installed ydotool only on
+  the laptop — so it would have broken the desktop's `Super+Shift+B` on the next
+  reload. Installed `ydotool` (rung-1 `extra`) here; elogind's `/dev/uinput` ACL
+  covers injection (no `input` group). Details in the rofi-parity doc.
+- **Emoji-bind collision fixed.** The restored emoji bind sat on `Super+Ctrl+Space`,
+  which already had float-toggle — and Hyprland matches keysyms CASE-INSENSITIVELY,
+  so `Space`==`space` and the first-defined bind won (emoji never fired). Moved emoji
+  to **`Super+.`**; scoped the `i3-mouse-rofi` bind behind a `has_cmd` guard so it
+  doesn't dangle where the tool is absent.
+- **i3-config ports:** `Super+y` → Brave `Profile 3` (pennystinker@gmail); the
+  `browser` var gained **`WebMCP`** in a single consolidated `--enable-features`
+  (Chromium only honors the last such flag) so Claude/marksnip can drive Brave over
+  CDP; and a **`keymapp`** float rule (ZSA keyboard config).
+- Deferred (needs live testing, not a coord guess): the i3 `Keybase` tray-popup
+  float+position rule. `steam` left tiling its main client (Hyprland floats only aux).
+
 ## 7. Deployment & migration
 
 1. Author the modules alongside the existing files in `dotfiles/.config/hypr/`

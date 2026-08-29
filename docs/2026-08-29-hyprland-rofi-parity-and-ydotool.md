@@ -231,3 +231,27 @@ reliably provide.
   (dotfiles-tracked at `.config/rofi/scripts/emoji`)
 - `getfacl /dev/uinput` on both machines to verify elogind ACL is present
   (if it isn't for some reason, add a udev rule per the earlier plan).
+
+## 12. Desktop review corrections (2026-08-29)
+
+Reviewing this work on `godlike-artix` (the desktop, a different session) turned up
+problems in the shared modules that only bit the desktop:
+
+- **`Super+Ctrl+Space` collision.** The restored emoji bind (Fix 1) landed on the
+  same chord as the pre-existing float-toggle. Hyprland resolves keysyms
+  CASE-INSENSITIVELY (`Space` == `space`) and fires the FIRST matching bind, so the
+  emoji picker silently never ran. Fix: moved emoji to **`Super+period`** (frees the
+  Ctrl modifier; matches the OS-standard emoji shortcut). Lesson: the offline
+  `hl`-stub tests can't see a Hyprland-level keysym clash — enumerate chords with
+  `hyprctl binds` (case-insensitively) when adding a bind near existing ones.
+- **`i3-mouse-rofi` dangled.** The bind is shared but the script is laptop-only, so
+  it no-op'd on the desktop. Scoped it behind a `has_cmd("i3-mouse-rofi")` guard in
+  `bindings.lua` — binds only where the tool exists, auto-activates if deployed.
+- **`ydotool` wasn't installed on the desktop** (only the laptop) — installed here
+  (rung-1 `extra/ydotool`) so the shared `--typer ydotool` bind works fleet-wide.
+- Corrected the `autostart.lua` socket comment: ydotool 1.0.4 derives the socket
+  from `$XDG_RUNTIME_DIR` (`/run/user/<uid>/.ydotool_socket`), not `/tmp/.ydotool_socket`.
+
+Separately, ported three items from the i3 `config-desktop` in the same pass:
+`Super+y` → Brave `Profile 3` (pennystinker@gmail), `--enable-features=…,WebMCP` on
+the main `browser` var (for CDP), and a `keymapp` float rule.
