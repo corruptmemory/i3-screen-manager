@@ -237,6 +237,23 @@ checklist so the disposition of each is a recorded decision, not a silent merge.
 
 NVIDIA is **not** a config delta — it lives in `start-hyprland`.
 
+### Post-execution simplification (2026-08-29)
+
+A cleanup pass right after the cutover (recorded so the delta map stays accurate):
+- **morgen removed entirely** — window rule, `special:morgen` ws-rule, `Super+m`
+  bind, and the laptop autostart are gone; `morgen-bin` uninstalled.
+- **zoom taken off its special workspace** — it now just floats on whatever
+  workspace it opens on (still suppresses activate/fullscreen); `special:zoom` +
+  `Super+z` dropped (the special-workspace confinement was "endless pain").
+- **`special:terminal` removed** (unused) — its ws-rule + `Super+S` gone, and the
+  now-unused `require("vars")` dropped from `rules.lua`.
+- **Duplicate rules converged** — `flameshot`, `float-apps`, and the GTK-portal
+  rule collapsed from per-machine `if/else` pairs into one shared rule each.
+  GTK-portal is now **float+center on both** (the laptop's old 800x600 cap dropped;
+  re-add a laptop `xdg-portal-size` in-situ if ever needed). `flameshot` → shared center.
+- Net: the only per-machine window rule left is `msg-apps` (ws10/ws1); the only
+  special workspaces are `special:volume` and `special:sharing`.
+
 ## 7. Deployment & migration
 
 1. Author the modules alongside the existing files in `dotfiles/.config/hypr/`

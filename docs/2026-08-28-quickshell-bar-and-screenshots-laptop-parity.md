@@ -119,6 +119,19 @@ which is the only way to fully quit apps like Discord. It arrives with the pull
 and works as-is on the laptop (the shell already declares `//@ pragma
 UseQApplication`, the requirement for platform menus).
 
+**Per-monitor compact bar — SHARED, auto-applies.** `shell.qml` now gives each
+bar a `compact` flag (`modelData.height > modelData.width`): on a **portrait**
+panel the right-side system cluster (weather/audio/net/cpu/mem/temp/idle) is
+hidden, leaving only workspaces + window title (left), clock (center), and tray
+(right) — so nothing collides with the centered clock on a narrow panel. It keys
+on orientation, not monitor name, so any portrait external the laptop drives gets
+the reduced bar automatically — nothing to configure. Landscape panels keep the
+full cluster.
+
+Also note: **`morgen` was removed fleet-wide** (2026-08-29) — the laptop no longer
+autostarts it and `morgen-bin` is uninstalled; don't expect a morgen window rule
+or `Super+m`.
+
 ---
 
 ## Step 3 — Screenshot flow on the laptop

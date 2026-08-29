@@ -881,3 +881,18 @@ git -C ~/projects/dotfiles commit -m "feat(hypr): retire Waybar, launch Quickshe
 **Type consistency:** `Theme` token names are used identically across all widgets; `PollText` contract (`command`/`interval`/`transform`, writes `value`) is consistent in Tasks 6-10; `BarText.value` used consistently; `Workspaces.pool` produced by `shell.qml poolFor()` and consumed in Task 4; glyph placeholders are labeled as retunable, not load-bearing.
 
 **Known live-shakeout point:** Task 1 Step 6 is where Quickshell singleton/module import mechanics (`pragma Singleton` + `import qs` / `import qs.Widgets`) are proven against the running compositor; if the import spelling differs on 0.3.1, fix it there before building widgets on top.
+
+---
+
+## Update (2026-08-29): per-monitor compact bar
+
+The narrow portrait panel (HDMI-A-1, 1200px wide after `transform=3`) ran the full
+right-side system cluster into the centered clock. Fix: `shell.qml` gives each
+`PanelWindow` a `readonly property bool compact: modelData.height > modelData.width`,
+and the right slot wraps the system widgets (Weather / IdleInhibitor / Pulseaudio /
+Network / Cpu / Memory / Temperature) in a `RowLayout { visible: !bar.compact }`,
+leaving **Tray** always shown. So a portrait panel keeps only workspaces + window
+title (left), clock (center), tray (right); landscape panels keep the full set.
+Orientation-based, not name-based, so it auto-applies to any portrait monitor
+(incl. laptop externals). Verified via `hyprctl layers`: HDMI-A-1's `qs-bar` reports
+w=1200 (rotated/logical), so `compact` resolves true there and false on DP-2 (w=2560).
