@@ -101,6 +101,18 @@ Those are the *desktop's* monitors. The laptop's are `eDP-1` + dynamic externals
 — add a `Widgets/Battery.qml` PollText, same pattern as Cpu/Memory. The laptop's
 old Waybar/polybar config shows what else it surfaced (brightness, etc.).
 
+**Popouts (calendar + weather) — SHARED, but weather has a desktop hardcode.**
+The bar's two popouts (`Popout.qml`, `Widgets/Calendar.qml`,
+`Widgets/Weather.qml`, `Widgets/WeatherForecast.qml`, plus the `Weather {}` slot
+in `shell.qml` and the clickable `Clock.qml`) all arrive with the `git pull` —
+see `2026-08-28-quickshell-popouts-calendar-weather.md` for how they work.
+**One laptop change is mandatory:** `Weather.qml` hardcodes Ridgewood, NJ
+lat/lon, which is desktop-only. The laptop must make the location dynamic (read a
+machine-local `~/.config/quickshell/weather-location` file, or geolocate) — do
+NOT ship the Ridgewood hardcode. The calendar needs no laptop change (pure local
+date math); its future "upcoming events" pane is meant to come from
+`~/projects/life-dashboard/`'s local JSON, not a bar-local cache.
+
 ---
 
 ## Step 3 — Screenshot flow on the laptop

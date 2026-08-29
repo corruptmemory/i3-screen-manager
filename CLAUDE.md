@@ -326,6 +326,17 @@ Docs:
   own pool map, a battery widget), and what to deliberately NOT copy (the
   nm-applet drop, the portrait transform/VRR, desktop workspace confinement).
   **Read this first when doing the laptop.**
+- `docs/2026-08-28-quickshell-popouts-calendar-weather.md` — **the bar's first
+  two popouts** (EXECUTED): a month-grid **calendar** off the clock (Sunday-start,
+  ISO-week-of-Thursday numbering, pure-local, no network) and a **weather** pill
+  (Open-Meteo, no key, JSON parsed in QML) with a 4-day forecast popout. Both ride
+  one reusable `Popout.qml` (`PopupWindow` + `HyprlandFocusGrab`, cribbed from
+  Omarchy's `PopupCard.qml` minus the plugin machinery). Records the WMO-code ->
+  Material-Design nerd-glyph mapping (`String.fromCodePoint`, glyphs cmap-verified),
+  the Ridgewood weather-location desktop hardcode (**laptop must make this dynamic**),
+  and — the important future seam — that calendar *events* should eventually come
+  from `~/projects/life-dashboard/`'s local JSON (it already caches Google+MS
+  calendars), NOT a second bar-local cache.
 
 Hyprland and IceWM are both installed and toggleable from a TTY on each
 machine. PekWM was the lone exception to the "additive and reversible" rule —
