@@ -328,7 +328,163 @@ Compressed for future me:
 - **Do** distinguish coordination gaps (Chromium, GNOME, distro choices) from
   architecture gaps (very few of these actually exist).
 
-## 9. When this framing applies (topic triggers)
+## 9. The mandatory-compositor tax (composite-always vs present-direct)
+
+Added from the desktop conversation 2026-08-29/30. The seed observation:
+tab-cycling the ws-10 comms group is visibly *faster* under i3/X11 than under
+Hyprland — despite Wayland being sold as the more efficient architecture. The
+user's read: X's "page bitmaps just move more efficiently."
+
+The mechanism isn't blitter speed; it's **how many machines touch each frame**.
+- **X (no compositor):** a window's pixmap reaches scanout with the minimum in
+  the path — Present + DRI3 make that direct (page-flip / DMA-BUF), and XLibre's
+  `TearFree` makes it *also* vblank-synced. You pay a compositor's per-frame cost
+  only if you *run* one (picom, etc.). Compositing is **opt-in**.
+- **Wayland (compositor mandatory):** there is no "no compositor" mode — the
+  compositor *is* the display server. Every frame from every client goes through
+  its render/commit path. Direct-scanout (page-flip a fullscreen opaque surface,
+  skipping a composite pass) exists but is an *optimization the compositor may or
+  may not hit*, not the default shape.
+
+The sharpening, and the load-bearing point: **"tear-free" is itself a
+micro-composite.** Waiting for vblank means holding a finished framebuffer until
+the scanout boundary — a buffering/sync step with a cost, whether X's TearFree
+does it or a Wayland compositor does. So the honest comparison is NOT "Wayland
+composites, X doesn't" (both can be tear-free); it's **"same cadence, heavier
+machine per tick."** Wayland routes every frame through a mandatory compositor
+whose per-frame overhead you pay *whether or not you use any of the eye candy
+that overhead exists to enable*. If you don't want animations/shadows/blur — and
+XLibre's TearFree-by-default hands you the one thing that mattered — you're
+paying upkeep on an eye-candy factory you never visit.
+
+**Is Wayland's architecture superior, then?** Camp-dependent, stated honestly:
+superior *if* you want the compositor's capabilities (per-frame effects,
+mixed-DPI perfect scaling, per-surface color management), because then the
+mandatory compositor is doing work you wanted anyway. If you don't, it's a tax
+with no return, and X's "direct by default, compositor bolt-on when wanted" model
+fits better — with the tear-free gap now closed, the last thing that model was
+missing is gone. So the perceived speed delta isn't a paradox: the "more
+efficient architecture" is more efficient *at compositing*, a cost the other
+architecture simply doesn't incur when idle.
+
+(Honesty caveat: the tab-cycle delta is a single-machine subjective read, not a
+benchmark; Hyprland's animation defaults and its group/tab redraw path could
+account for much of the *magnitude* independent of composite-vs-present. The
+architectural point — mandatory vs opt-in compositor — stands regardless.)
+
+## 10. The security boundary is the device layer, not the display protocol
+
+Two symmetric corrections to the "Wayland is more secure" axiom, from the same
+conversation.
+
+**(a) X's isolation-by-convention has a Wayland mirror image:
+isolation-by-compositor-policy.** The pro-Wayland claim is "under X any client can
+keylog the session (XRecord/XTEST/core grabs are requests the server must
+honor)." True. But Wayland's counter-guarantee is *not* protocol-inherent either
+— it's the compositor *choosing* not to expose input to other clients. Nothing
+stops a compositor from offering exactly that: Hyprland already ships a private
+IPC (`hyprctl`) that reaches into window state, and the ecosystem already has
+global-shortcut / input-inhibitor / virtual-keyboard protocols inching toward
+it. "Wayland is secure" is a *convention enforced by the compositor*, precisely
+parallel to "X is open" being a convention. Neither is a protocol-level law;
+both are where-the-implementation-draws-the-line.
+
+**(b) The real boundary lives BELOW the display protocol, at the kernel device
+layer.** "One can just talk to the devices directly." Reading input is
+`/dev/input/event*` (= keylog the whole machine, *regardless of display
+server*); injecting is `/dev/uinput` (= synthesize input — exactly how `ydotool`
+works, and why the Hyprland rofi-rbw auto-type fix needed the login user to hold
+`rw` on `/dev/uinput`). Access to those nodes is gated by udev + the
+elogind/logind seat ACLs, which hand the device fds to the *compositor or X
+server*, not to ordinary apps. So the thing that actually stops a random app
+from keylogging you is **device-node permissions**, identical under X and
+Wayland. Wayland isolates *one* surface (the display protocol's input path) while
+the device nodes underneath are the same on both — which is why §4's "isolates
+one bit and markets it as the whole game" is literally true at the device layer.
+
+**The trade-off-camp crystallization** (the user's own framing, preserve in
+spirit):
+- **Wayland:** everything blocked by default; holes punched over time, often
+  needing a human approval each time. → frustrating, but "secure."
+- **X11:** everything open by default; security is an *expense you choose to
+  pay* — instead of poking holes you install **plugs** (Xnamespace, XACE, the
+  SECURITY extension, per-app sandboxing). → insecure by default, but everything
+  works as expected.
+
+Both are coherent; which is right is threat-model-dependent (§4). Naming the two
+camps is the point: "secure by default" is a *position in a trade-off*, not a
+free win — the friction is the price of the default, and on a hygiene-competent
+solo desktop that price can exceed the payoff.
+
+## 11. Chain of trust dwarfs the display-isolation debate
+
+The display-protocol security argument is small next to the trust you *already*
+extend by running software at all. Everything "safely on my machine" rests on a
+chain you can't audit end-to-end: distro package maintainers, the browser and
+its update channel, every app developer, and — the long tail that actually bites
+— their transitive dependencies. The `xz` backdoor (CVE-2024-3094) is the proof
+that nearly worked: a multi-year social-engineering supply-chain attack on a core
+compression lib, caught by *luck* (an engineer chasing a ~500ms SSH latency
+regression + odd valgrind noise), not by any isolation layer. A keylogger-via-X
+is a rounding error next to "the library your SSH daemon links was backdoored
+upstream."
+
+So the honest posture isn't "lock the display protocol down"; it's that
+**personal computing is an accepted-risk activity built on trust you can't fully
+verify, and the alternative to accepting that risk is not-computing.** The
+reductio: the only truly secure computer is powered off, in a safe, at the bottom
+of the Mariana Trench — which is a paperweight, not a computer. The user's
+calibration anchor for how much security *friction* he'll tolerate on a
+*personal* box: his login password is `password`. That's not carelessness missing
+a threat model — it's an explicit statement that on this machine the expected
+cost of friction exceeds the expected cost of the threats it guards, and he'd
+rather have a computer that "just works" than one that treats him as the
+adversary. (The §4 calibration taken to its personal-desktop limit — and a
+legitimate point on the curve: the *same* person runs `aur-malware-check`, reads
+PKGBUILD diffs, and keeps the AUR at arm's length, i.e. spends the trust budget
+where the supply chain is actually attacked, not on the display socket.)
+
+## 12. Path dependence, and the honest per-machine conclusion
+
+**Adoption was never a truth contest — it's path dependence.** Effort flowed to
+Wayland; toolkits, distros, and app backends followed; and now "it works because
+everyone built for it" *becomes the retroactive proof it was right* — independent
+of whether it was. QWERTY, Betamax-vs-VHS, the whole catalog: technical merit is
+a minority shareholder in adoption; timing, momentum, who controls the toolkits,
+and who got to declare the incumbent "legacy" own the rest. Which is why "why
+Wayland, if X-with-Xnamespace-and-Present-and-VRR was reachable all along?"
+doesn't get asked at scale — nobody relitigates a migration they've sunk a decade
+into; the sunk cost *is* the argument. (Same shape as §2's narrative loop and
+§7's 1968 thesis, stated as economics rather than sociology.)
+
+**The consolation that isn't cold comfort:** truth doesn't need the crowd; it
+needs the stubborn few, and they show up. XLibre exists *because* a handful of
+people checked the narrative against the code, found the "structural" limits
+weren't, and did the unglamorous incremental work anyway — late, unthanked,
+correct. You don't need humanity to converge on evidence (it won't — the last
+decade is ample proof); you need a compiler and a few people who read the source.
+That has always been enough to keep the workshop open.
+
+**The per-machine conclusion — tool-matching, not indecision.** The fleet
+rationally *splits*, and that's the honest synthesis:
+- **Desktop (`godlike-artix`) → i3/X11:** a workshop — fixed, mouse-driven,
+  latency- and control-sensitive, no touch surface. The mandatory-compositor tax
+  (§9) buys nothing here; TearFree removes the only default it lacked; i3's
+  deterministic tiling + speed win.
+- **Laptop (`nomad-artix`) → Hyprland/Wayland is defensible for reasons that
+  actually land on *that* machine:** (a) external-monitor hotplug for
+  presentations rides the *more-exercised* path there (the laptop's i3/X11
+  externals go through the finicky NVIDIA-PRIME provider-bind and were freshly
+  scaffolded); (b) **pinch-to-zoom in Brave** — a *genuine* Wayland incidental
+  win (native `wp_pointer_gestures`; X has no per-client gesture protocol, only
+  the app-level coordination gap of §3) landing exactly where it's useful: a
+  touchpad device, reading without reaching for glasses.
+
+The point isn't "X wins" or "Wayland wins" — it's that the *question is
+per-use-profile*, and pretending one answer fits both machines is the actual
+mistake. Match the tool to the machine's job.
+
+## 13. When this framing applies (topic triggers)
 
 Grep for these terms in future conversation; this doc should surface:
 
@@ -340,10 +496,25 @@ Grep for these terms in future conversation; this doc should surface:
 - "1968" / "Casey Muratori" / "Datamation" / "generational reinvention"
 - "Xnamespace" / "Present" / "DRI3"
 - "protocol simplicity" / "code generation" / "XML-defined protocol"
+- "compositor tax" / "composite vs present" / "tear-free" / "vblank" / "blitting"
+- "/dev/input" / "/dev/uinput" / "ydotool" / "device layer" / "keylogging"
+- "chain of trust" / "supply chain" / "xz" / "security friction" / "password is password"
+- "path dependence" / "QWERTY" / "Betamax" / "tool-matching" / "per-machine" / "why Wayland"
 
-## 10. Provenance
+## 14. Provenance
 
 Assembled 2026-08-30 from a rolling conversation the user has had "variants
 of on multiple machines," now explicitly captured so it doesn't have to be
 re-derived. Companion bite-sized captures published to open-brain the same
 day for cross-machine retrieval.
+
+§§1–8 + the original topic-triggers/provenance were captured from the **laptop
+(`nomad-artix`) 2026-08-30** "parallel rant." §§9–12 were added from the
+**desktop (`godlike-artix`) 2026-08-29/30** conversation that ran in parallel on
+the same topics — the mandatory-compositor tax, the device-layer security
+boundary + the punch-holes/install-plugs framing, chain-of-trust-dwarfs-the-debate,
+and the path-dependence + honest per-machine (i3-desktop / Hyprland-laptop) split.
+The two conversations converged independently; this doc is their union. Companion
+open-brain thoughts for §§9–12 published 2026-08-30 (siblings to #346): **#354**
+(§9 compositor tax), **#355** (§10 device layer), **#356** (§11 chain of trust),
+**#357** (§12 path dependence / per-machine split).
