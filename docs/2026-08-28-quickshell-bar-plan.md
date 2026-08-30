@@ -983,3 +983,32 @@ screenshot check: the adjacent `0%`/`1%` is the **Cpu** widget at idle (a cpu
 Nerd glyph that reads battery-ish at 28px), not a phantom `Battery{}` —
 `/sys/class/power_supply/` is empty on the desktop, so `Battery{}` correctly
 self-hides.
+
+## Update (2026-08-30): Battery glyph — plug on AC, level bucket on battery
+
+The prior `Battery.qml` showed `battery_charging` (single glyph, no level)
+while `state == Charging`, and level-bucket glyphs otherwise. That was a lie
+on AC: `state == Full` (charged to 100% and plugged in) fell through to the
+level-bucket branch and showed a **full-battery** glyph, indistinguishable
+from `state == Discharging` at 100%. Same on `Not charging` (some laptops
+throttle charging when a threshold is met). So the icon claimed "on battery"
+even while plugged in.
+
+Now the glyph is a **semantic switch**:
+- On AC → **`nf-md-power_plug`** (0xf06a5, filled — matches the filled-battery
+  aesthetic already there).
+- On battery → level bucket (0..9 → `nf-md-battery_10..nf-md-battery`), as before.
+- On battery + capacity < 15 → `battery_alert` (unchanged: warning glyph, not level).
+
+"On AC" is an explicit whitelist — `Charging || Full || Not charging` — rather
+than `!= Discharging`, so a transient `Unknown` state (firmware quirks at boot)
+falls through to the level-bucket branch instead of lying with a plug. The `low`
+warning still gates on `!plugged` (plugged in with 5% is charging, not
+concerning). The `%` text is untouched, so level info stays readable next to
+the plug on AC.
+
+Nerd Font codepoints verified via `fontTools.ttLib` against
+`~/.local/share/fonts/NFM.ttf` on the laptop before shipping (a check worth
+doing whenever a new codepoint enters the bar — MDI ↔ Symbols Nerd Font
+mapping is stable but not universal across font revisions). Live-tested on the
+laptop plugged/unplugged.
