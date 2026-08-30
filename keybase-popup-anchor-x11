@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# keybase-popup-anchor-x11 — i3/X11 sibling of keybase-popup-anchor (Hyprland).
+#
+# WHY A WATCHER AND NOT A for_window RULE
+# ---------------------------------------
+# Keybase is Electron. Its tray popup and its MAIN window are indistinguishable
+# by every X property i3 can match on: both report WM_CLASS "keybase","Keybase",
+# WM_WINDOW_ROLE "browser-window", _NET_WM_WINDOW_TYPE_NORMAL. The ONLY thing
+# that separates them is footprint — popup ~360-460 wide, main ~2054 — and i3's
+# `for_window` has no size selector.
+#
+# The old static rule leaned on the title:
+#     for_window [class="Keybase" title="^Keybase$"] floating enable, move ...
+# but the MAIN window's title is TRANSIENTLY exactly "Keybase" at map time
+# (Electron renames it to "Keybase: Chat" a beat later). So at launch the rule
+# caught the main window, floated it, and jammed it into the popup slot — and
+# because a floated window is never swallowed by the append_layout skeleton,
+# "Launch Chats" (i3-chat-rebuild) parked the main Keybase window in the popup
+# corner instead of its tabbed ws-10 slot. Removing that rule and filtering on
+# SIZE here fixes both cases: the main window stays tiled (swallow works), and
+# only the small floating popup is re-anchored.
+#
+# Same conclusion the Hyprland port reached — see
+# docs/2026-08-13-keybase-tray-popup-i3.md — so the fleet runs one watcher shape
+# per compositor: socket2 there, `i3-msg -t subscribe` here.
+#
+# Behaviour: on each Keybase window that is FLOATING and <= POPUP_MAX_W wide
+# (i.e. the popup), move it flush-right under the top bar of whatever output it
+# mapped on. The large tiled main window matches neither guard and is left
+# alone. Started via `exec_always --no-startup-id` from config-desktop; the
+# flock guard keeps exactly one instance across an i3 restart.
+set -uo pipefail
+
+# --- single-instance guard (exec_always re-runs on i3 restart) ---------------
+LOCK="${XDG_RUNTIME_DIR:-/tmp}/keybase-popup-anchor-x11.lock"
+exec 9>"$LOCK"
+flock -n 9 || exit 0
+
+# --- deps (inline guard; ~/.local/lib/sh/require.sh isn't symlinked on every box)
+for t in i3-msg jq; do
+    command -v "$t" >/dev/null 2>&1 || {
+        command -v notify-send >/dev/null 2>&1 &&
+            notify-send -u critical "keybase-popup-anchor-x11" "missing dependency: $t"
+        echo "keybase-popup-anchor-x11: missing dependency: $t" >&2
+        exit 1
+    }
+done
+
+BAR=28            # polybar height (config-i3.ini `height`); bump if that changes
+POPUP_MAX_W=1000  # popup observed 360/400/459 wide, main ~2054; 1000 divides safely
+
+# Subscribe to window events. jq normalizes i3-msg's concatenated JSON stream to
+# one compact line per RELEVANT event and drops everything else here — most
+# importantly the large tiled main window (fails the floating AND width guards),
+# so it is never touched. Emits: window id, current width, current global x.
+i3-msg -t subscribe -m '["window"]' \
+  | jq --unbuffered -c --argjson maxw "$POPUP_MAX_W" '
+      select(.change == "new" or .change == "title")
+      | .container as $c
+      | select(($c.window_properties.class // "") == "Keybase")
+      | select(($c.floating // "") | test("on"))          # popup auto-floats; main is tiled
+      | select(($c.rect.width // 99999) <= $maxw)         # popup is small; main is ~2054
+      | {id: $c.window, w: $c.rect.width, x: $c.rect.x}
+    ' \
+  | while IFS= read -r ev; do
+        id=$(jq -r '.id' <<<"$ev")
+        w=$(jq  -r '.w'  <<<"$ev")
+        px=$(jq -r '.x'  <<<"$ev")
+        [ -n "$id" ] && [ "$id" != "null" ] || continue
+
+        # Target = top-right of the output the popup sits on (fallback: primary),
+        # flush-right, just under the top bar. i3 `move position` is in GLOBAL
+        # coords, so these are output-origin-relative offsets made absolute.
+        read -r tx ty < <(i3-msg -t get_outputs \
+            | jq -r --argjson px "$px" --argjson w "$w" --argjson bar "$BAR" '
+                [ .[] | select(.active) ] as $outs
+                | ( [ $outs[] | select(.rect.x <= $px and $px < (.rect.x + .rect.width)) ][0]
+                    // [ $outs[] | select(.primary) ][0]
+                    // $outs[0] ) as $o
+                | "\($o.rect.x + $o.rect.width - $w) \($o.rect.y + $bar)"')
+        [ -n "${tx:-}" ] || continue
+
+        i3-msg "[id=\"$id\"] floating enable, move position $tx $ty" >/dev/null
+    done

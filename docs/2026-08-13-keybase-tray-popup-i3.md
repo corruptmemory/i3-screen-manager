@@ -1,9 +1,17 @@
 # Keybase tray-icon popup lands off-screen under i3 — diagnose & fix
 
 **Date:** 2026-08-13 · **Applies to:** i3/X11, both machines · **Desktop
-(`godlike-artix`): DONE** (rule in `dotfiles/.config/i3/config-desktop`) ·
-**Laptop (`nomad-artix`): DONE 2026-08-14** (rule in
-`dotfiles/.config/i3/config-laptop`) — Option A landed, see below.
+(`godlike-artix`): the static rule was REPLACED 2026-08-30 by the
+`keybase-popup-anchor-x11` watcher** — the rule mis-placed the *main* window at
+launch; see "i3 launch-race (2026-08-30)" below. · **Laptop (`nomad-artix`):
+static rule still live** (`config-laptop`, Option A `move position mouse`,
+landed 2026-08-14) — same latent launch-race, watcher swap pending.
+
+> The 2026-08-13/14 body below documents the *original* popup-placement problem
+> and the static-`for_window` fix. That fix is superseded on the desktop by the
+> watcher (last section but one) because the static rule cannot avoid catching
+> the main window at launch. Read the original first — it explains WHY only size
+> separates the two windows, which is the whole reason the watcher exists.
 
 ## Symptom
 
@@ -187,6 +195,96 @@ close and reopen the popup to test. Whether Keybase even runs on the laptop
 depends on whether the workspace-10 comms stack is wired there yet (it was
 deferred — see `docs/2026-07-21-i3-laptop-setup.md`); this fix applies whenever
 Keybase runs under i3.
+
+## i3 launch-race (2026-08-30): the static rule mis-places the MAIN window — watcher fix
+
+The edge case flagged above ("if the main window ever shows a bare `Keybase`
+title, the rule would catch it too — rare") turned out to be **deterministic at
+launch, not rare** — and worse than a cosmetic mis-float. Reported + fixed on
+`godlike-artix` (i3/X11, dual-head) 2026-08-30.
+
+### Symptom
+
+Running **"Launch Chats"** (`i3-chat-rebuild`) parked the **main** Keybase
+window floating in the popup corner (`~2200,272`) instead of tiling it into its
+tabbed ws-10 slot. Manually re-homing the main window fixed it, and from then on
+the popup itself opened correctly — so the bug was purely the *launch* race.
+
+### Root cause — two things compounding
+
+1. **Title collision at map time.** Electron maps the main window with its title
+   transiently equal to exactly `"Keybase"` (it renames to `"Keybase: Chat"` /
+   `"Keybase: People"` a beat *after* map). So at launch the static rule
+   `for_window [class="Keybase" title="^Keybase$"] floating enable, move …`
+   matches the **main** window, not just the popup. i3 re-runs `for_window` on
+   title change, but only to *apply* on match — it never *un-applies* the float
+   when the title later stops matching. The float sticks.
+2. **Float defeats the swallow.** `chat-layout.json` swallows the Keybase slot by
+   `class ^Keybase$`, but **`append_layout` only swallows *tiled* windows** — a
+   window the rule just floated is ineligible, so the main window escapes its
+   placeholder entirely and lands at the popup coordinates.
+
+### Why no static rule can fix it (same wall as the Hyprland port)
+
+The popup and the main window are identical on **every property i3 can match**
+(`class` "Keybase", `WM_WINDOW_ROLE` "browser-window", `_NET_WM_WINDOW_TYPE`
+NORMAL). The **only** discriminator is footprint (popup ~360–460 wide vs main
+~2054/1200), and **i3 `for_window` has no `size:` selector** — the exact same
+limitation that forced the Hyprland daemon (below). A title rule is the only
+lever a static config has, and the title collides at launch.
+
+### The fix — `keybase-popup-anchor-x11` (i3 sibling of the Hyprland daemon)
+
+Delete the static rule; do the popup positioning in a size-aware **watcher**:
+
+- **`keybase-popup-anchor-x11`** (`~/projects/i3-screen-manager/`, symlinked into
+  `~/.local/bin/`) subscribes to `i3-msg -t subscribe '["window"]'`, and on each
+  `new`/`title` event for a Keybase window that is **floating AND ≤1000 px wide**
+  (the popup — the main window is tiled *and* wide, so it fails **both** guards
+  and is never touched), moves it flush-right under the top bar of **whatever
+  output it mapped on** (`out.x + out.width − w`, `out.y + 28`). Live-output
+  geometry, so it also drops the desktop's brittle hardcoded `2200,272`.
+- Wired from `config-desktop` as `exec_always --no-startup-id
+  keybase-popup-anchor-x11`, with an internal **`flock`** single-instance guard.
+  `exec_always` (not `exec`) because on this box `exec_always` re-runs on i3
+  **restart** (not reload — the measured i3 truth), and the flock keeps the
+  restart from stacking a duplicate. The old `for_window` rule is replaced by a
+  pointer comment.
+
+Structurally identical to the Wayland `keybase-popup-anchor` (socket2 there,
+`i3-msg -t subscribe` here; `size <= 1000` filter both) — one watcher shape per
+compositor.
+
+### Verified (live, 2026-08-30)
+
+- **Main-window fix, end-to-end:** ran `i3-chat-rebuild` (genuine kill+relaunch —
+  Keybase GUI `etimes` reset to ~75 s while the spared service daemon stayed at
+  ~28 min); the main window stayed `floating=auto_off` in its ws-10 slot
+  (`2560,996 1200x924` on the portrait monitor) for the full 40 s poll — never
+  floated to the popup corner. Watcher error log empty; it correctly ignored the
+  large tiled window.
+- **Popup path, logic-verified** (a blind systray click was too risky to trigger
+  live): a synthetic 360-wide floating Keybase `new` event passes the filter and
+  computes target `2200,268` (== the old `2200,272`, flush-right of DP-2 under the
+  28 px bar); a 1200-wide tiled event and the `{success:true}` subscribe
+  confirmation are both filtered out. **User confirmation still owed:** click the
+  Keybase tray icon once → popup should appear flush-right under the bar.
+
+### Still to do
+
+- **Laptop (`nomad-artix`):** `config-laptop` carries the analogous rule
+  (`… move position mouse, move down 32px`) with the *same* latent launch-race
+  (there it would float the main window to the pointer). Not changed here —
+  untestable from the desktop, and the laptop's ws-10 comms wall is deferred
+  anyway. When the laptop's comms design lands, apply the same
+  remove-rule + `exec_always keybase-popup-anchor-x11` swap.
+- **Hyprland deploy gap (noticed in passing):** `~/.local/bin/keybase-popup-anchor`
+  (the Wayland daemon) is **not currently symlinked** on `godlike-artix`, so
+  Hyprland's `autostart.lua` `exec_cmd("keybase-popup-anchor")` would fail to find
+  it. Symlink it (`ln -s ~/projects/i3-screen-manager/keybase-popup-anchor
+  ~/.local/bin/`) next time you're on Wayland — the daemon sources
+  `~/.local/lib/sh/require.sh`, which is *also* missing here, so it needs that
+  symlink too or a fallback like this x11 sibling's inline dep guard.
 
 ## Hyprland port (2026-08-29): windowrules can't do it — daemon instead
 
