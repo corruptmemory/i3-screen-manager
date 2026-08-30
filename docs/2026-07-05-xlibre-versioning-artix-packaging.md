@@ -3,6 +3,16 @@
 *2026-07-05. Reference note for both machines (godlike-artix, nomad-artix), which
 run XLibre as their X11 server on Artix.*
 
+> **STATUS: SUPERSEDED 2026-08-30.** Artix dropped XLibre support on 2026-08-27
+> (see [`docs/2026-08-30-xlibre-artix-drop-and-vendor-repo-migration.md`](2026-08-30-xlibre-artix-drop-and-vendor-repo-migration.md)).
+> Version cadence and `world`/`world-gremlins` promotion mechanics described in
+> this doc no longer control what XLibre we run — the maintained path is now
+> XLibre's own signed binary repo at `packages.xlibre.net/arch/{stable,oldstable,beta}`.
+> The Watch List at the bottom is historical; read the migration doc for the
+> current watch-list. Everything ABOVE the Watch List (branch model, ABI story,
+> version-difference reasoning) remains factually correct and worth reading if
+> you're triaging a version anomaly on the vendor repo.
+
 ## The question
 
 Upstream XLibre's current "stable" is **`25.1.8`**, and `xlibre.net`'s homepage
@@ -106,9 +116,9 @@ curl -s https://mirror1.artixlinux.org/repos/world-gremlins/os/x86_64/ | grep -o
 curl -s https://checkupdates.artixlinux.org | grep -i xlibre
 ```
 
-## Watch list
+## Watch list — HISTORICAL (see the 2026-08-30 migration doc for current)
 
-- [ ] Watch for the `world-gremlins → world` promotion of `xlibre-xserver 25.1.x`.
+- [x] ~~Watch for the `world-gremlins → world` promotion of `xlibre-xserver 25.1.x`.~~
   When it lands, a normal `pacman -Syu` brings the whole xlibre set across together.
 - [ ] If the June-5 security fixes matter *before* then: enable `[world-gremlins]`
   and update the **entire** xlibre stack **atomically** (server + all

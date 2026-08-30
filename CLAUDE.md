@@ -199,7 +199,25 @@ Docs:
   `VIDEODRV 28.0`), the security gap (`world`'s `25.0.0.23` predates the 2026-06-05
   hardening — Artix skipped `25.0.0.24`), and a Watch List for the
   `world-gremlins → world` promotion. Ties into the `25.0.0.21` vblank regression
-  under Common Issues → "X11 historical".
+  under Common Issues → "X11 historical". **STATUS: SUPERSEDED by the 2026-08-30
+  vendor-repo migration doc below** — Artix dropped XLibre 2026-08-27; the
+  `world`/`world-gremlins` promotion mechanics no longer control what XLibre we run.
+  Branch model + ABI reasoning in the pre-Watch-List body remain factually correct.
+- `docs/2026-08-30-xlibre-artix-drop-and-vendor-repo-migration.md` — **the "we
+  stay on XLibre" migration** after Artix's 2026-08-27 drop. XLibre spun up their
+  own signed pacman binary repo (`packages.xlibre.net/arch/{stable,oldstable,beta}`,
+  managed by the `xlibre-arch` GitHub org, successor to the archived
+  `X11Libre/*-arch-based` repos). Rung-2 install-path (vendor's own signed distribution),
+  NOT AUR — signing key `0C92313001CFCA27627B9098B97F7C613F359424` (short ID
+  `B97F7C613F359424`), `--lsign-key`'d into the local pacman keyring, external
+  `.sig` files per package verified by pacman on every install. `[xlibre-stable]`
+  above `[world]` in `/etc/pacman.conf` guarantees repo priority; `IgnorePkg = xorg-server xorg-server-common`
+  is a belt-and-suspenders belt in `[options]`. **`nomad-artix` DONE 2026-08-30**
+  (input drivers repackaged from vendor at pkgrel bump; xserver + common still
+  Artix-packaged 25.1.9-1 pending the next real version bump — repo priority
+  makes that flip automatically). **`godlike-artix` PENDING** — same recipe.
+  Read the doc for the full trust-bootstrap steps, rollback recipes, and the
+  post-cutover 5-item watch-list.
 - `docs/2026-07-29-starling-desktop-investigation.md` — **code-level teardown of
   Starling** (`starling.build`, the AI-written desktop) + a broader X11/Wayland
   "structural vs folklore" audit. Not a WM-setup doc — a reference for revisiting
@@ -497,5 +515,5 @@ that could resurface if X11 is ever re-introduced (e.g. via an X11 app under
 XWayland, or rollback).
 
 - **`xorg.conf.d TargetRefresh` ignored**: the `TargetRefresh` monitor option doesn't work reliably (e.g. amdgpu). Use explicit `xrandr --rate` in `~/.xinitrc` instead.
-- **xlibre-xserver 25.0.0.21 vblank regression (2026-02-22)**: 20→21 caused X lockup (`modeset(0): failed to queue next vblank event`). Userspace X server bug, NOT the desktop's PCIe/GPU hardware issue. Downgrade cached at `/var/cache/pacman/pkg/xlibre-xserver-25.0.0.20-1-x86_64.pkg.tar.zst`. No longer relevant under Hyprland but listed in case of X11 fallback.
+- **xlibre-xserver 25.0.0.21 vblank regression (2026-02-22)**: 20→21 caused X lockup (`modeset(0): failed to queue next vblank event`). Userspace X server bug, NOT the desktop's PCIe/GPU hardware issue. Downgrade cached at `/var/cache/pacman/pkg/xlibre-xserver-25.0.0.20-1-x86_64.pkg.tar.zst`. Doubly moot now: we're on Hyprland (X server rarely spawns) AND we're on the 25.1.x line via the vendor repo since 2026-08-30 (see `docs/2026-08-30-xlibre-artix-drop-and-vendor-repo-migration.md`) — the 25.0.0.x branch that had the .21 bug is now `[xlibre-oldstable]` backport-only. Rollback recipe if a future 25.1 regression bites: swap the pacman.conf stanza to `[xlibre-oldstable]` + `pacman -Syyuu`.
 - **Workspace move errors via `i3-msg`**: `"No output matched"` was usually harmless — workspace was already on the target output. (`i3-msg` no longer used; Hyprland uses `hyprctl dispatch moveworkspacetomonitor`.)
