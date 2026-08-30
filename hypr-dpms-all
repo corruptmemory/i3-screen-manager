@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# hypr-dpms-all — turn DPMS on/off for EVERY monitor under Hyprland (Lua mode).
+#
+# Called by hypridle (on-timeout/on-resume) and usable from a keybind or by hand.
+#
+# WHY A LOOP AND NOT `hl.dsp.dpms("off")`: under Hyprland 0.55+ Lua mode the dpms
+# dispatcher's signature is a TABLE — dpms({ monitor?, action? }) — not a
+# positional string. The bare-string form hl.dsp.dpms("off") is mis-shaped: it
+# reaches the focused monitor but silently skips the others (this is exactly why
+# the portrait HDMI-A-1 never slept), and the "on" string form was observed
+# turning monitors OFF instead of on. Verified live 2026-08-29: the table form
+# flips dpmsStatus correctly per monitor; the string form does not. Enumerating
+# every monitor by name and dispatching the table form is robust AND portable
+# (any monitor count, no hardcoded names — works on the laptop too).
+#
+# Action values are "on"/"off" (both verified working; the wiki's "disable"
+# example is not what this dispatcher accepts here).
+set -uo pipefail
+
+action="${1:-}"
+case "$action" in
+    on|off) ;;
+    *) echo "usage: hypr-dpms-all <on|off>" >&2; exit 2 ;;
+esac
+
+hyprctl monitors -j | jq -r '.[].name' | while read -r mon; do
+    [ -n "$mon" ] || continue
+    hyprctl dispatch "hl.dsp.dpms({ monitor = \"${mon}\", action = \"${action}\" })" >/dev/null
+done

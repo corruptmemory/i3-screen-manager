@@ -67,6 +67,12 @@ case "${1:-polybar}" in
             echo "$icon ${volts}V"
         fi
         ;;
+    quickshell)
+        # "<volts> <status>" — parsed by the QuickShell Widgets/CmosBattery.qml
+        # bar widget, which owns its own glyph + Theme color per status. No sensor
+        # -> the early `exit 0` above emits nothing, so the widget self-hides.
+        echo "${volts} ${status}"
+        ;;
     cli|--cli)
         echo "CMOS Battery: ${volts}V ($status)"
         if [[ "$status" == "LOW" ]]; then

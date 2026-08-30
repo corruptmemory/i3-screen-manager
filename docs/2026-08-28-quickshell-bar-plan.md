@@ -956,3 +956,30 @@ desktop wants a specific mobo sensor over the CPU package.
 Live-verified on the laptop 2026-08-29 (`wlan0` in Network, `51°C` in
 Temperature). The desktop keeps its `eth0` / `k10temp` readings unchanged
 after pull because those pattern-match first in the same scans.
+
+## Update (2026-08-29): CMOS coin-cell (CR2032) widget
+
+Ported the desktop's polybar `cmos-battery` indicator to the bar — Jim's
+sanity gauge, because "when that battery goes low all hell breaks loose"
+(it87 Vbat drop → BIOS corruption / boot failures / PCIe instability).
+
+- **`Widgets/CmosBattery.qml`** (new) follows the **`Battery.qml` shape**, not
+  `PollText`, because it needs the two things PollText can't do: **self-hide**
+  when the sensor is absent (no it87 → laptop), and **status-driven color**
+  (OK → `fg`, LOW → `warn`, DEAD → `crit`). It *runs* the shared
+  `i3-cmos-battery quickshell` (new output mode: `<volts> <status>`) rather than
+  re-reading hwmon in QML — the script stays the single source of truth for the
+  CR2032 thresholds. Glyph mirrors Battery's alarm treatment: full-battery when
+  OK, **battery_alert** when LOW/DEAD, so a dying cell reads as a *warning*.
+- **`Theme.qml`** gained `warn` (`#F0C674`) + `crit` (`#A54242`) — the alarm
+  palette, matching i3-cmos-battery's own colors, reusable by future widgets.
+- **`shell.qml`** places `CmosBattery {}` in the `!compact` system cluster, so
+  it shows on the **main (landscape) monitor only** — the portrait panel stays
+  compact, and the laptop self-hides for lack of the sensor. 6h poll interval
+  (matches the old polybar module; the cell drifts glacially).
+
+Live-verified on the desktop (`CMOS 3.29V`, OK/fg). Aside caught during the
+screenshot check: the adjacent `0%`/`1%` is the **Cpu** widget at idle (a cpu
+Nerd glyph that reads battery-ish at 28px), not a phantom `Battery{}` —
+`/sys/class/power_supply/` is empty on the desktop, so `Battery{}` correctly
+self-hides.
