@@ -203,6 +203,22 @@ Docs:
   vendor-repo migration doc below** — Artix dropped XLibre 2026-08-27; the
   `world`/`world-gremlins` promotion mechanics no longer control what XLibre we run.
   Branch model + ABI reasoning in the pre-Watch-List body remain factually correct.
+- `docs/2026-08-30-wayland-x-critique-framing.md` — **the reusable
+  Wayland-vs-X framing** the user has been developing across sessions on
+  multiple machines, now captured as thesis-form documentation so future
+  Claude Code sessions don't re-derive it. Ten sections indexed by grep-friendly
+  headers: XLibre's actual 2026 technical envelope; the self-fulfilling
+  narrative loop + FLOSS "rewrite outruns improve" coalition asymmetry;
+  coordination-vs-technical distinction (Chromium/Brave gesture absence is
+  coordination, not X limitation); security-by-default calibration (threat
+  model + POLA operational cost); Wayland protocol concept-count (6 vs X's
+  2 vs Win32's 2) empirically refuted by `~/projects/jai-wayland`;
+  design-by-XML anti-pattern; IoC / libwayland-owns-main framework critique
+  (`wl_event_loop` as the tell); Casey Muratori's 1968 *Datamation*
+  generational-reinvention thesis (Casey's Standup appearance 2026-08-29);
+  "recurring mistakes to not make"; "when this framing applies" trigger-terms
+  list. Companion open-brain captures (thoughts sibling to #346) publish
+  bite-sized versions of each thesis for cross-machine retrieval.
 - `docs/2026-08-30-xlibre-artix-drop-and-vendor-repo-migration.md` — **the "we
   stay on XLibre" migration** after Artix's 2026-08-27 drop. XLibre spun up their
   own signed pacman binary repo (`packages.xlibre.net/arch/{stable,oldstable,beta}`,
