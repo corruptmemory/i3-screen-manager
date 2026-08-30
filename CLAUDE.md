@@ -364,6 +364,21 @@ Docs:
   in the design doc §2 (config dir auto on `package.path`; reload rebuilds a
   fresh `lua_State`; **config runs TWICE per reload** so `machine.lua` stays
   cheap + side-effect-free).
+- `docs/2026-08-29-hyprland-dwindle-switch-and-i3-move-binds.md` — **switched the
+  active layout from `master` to `dwindle` fleet-wide (A/B'd live, dwindle KEPT)**
+  to recover two i3 reflexes the master layout structurally lacked: per-window
+  split direction and whole-group block-move. Root reframe: **`master` has no
+  splits at all** — split direction is a dwindle-only concept (`preselect <dir>`
+  = i3 `split h`/`split v`; `togglesplit` needs `preserve_split`). The i3 binds
+  port onto their exact chords (`Super+h`/`Super+v`/`Super+Shift+e`, read off
+  `config-desktop`). Documents the **three distinct move verbs** Hyprland splits
+  i3's `move` into — block-move (`Super+Shift+arrows`, plain `window.move`),
+  group in/out (`Super+Ctrl+Shift+arrows`, `group_aware=true`), tab-order reorder
+  (`Super+Alt+Ctrl+←/→`, `group.move_window`) — since a group "takes the space of
+  one window"; the A/B mechanism (single `vars.layout` selector, both layout
+  blocks defined for a clean revert); and the one i3 thing with **no** Hyprland
+  home (`focus parent`/`child` — no arbitrary-subtree selection). Wiki facts
+  pulled from `hyprwm/hyprland-wiki` via `gh` (live site 403s WebFetch).
 
 Hyprland and IceWM are both installed and toggleable from a TTY on each
 machine. PekWM was the lone exception to the "additive and reversible" rule —
