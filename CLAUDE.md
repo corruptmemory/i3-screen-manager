@@ -212,12 +212,17 @@ Docs:
   `B97F7C613F359424`), `--lsign-key`'d into the local pacman keyring, external
   `.sig` files per package verified by pacman on every install. `[xlibre-stable]`
   above `[world]` in `/etc/pacman.conf` guarantees repo priority; `IgnorePkg = xorg-server xorg-server-common`
-  is a belt-and-suspenders belt in `[options]`. **`nomad-artix` DONE 2026-08-30**
-  (input drivers repackaged from vendor at pkgrel bump; xserver + common still
-  Artix-packaged 25.1.9-1 pending the next real version bump — repo priority
-  makes that flip automatically). **`godlike-artix` PENDING** — same recipe.
-  Read the doc for the full trust-bootstrap steps, rollback recipes, and the
-  post-cutover 5-item watch-list.
+  is a belt-and-suspenders belt in `[options]`. **`nomad-artix` + `godlike-artix`
+  BOTH DONE 2026-08-30** — desktop was driven remotely from the laptop over SSH
+  (pure TTY on the desktop). Input drivers now vendor-packaged (`xlibre-input-libinput
+  25.0.1-4` on both; `xlibre-input-evdev` laptop-only); xserver + common still
+  Artix-packaged at 25.1.9-1 on both (same version means -Syu didn't touch them;
+  repo priority makes the flip automatic on the next real version bump). Read the
+  doc for trust-bootstrap steps, rollback recipes, and the post-cutover 5-item
+  watch-list. **Non-migration follow-ups surfaced by the desktop -Syu (both machines
+  eventually):** `tar 1.35-5` moved backup/restore helpers to a separate
+  `tar-scripts` package; `tpm2-tss 4.2.0-2` shipped two `.pacnew` files under
+  `/etc/tpm2-tss/fapi-profiles/`.
 - `docs/2026-07-29-starling-desktop-investigation.md` — **code-level teardown of
   Starling** (`starling.build`, the AI-written desktop) + a broader X11/Wayland
   "structural vs folklore" audit. Not a WM-setup doc — a reference for revisiting

@@ -1,6 +1,6 @@
 # XLibre → vendor-repo migration (Artix drops XLibre support)
 
-**Date:** 2026-08-30 · **Machines:** `nomad-artix` DONE · `godlike-artix` PENDING
+**Date:** 2026-08-30 · **Machines:** `nomad-artix` DONE · `godlike-artix` DONE
 
 ## The event
 
@@ -174,19 +174,59 @@ sudo pacman -S xlibre-xserver xlibre-xserver-common     # forces reinstall of sa
 ```
 Not done here — no functional gain, the bits are identical.
 
-## Desktop execution (`godlike-artix`, TODO)
+## Desktop execution log (`godlike-artix`, 2026-08-30 13:26-13:27 EDT)
 
-Same recipe. Before running, check current state:
-```bash
-pacman -Qs '^xlibre'                      # what's installed
-grep -E '^\[[a-z-]+\]' /etc/pacman.conf   # confirm the repo order to insert into
+Driven remotely from the laptop over SSH (`ssh jim@192.168.1.19`, pure TTY on
+the desktop — no display manager, no X server, safe transaction window).
+
+Pre-migration state (surprise vs. the 2026-07-05 doc's snapshot):
+```
+xlibre-input-libinput 25.0.1-3    Packager: artist@artixlinux.org  <- Artix-packaged
+xlibre-xserver 25.1.9-1           Packager: artist@artixlinux.org  <- ALREADY on 25.1.x, not 25.0.0.x
+xlibre-xserver-common 25.1.9-1    Packager: artist@artixlinux.org
 ```
 
-If the desktop is still on the 25.0.x series (per the 2026-07-05 doc's snapshot),
-adding `[xlibre-stable]` will bump it to 25.1.x on the first `-Syu`. That's a
-normal minor bump upstream; 25.0 is now backport-only, so the maintained direction
-is 25.1. If the version jump is unwanted, use `[xlibre-oldstable]` instead
-(same recipe, different `Server =` URL: `.../arch/oldstable/$arch`).
+The **desktop was already on `25.1.9`** — the July doc's snapshot of `25.0.0.23`
+had been superseded by an Artix promotion at some point. Both machines therefore
+started this migration on the same version, so `[xlibre-stable]` was the right
+pick with no version jump on either box.
+
+`xlibre-input-evdev` isn't installed on the desktop (pure AMD, only needs libinput
+for mouse/keyboard). `xlibre-video-amdgpu` also isn't installed — the amdgpu path
+runs via the kernel modesetting driver + the generic `modesetting` X DDX, not the
+`xf86-video-amdgpu` DDX. Both are correct absences.
+
+`-Syu` transaction was 22 packages (bigger backlog than the laptop; the desktop
+hadn't been synced recently). Only one XLibre-touching item:
+`xlibre-input-libinput 25.0.1-3 → 25.0.1-4` (pkgrel bump from vendor). Other
+notable items: `binutils 2.47-4`, `tailscale 1.102.3-1`, `dhcpcd 10.5.2-1`,
+`tpm2-tss 4.2.0-2`. Two side-notes surfaced by pacman that need follow-up but are
+NOT part of this migration:
+
+- `tar 1.35-5` advisory: `/usr/bin/backup` and `/usr/bin/restore` moved to a
+  separate `tar-scripts` package. If either is used, `pacman -S tar-scripts`.
+- `tpm2-tss` shipped two `.pacnew` files:
+  `/etc/tpm2-tss/fapi-profiles/{P_ECCP384SHA384,P_RSA3072SHA384}.json.pacnew` —
+  merge or diff, then remove `.pacnew`.
+
+Post-migration state:
+```
+xlibre-input-libinput  25.0.1-4    Packager: XLibre for Arch Linux Maintainers  <- vendor
+xlibre-xserver         25.1.9-1    Packager: artist@artixlinux.org              <- still Artix (same-version -Syu no-op)
+xlibre-xserver-common  25.1.9-1    Packager: artist@artixlinux.org              <- same
+xlibre-meta            25.1-1      Packager: XLibre for Arch Linux Maintainers  <- new umbrella
+```
+
+Same mixed-ownership state as the laptop; same auto-migration on the next real
+version bump. Belt in place: `IgnorePkg = xorg-server xorg-server-common`.
+Backup at `/etc/pacman.conf.bak.pre-xlibre-vendor-repo-20260830-132620`.
+
+### Notes on driving from bash-in-Fish
+
+The desktop's login shell is fish, which doesn't understand `set -e` or `<<HEREDOC`
+inside the SSH command string. The workaround used was `ssh ... bash -s <<'REMOTE'`
+— feed the whole recipe into bash on stdin, and it evaluates as expected (nested
+`<<'PYEOF'` heredocs work fine inside the outer `bash -s`).
 
 ## Post-cutover watch-list (from the video-transcript bug-map)
 
