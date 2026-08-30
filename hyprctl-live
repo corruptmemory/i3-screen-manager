@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# hyprctl-live — /usr/bin/hyprctl wrapper that always resolves the LIVE Hyprland
+# instance signature before proxying, then forwards every argument unchanged.
+#
+# Why this exists: any shell that outlives a Hyprland session carries a stale
+# HYPRLAND_INSTANCE_SIGNATURE from the previous run — e.g. a herdr-hosted agent
+# session, a tmux/screen pane older than the compositor, a Claude Code process
+# reattached across a logout. Bare hyprctl then hits a dead socket
+# (`Couldn't connect to /run/user/1000/hypr/<old-sig>/.socket.sock. (4)`).
+#
+# The `hyprctl instances -j` subcommand does NOT need a valid sig — it just
+# enumerates $XDG_RUNTIME_DIR/hypr — so it's safe to call from a poisoned env
+# and use its result to set the sig for the actual proxied command.
+#
+# Multiple concurrent Hyprland instances: this picks the first one listed.
+# That's the right default for the single-instance case; use bare hyprctl with
+# an explicit sig for the multi-instance edge case.
+set -uo pipefail
+
+sig=$(/usr/bin/hyprctl instances -j 2>/dev/null | jq -r '.[0].instance // empty')
+if [ -z "$sig" ]; then
+    echo "hyprctl-live: no Hyprland instance found (is Hyprland running?)" >&2
+    exit 1
+fi
+
+HYPRLAND_INSTANCE_SIGNATURE=$sig exec /usr/bin/hyprctl "$@"
