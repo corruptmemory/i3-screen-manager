@@ -535,7 +535,21 @@ cmd_apply_ws_split() {
 
 cmd_scale() {
     local scale="${1:-}"
-    local target="${2:-$INTERNAL}"
+    local target="${2:-}"
+
+    # Default target: the monitor currently focused, not always the internal.
+    # Under Wayland, ask Hyprland which monitor holds keyboard focus (this is
+    # also where the mouse most likely is, since Super+Alt+BackSpace launched
+    # us from there). Falls back to $INTERNAL if no monitor is focused, or if
+    # the query fails, or under X11 (no per-output scale — Xft.dpi is server-
+    # wide anyway).
+    if [[ -z "$target" ]]; then
+        if is_wayland; then
+            target=$(hyprctl monitors -j 2>/dev/null \
+                | jq -r 'first(.[] | select(.focused) | .name) // empty')
+        fi
+        [[ -z "$target" || "$target" == "null" ]] && target="$INTERNAL"
+    fi
 
     if [[ -z "$scale" ]]; then
         local current
