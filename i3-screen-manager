@@ -15,6 +15,10 @@
 #   disconnect      Revert to laptop screen only
 #   scale [VALUE]   Set monitor scale (shows rofi picker if no value given)
 #   status          Show current display state
+#   apply-ws-split  (Wayland only) Move EXTERNAL_WORKSPACES to the external if
+#                   one is attached. Idempotent no-op otherwise. Wired to
+#                   Hyprland's monitor.added event so hot-plug and initial boot
+#                   both re-apply the split without a manual extend command.
 #
 # Compositor support:
 #   - Wayland/Hyprland-Lua (0.55+): uses `hyprctl dispatch 'hl.monitor({...})'`
@@ -52,6 +56,17 @@ EXTERNAL_WORKSPACES=(7 8 9 10)
 is_wayland() {
     [[ "${XDG_SESSION_TYPE:-}" == "wayland" || -n "${WAYLAND_DISPLAY:-}" ]]
 }
+
+# When this script is invoked from a shell that outlived a Hyprland restart
+# (agent sessions, herdr-hosted terminals, tmux panes older than the current
+# compositor), HYPRLAND_INSTANCE_SIGNATURE points at a dead socket and every
+# bare `hyprctl` call silently fails: dispatchers no-op, queries return the
+# error text, and this script would appear to do nothing at all. Route every
+# hyprctl call through `hyprctl-live`, which rediscovers the live signature on
+# each invocation. In-session terminals (autostart execs, keybinds) also work
+# fine — hyprctl-live's rediscovery is a cheap `ls $XDG_RUNTIME_DIR/hypr`.
+# See CLAUDE.md § Hyprland common issues → "Stale HYPRLAND_INSTANCE_SIGNATURE".
+hyprctl() { command hyprctl-live "$@"; }
 
 # ============================================================================
 # Shared helpers (compositor-agnostic — kernel ACPI + elogind)
@@ -299,14 +314,15 @@ cmd_extend_wayland() {
     ext_pw=$(preferred_width_wayland "$ext")
     ext_ph=$(preferred_height_wayland "$ext")
 
-    # Ensure internal is active at its canonical position
-    hl_apply "output = \"$INTERNAL\", mode = \"preferred\", position = \"0x0\", scale = $INTERNAL_SCALE"
+    # Ensure internal is active at its canonical position. `disabled = false`
+    # is required to re-enable a monitor that was disabled by a prior clamshell.
+    hl_apply "output = \"$INTERNAL\", mode = \"preferred\", position = \"0x0\", scale = $INTERNAL_SCALE, disabled = false"
 
     case "$direction" in
-        right) hl_apply "output = \"$ext\", mode = \"preferred\", position = \"${int_lw}x0\", scale = $EXTERNAL_SCALE" ;;
-        left)  hl_apply "output = \"$ext\", mode = \"preferred\", position = \"-${ext_pw}x0\", scale = $EXTERNAL_SCALE" ;;
-        above) hl_apply "output = \"$ext\", mode = \"preferred\", position = \"0x-${ext_ph}\", scale = $EXTERNAL_SCALE" ;;
-        below) hl_apply "output = \"$ext\", mode = \"preferred\", position = \"0x${int_lh}\", scale = $EXTERNAL_SCALE" ;;
+        right) hl_apply "output = \"$ext\", mode = \"preferred\", position = \"${int_lw}x0\", scale = $EXTERNAL_SCALE, disabled = false" ;;
+        left)  hl_apply "output = \"$ext\", mode = \"preferred\", position = \"-${ext_pw}x0\", scale = $EXTERNAL_SCALE, disabled = false" ;;
+        above) hl_apply "output = \"$ext\", mode = \"preferred\", position = \"0x-${ext_ph}\", scale = $EXTERNAL_SCALE, disabled = false" ;;
+        below) hl_apply "output = \"$ext\", mode = \"preferred\", position = \"0x${int_lh}\", scale = $EXTERNAL_SCALE, disabled = false" ;;
     esac
 
     sleep 0.5
@@ -356,7 +372,7 @@ cmd_clamshell_wayland() {
 
     # Enable external at a safe non-overlapping position first.
     # moveworkspacetomonitor silently fails on disabled monitors.
-    hl_apply "output = \"$ext\", mode = \"preferred\", position = \"auto\", scale = $EXTERNAL_SCALE"
+    hl_apply "output = \"$ext\", mode = \"preferred\", position = \"auto\", scale = $EXTERNAL_SCALE, disabled = false"
     sleep 0.5
 
     move_workspaces_to_wayland "$ext"
@@ -367,7 +383,7 @@ cmd_clamshell_wayland() {
     hl_apply "output = \"$INTERNAL\", disabled = true"
     sleep 0.2
     wlr-randr --output "$INTERNAL" --off 2>/dev/null || true
-    hl_apply "output = \"$ext\", mode = \"preferred\", position = \"0x0\", scale = $EXTERNAL_SCALE"
+    hl_apply "output = \"$ext\", mode = \"preferred\", position = \"0x0\", scale = $EXTERNAL_SCALE, disabled = false"
 
     sleep 0.3
     refresh_desktop_wayland
@@ -409,8 +425,8 @@ cmd_mirror() {
 
 cmd_mirror_wayland() {
     local ext="$1"
-    hl_apply "output = \"$INTERNAL\", mode = \"preferred\", position = \"0x0\", scale = $INTERNAL_SCALE"
-    hl_apply "output = \"$ext\", mode = \"preferred\", position = \"0x0\", scale = $EXTERNAL_SCALE, mirror = \"$INTERNAL\""
+    hl_apply "output = \"$INTERNAL\", mode = \"preferred\", position = \"0x0\", scale = $INTERNAL_SCALE, disabled = false"
+    hl_apply "output = \"$ext\", mode = \"preferred\", position = \"0x0\", scale = $EXTERNAL_SCALE, mirror = \"$INTERNAL\", disabled = false"
     sleep 0.3
     refresh_desktop_wayland
     echo "Mirror (Wayland): $ext mirrors $INTERNAL"
@@ -456,12 +472,17 @@ cmd_disconnect_wayland() {
         #  - Disabled-in-Hyprland ≠ removed-from-state: external's position is
         #    remembered even after `disabled = true`, so its 0,0 slot has to be
         #    freed BEFORE internal claims it, not after.
+        #  - hl.monitor with `mode/position/scale` alone will NOT re-enable a
+        #    monitor that was previously disabled — `disabled = false` must be
+        #    passed explicitly. Without it, coming out of clamshell leaves
+        #    internal disabled + external disabled → FALLBACK activates and
+        #    both screens go dark.
         #
-        # Sequence: bump external off 0,0, put internal at 0,0 directly (no
-        # auto→reposition dance), move workspaces, then disable external.
-        hl_apply "output = \"$ext\", mode = \"preferred\", position = \"10000x0\", scale = $EXTERNAL_SCALE"
+        # Sequence: bump external off 0,0, put internal at 0,0 with an explicit
+        # `disabled = false`, move workspaces, then disable external.
+        hl_apply "output = \"$ext\", mode = \"preferred\", position = \"10000x0\", scale = $EXTERNAL_SCALE, disabled = false"
         sleep 0.2
-        hl_apply "output = \"$INTERNAL\", mode = \"preferred\", position = \"0x0\", scale = $INTERNAL_SCALE"
+        hl_apply "output = \"$INTERNAL\", mode = \"preferred\", position = \"0x0\", scale = $INTERNAL_SCALE, disabled = false"
         sleep 0.3
         move_workspaces_from_wayland "$ext" "$INTERNAL"
         sleep 0.2
@@ -469,7 +490,7 @@ cmd_disconnect_wayland() {
         wlr-randr --output "$ext" --off 2>/dev/null || true
         echo "Disconnected (Wayland): $ext off, $INTERNAL restored"
     else
-        hl_apply "output = \"$INTERNAL\", mode = \"preferred\", position = \"0x0\", scale = $INTERNAL_SCALE"
+        hl_apply "output = \"$INTERNAL\", mode = \"preferred\", position = \"0x0\", scale = $INTERNAL_SCALE, disabled = false"
         echo "Internal display restored (no external was active)"
     fi
 
@@ -491,6 +512,25 @@ cmd_disconnect_x11() {
 
     sleep 0.3
     refresh_desktop_x11
+}
+
+cmd_apply_ws_split() {
+    # Wayland-only. Applies EXTERNAL_WORKSPACES onto the currently-attached
+    # external if any. Meant to be wired to Hyprland's monitor.added event so
+    # boot + hot-plug both re-establish the split without an explicit extend.
+    # Silent no-op when there is no external — this is expected on the laptop
+    # in laptop-only mode.
+    if ! is_wayland; then
+        echo "apply-ws-split is Wayland-only" >&2
+        exit 1
+    fi
+    local ext
+    ext=$(find_external_wayland)
+    if [[ -z "$ext" ]]; then
+        exit 0
+    fi
+    apply_ws_split_wayland "$ext"
+    echo "ws split applied: ${EXTERNAL_WORKSPACES[*]} -> $ext"
 }
 
 cmd_scale() {
@@ -593,5 +633,6 @@ case "${1:-}" in
     disconnect)   cmd_disconnect ;;
     scale)        cmd_scale "${2:-}" "${3:-}" ;;
     status)       cmd_status ;;
+    apply-ws-split) cmd_apply_ws_split ;;
     *)            usage ;;
 esac
