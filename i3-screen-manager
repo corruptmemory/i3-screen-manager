@@ -37,6 +37,14 @@ INTERNAL_SCALE=1.25
 EXTERNAL_SCALE=1.0
 PIDFILE="/tmp/i3-screen-manager-inhibit.pid"
 
+# Workspace split for extend mode (Wayland only). Values duplicated in
+# dotfiles/.config/hypr/machine.lua (SSOT) and shell.qml's poolFor.
+# Rebalance: internal keeps 1-6, external takes 7-10 when both are up. In
+# clamshell mode ALL workspaces go to external (handled by move_workspaces_to_wayland
+# in cmd_clamshell_wayland); disconnect pulls them all back (handled by
+# move_workspaces_from_wayland in cmd_disconnect_wayland).
+EXTERNAL_WORKSPACES=(7 8 9 10)
+
 # ============================================================================
 # Compositor detection
 # ============================================================================
@@ -198,6 +206,18 @@ ensure_workspace_on_wayland() {
     fi
 }
 
+# Applies the extend-mode workspace split: EXTERNAL_WORKSPACES onto $1, all
+# others stay on $INTERNAL. The persistent rules in monitors.lua guarantee
+# 1-10 exist at boot rooted on eDP-1, so hl.dsp.workspace.move never hits the
+# "Workspace not found" case here (unlike the raw-focus creation path).
+apply_ws_split_wayland() {
+    local ext="$1"
+    local ws
+    for ws in "${EXTERNAL_WORKSPACES[@]}"; do
+        hl_ws_to_monitor "$ws" "$ext"
+    done
+}
+
 # ============================================================================
 # X11 (IceWM) backend
 # ============================================================================
@@ -290,10 +310,14 @@ cmd_extend_wayland() {
     esac
 
     sleep 0.5
+    # Apply the split FIRST so the external gets ws 7-10; ensure_workspace_on_wayland
+    # then sees them and skips, avoiding a spurious `max+1` workspace (the pre-Aug'26
+    # code path created ws 11 on top of the split).
+    apply_ws_split_wayland "$ext"
     ensure_workspace_on_wayland "$ext"
     sleep 0.5
     refresh_desktop_wayland
-    echo "Extended $direction (Wayland): $INTERNAL + $ext"
+    echo "Extended $direction (Wayland): $INTERNAL + $ext (ws split ${EXTERNAL_WORKSPACES[*]} -> $ext)"
 }
 
 cmd_extend_x11() {
