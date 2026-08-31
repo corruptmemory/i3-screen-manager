@@ -446,17 +446,27 @@ cmd_disconnect() {
 cmd_disconnect_wayland() {
     local ext="$1"
     if [[ -n "$ext" ]]; then
-        # Bring internal up at 'auto' first (avoids the overlap warning when
-        # external is at 0x0); move workspaces back; disable external; then
-        # reposition internal to origin.
-        hl_apply "output = \"$INTERNAL\", mode = \"preferred\", position = \"auto\", scale = $INTERNAL_SCALE"
+        # Target state: internal at 0,0, external fully off, all workspaces on
+        # internal. Constraints in play:
+        #  - hl.dsp.workspace.move silently no-ops on a disabled target monitor,
+        #    so internal must be enabled BEFORE we move workspaces off external.
+        #  - Two monitors cannot share position 0,0 — Hyprland quietly refuses
+        #    one of them and the layout can end up with no visible active
+        #    monitor (both screens blank; the reason this was reported).
+        #  - Disabled-in-Hyprland ≠ removed-from-state: external's position is
+        #    remembered even after `disabled = true`, so its 0,0 slot has to be
+        #    freed BEFORE internal claims it, not after.
+        #
+        # Sequence: bump external off 0,0, put internal at 0,0 directly (no
+        # auto→reposition dance), move workspaces, then disable external.
+        hl_apply "output = \"$ext\", mode = \"preferred\", position = \"10000x0\", scale = $EXTERNAL_SCALE"
+        sleep 0.2
+        hl_apply "output = \"$INTERNAL\", mode = \"preferred\", position = \"0x0\", scale = $INTERNAL_SCALE"
         sleep 0.3
         move_workspaces_from_wayland "$ext" "$INTERNAL"
         sleep 0.2
         hl_apply "output = \"$ext\", disabled = true"
         wlr-randr --output "$ext" --off 2>/dev/null || true
-        sleep 0.2
-        hl_apply "output = \"$INTERNAL\", mode = \"preferred\", position = \"0x0\", scale = $INTERNAL_SCALE"
         echo "Disconnected (Wayland): $ext off, $INTERNAL restored"
     else
         hl_apply "output = \"$INTERNAL\", mode = \"preferred\", position = \"0x0\", scale = $INTERNAL_SCALE"
