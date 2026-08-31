@@ -46,8 +46,11 @@ for t in i3-msg jq; do
     }
 done
 
-BAR=28            # polybar height (config-i3.ini `height`); bump if that changes
-POPUP_MAX_W=1000  # popup observed 360/400/459 wide, main ~2054; 1000 divides safely
+# Env-overridable so per-machine values don't need per-machine forks of the script.
+# The desktop's polybar (config-i3.ini) is height=28; the laptop's (config-i3-laptop.ini)
+# is height=32 and launches this via `exec_always --no-startup-id BAR=32 keybase-popup-anchor-x11`.
+BAR=${BAR:-28}            # polybar height under which the popup should sit
+POPUP_MAX_W=${POPUP_MAX_W:-1000}  # popup observed 360/400/459 wide, main ~2054; 1000 divides safely
 
 # Subscribe to window events. jq normalizes i3-msg's concatenated JSON stream to
 # one compact line per RELEVANT event and drops everything else here — most
