@@ -14,6 +14,37 @@ Resolves the deferred "port i3's Launch Chats to Hyprland" item. The primitives
 only existed once the box moved to dwindle — under the old master layout you
 could not build the two-group wall at all.
 
+> **UPDATE 2026-08-31 — rewritten for determinism (dotfiles `3067cc4`).** The
+> original builder (this doc, §§4-6) launched all five apps in PARALLEL, waited
+> for all to map, then merged them with a geometry-directional
+> `into_or_create_group`. Two things raced — which window mapped first (the group
+> anchor) and where each sat when the merge ran — so the group **tab order** (what
+> `Super+left`/`Super+right` = `group.prev`/`group.next` cycle) came out RANDOM
+> run-to-run, and cycling between the groups "made no sense at all." The rewrite
+> constructs the wall **serially at ≤2 relevant tiles per merge**, so the layout
+> is identical every time:
+>
+> 1. Ensure every app is running (launch missing; wait per-app until mapped).
+> 2. **Teardown:** dissolve any existing target groups, then park EVERY target
+>    window — *by address*, so Discord's splash twin (a "forever" Electron quirk)
+>    is swept up too — onto a hidden `special:chatbuild` workspace. ws10 is clear.
+> 3. Build **group A** (Messages | WhatsApp): bring Messages back (anchor,
+>    `togglegroup`), bring WhatsApp back and merge. Only 2 tiles → unambiguous.
+> 4. **Lock group A** (`group.lock_active` lock). A locked group refuses new
+>    members, so group B's windows cannot merge into it while sharing ws10.
+> 5. Build **group B** (Discord | Keybase | Slack): each brought back and merged;
+>    locked-A + a bounded 4-direction search converge cleanly.
+> 6. Unlock A; restore focus.
+>
+> Re-running is a full teardown+rebuild, so it **converges** to the same layout
+> even when the apps are already open in a wrong order (that is the point). Group
+> ops drive by resolved **primary address** (largest window of the class), so the
+> Discord splash is parked and never grouped. `group:insert_after_current=false`
+> (looknfeel.lua) makes tab order == insertion order. Validated live: three
+> consecutive teardown+rebuild runs each yield A=[Messages,WhatsApp],
+> B=[discord,Keybase,slack]. §§4-6 below describe the SUPERSEDED parallel design;
+> the "unique Wayland classes" finding (§2) and the dispatcher (§3) still hold.
+
 ## 1. Why the i3 approach does not port
 
 i3's `i3-chat-layout` lays down a `chat-layout.json` skeleton via `append_layout`:
