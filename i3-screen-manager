@@ -14,6 +14,11 @@
 #   mirror          Mirror displays (external mirrors laptop)
 #   disconnect      Revert to laptop screen only
 #   scale [VALUE]   Set monitor scale (shows rofi picker if no value given)
+#   dpi [VALUE]     Alias for scale — the desktop's key name for it (historical:
+#                   X11 Xft.dpi). cmd_scale already branches internally: output
+#                   scale under Wayland, Xft.dpi under X11. The Hyprland bind
+#                   (bindings.lua) passes "dpi" on the desktop, "scale" on the
+#                   laptop; both must reach cmd_scale.
 #   status          Show current display state
 #   apply-ws-split  (Wayland only) Move EXTERNAL_WORKSPACES to the external if
 #                   one is attached. Idempotent no-op otherwise. Wired to
@@ -646,6 +651,7 @@ case "${1:-}" in
     mirror)       cmd_mirror ;;
     disconnect)   cmd_disconnect ;;
     scale)        cmd_scale "${2:-}" "${3:-}" ;;
+    dpi)          cmd_scale "${2:-}" "${3:-}" ;;   # desktop key-name alias (see usage header)
     status)       cmd_status ;;
     apply-ws-split) cmd_apply_ws_split ;;
     *)            usage ;;
