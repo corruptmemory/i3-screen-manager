@@ -263,12 +263,12 @@ compositor.
   (`2560,996 1200x924` on the portrait monitor) for the full 40 s poll — never
   floated to the popup corner. Watcher error log empty; it correctly ignored the
   large tiled window.
-- **Popup path, logic-verified** (a blind systray click was too risky to trigger
-  live): a synthetic 360-wide floating Keybase `new` event passes the filter and
-  computes target `2200,268` (== the old `2200,272`, flush-right of DP-2 under the
-  28 px bar); a 1200-wide tiled event and the `{success:true}` subscribe
-  confirmation are both filtered out. **User confirmation still owed:** click the
-  Keybase tray icon once → popup should appear flush-right under the bar.
+- **Popup path — user-confirmed 2026-08-30 (screenshot):** clicking the tray icon
+  places the popup flush-right under the top bar, exactly as before. (Logic had
+  been pre-verified too: a synthetic 360-wide floating Keybase `new` event passes
+  the filter and computes target `2200,268` == the old `2200,272`; a 1200-wide
+  tiled event and the `{success:true}` subscribe confirmation are both filtered
+  out.)
 
 ### Still to do
 
@@ -278,13 +278,22 @@ compositor.
   untestable from the desktop, and the laptop's ws-10 comms wall is deferred
   anyway. When the laptop's comms design lands, apply the same
   remove-rule + `exec_always keybase-popup-anchor-x11` swap.
-- **Hyprland deploy gap (noticed in passing):** `~/.local/bin/keybase-popup-anchor`
-  (the Wayland daemon) is **not currently symlinked** on `godlike-artix`, so
-  Hyprland's `autostart.lua` `exec_cmd("keybase-popup-anchor")` would fail to find
-  it. Symlink it (`ln -s ~/projects/i3-screen-manager/keybase-popup-anchor
-  ~/.local/bin/`) next time you're on Wayland — the daemon sources
-  `~/.local/lib/sh/require.sh`, which is *also* missing here, so it needs that
-  symlink too or a fallback like this x11 sibling's inline dep guard.
+- **Hyprland deploy gap — CORRECTED 2026-08-30 (`godlike-artix`).** Both
+  machine-local symlinks the Wayland `keybase-popup-anchor` daemon needs were
+  missing on the desktop and are now created:
+  - `~/.local/bin/keybase-popup-anchor` → `~/projects/i3-screen-manager/keybase-popup-anchor`
+    (so Hyprland's `autostart.lua` `exec_cmd("keybase-popup-anchor")` resolves).
+  - `~/.local/lib/sh/require.sh` → `~/projects/i3-screen-manager/lib/require.sh`
+    (the daemon sources it; it was absent, which would also have broken any other
+    fleet script that sources it here, e.g. `icewm-window-switcher`). `mkdir -p
+    ~/.local/lib/sh` first — the dir didn't exist.
+
+  Verified off-Wayland: `require.sh` sources clean, `_require socat python3
+  hyprctl` passes (all present), and the daemon reaches its graceful "no live
+  Hyprland instance" exit under i3. It'll actually anchor the popup on the next
+  Wayland boot. These are filesystem symlinks, not repo state — re-create them on
+  any fresh machine (the `require.sh` one is the "one-time machine-local symlink"
+  CLAUDE.md's silent-failure section refers to).
 
 ## Hyprland port (2026-08-29): windowrules can't do it — daemon instead
 
