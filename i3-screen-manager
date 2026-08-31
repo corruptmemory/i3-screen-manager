@@ -207,11 +207,18 @@ ensure_workspace_on_wayland() {
 # X server. The sources disagree on argument order (older docs say
 # `provider source`; the Arch Optimus wiki uses `modesetting NVIDIA-0`),
 # so try both forms. Idempotent — once bound, subsequent calls are no-ops.
+#
+# BOTH stdout AND stderr must be swallowed: xrandr's "Xlib" protocol errors
+# (BadValue on a wrong-order arg pair) go to stderr, but its own user-facing
+# errors ("Could not find provider with name NVIDIA-0") go to STDOUT. Left
+# unswallowed, that stdout line leaks into the function's return value,
+# poisons `ext=$(find_external_x11)` with a two-line garbage string, and
+# every downstream `xrandr --output "$ext" ...` fails silently.
 ensure_nvidia_provider_x11() {
-    xrandr --setprovideroutputsource modesetting NVIDIA-G0 2>/dev/null || \
-    xrandr --setprovideroutputsource modesetting NVIDIA-0  2>/dev/null || \
-    xrandr --setprovideroutputsource NVIDIA-G0 modesetting 2>/dev/null || \
-    xrandr --setprovideroutputsource NVIDIA-0  modesetting 2>/dev/null || true
+    xrandr --setprovideroutputsource modesetting NVIDIA-G0 >/dev/null 2>&1 || \
+    xrandr --setprovideroutputsource modesetting NVIDIA-0  >/dev/null 2>&1 || \
+    xrandr --setprovideroutputsource NVIDIA-G0 modesetting >/dev/null 2>&1 || \
+    xrandr --setprovideroutputsource NVIDIA-0  modesetting >/dev/null 2>&1 || true
 }
 
 find_external_x11() {
