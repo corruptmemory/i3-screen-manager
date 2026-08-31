@@ -4,8 +4,12 @@
 (`godlike-artix`): the static rule was REPLACED 2026-08-30 by the
 `keybase-popup-anchor-x11` watcher** — the rule mis-placed the *main* window at
 launch; see "i3 launch-race (2026-08-30)" below. · **Laptop (`nomad-artix`):
-static rule still live** (`config-laptop`, Option A `move position mouse`,
-landed 2026-08-14) — same latent launch-race, watcher swap pending.
+watcher LANDED 2026-08-30** (`config-laptop` c3297f9, i3-screen-manager 6d91bfe;
+verified live under a fresh i3 restart, real Keybase click confirmed by the
+user) — same watcher as the desktop, launched with `BAR=32` (env-override) to
+match the laptop's polybar height. `move position mouse` (2026-08-14) had the
+same latent launch-race the desktop had, so it was superseded rather than
+retained.
 
 > The 2026-08-13/14 body below documents the *original* popup-placement problem
 > and the static-`for_window` fix. That fix is superseded on the desktop by the
@@ -272,12 +276,20 @@ compositor.
 
 ### Still to do
 
-- **Laptop (`nomad-artix`):** `config-laptop` carries the analogous rule
-  (`… move position mouse, move down 32px`) with the *same* latent launch-race
-  (there it would float the main window to the pointer). Not changed here —
-  untestable from the desktop, and the laptop's ws-10 comms wall is deferred
-  anyway. When the laptop's comms design lands, apply the same
-  remove-rule + `exec_always keybase-popup-anchor-x11` swap.
+- **Laptop (`nomad-artix`) — DONE 2026-08-30 (from the laptop itself, i3/X11
+  session).** The analogous static rule (`… move position mouse, move down
+  32px`) was removed from `config-laptop` and replaced with `exec_always
+  --no-startup-id BAR=32 keybase-popup-anchor-x11` — same watcher as the
+  desktop, with the polybar height overridden via env (the desktop is 28, the
+  laptop is 32; the script itself now reads `BAR=${BAR:-28}` so both machines
+  share one script). Verified end-to-end: `i3 -C` clean, `i3-msg restart`
+  spawned exactly one watcher (flock guard held; the second bash PID from
+  `pgrep -af` was the pipeline subshell sharing FD 9), old rule confirmed gone
+  from live config via `i3-msg -t get_config`, and the user launched Keybase +
+  clicked the tray icon — main window stayed tiled, popup landed as expected.
+  Commits: i3-screen-manager `6d91bfe` (env-override) + dotfiles `c3297f9`
+  (config-laptop swap). Ws-10 comms wall is still deferred on the laptop, but
+  the fix does not depend on it — every manual Keybase launch is fixed too.
 - **Hyprland deploy gap — CORRECTED 2026-08-30 (`godlike-artix`).** Both
   machine-local symlinks the Wayland `keybase-popup-anchor` daemon needs were
   missing on the desktop and are now created:

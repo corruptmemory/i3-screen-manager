@@ -321,13 +321,19 @@ Docs:
   Keybase's Electron tray popup is a fixed-size 360x640 window that Electron
   anchors to the *bottom* of the screen (assuming a bottom systray) while polybar
   is at the *top*; being far from the pointer it blur-hides before you reach it.
-  i3 auto-floats + manages it, so a `for_window [class="Keybase" title="^Keybase$"]`
-  rule (title excludes the main `"Keybase: Chat"` window) can re-anchor it under
-  the tray. **Desktop DONE** (`config-desktop`, hardcoded `move position 2200 272`);
-  **laptop PENDING** — the doc deliberately steers the laptop AWAY from hardcoded
-  coords because clamshell + dynamic `i3-screen-manager scale` move the whole
-  coordinate space, toward `move position mouse` (anchor to the click) or a
-  recompute-from-live-output watcher. Includes the full diagnostic command set.
+  A static `for_window` rule (title `"^Keybase$"` to try to exclude the main
+  `"Keybase: Chat"` window) *seemed* like the fix, but it had a launch-race: the
+  MAIN window is transiently titled exactly `"Keybase"` at map time before
+  Electron renames it, so the static rule caught the main window too and
+  mis-placed it. The definitive fix on both machines is now the size-filtering
+  `keybase-popup-anchor-x11` watcher (an `i3-msg -t subscribe` daemon that only
+  moves windows ≤1000px wide — main window is ~2054), launched via `exec_always`
+  from each i3 config with a `BAR=` env override for polybar height. **Both
+  machines DONE 2026-08-30** — desktop `godlike-artix` (dotfiles `db7445f`,
+  i3-screen-manager `26ea990`); laptop `nomad-artix` (dotfiles `c3297f9`,
+  i3-screen-manager `6d91bfe`, uses `BAR=32` because its polybar is height=32
+  vs the desktop's 28). Includes the full diagnostic command set and a
+  post-mortem of why no static rule can solve the launch-race.
 - `docs/2026-08-13-win11-vm-kvm-setup.md` (+ `win11-vm-setup.sh` at repo root) —
   **Windows 11 VM on Artix via QEMU/KVM + libvirt, for running Garmin Express with
   USB passthrough** (it never worked under Wine; VirtualBox deliberately avoided).
