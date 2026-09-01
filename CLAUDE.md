@@ -434,7 +434,11 @@ Docs:
   (X11's shared "Brave-origin" needed `crx_` instance matching). Ships
   `hypr-chat-layout` (builder, **idempotent by regrouping live windows** — no
   kill-and-rebuild, unlike i3) + `i3-chat-launch` (session dispatcher) + two PWA
-  ws-pin rules; all in dotfiles. Desktop-only; laptop comms design still deferred.
+  ws-pin rules; all in dotfiles. The auto-**builder** is desktop-only (laptop
+  comms design still deferred), but the ws-pin rules themselves (Slack/Keybase/
+  Discord + Messages/WhatsApp PWAs → ws10) went fleet-wide 2026-09-01 (dotfiles
+  `rules.lua`) — so when a chat app is opened on the laptop it lands on ws10
+  alongside the desktop's convention, even without the self-assembling puzzle.
 - `docs/2026-08-31-hyprland-workspace-split-and-disconnect-fix.md` — **laptop
   workspace split (1-6 internal / 7-10 external) + the clamshell→disconnect
   blank-screen fix + a cluster of adjacent Hyprland hardening.** Ten commits
