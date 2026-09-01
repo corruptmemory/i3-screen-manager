@@ -400,6 +400,77 @@ Rip the whole daemon out — replace with:
 Kill it from `autostart.lua` too. Track the Hyprland-plugin/upstream
 issue for a size selector; this is the primary shrink path.
 
+### Lua port + the winning strategy (2026-08-31): DON'T move the menu — move the CURSOR
+
+The bash daemon (socat tail of `.socket2.sock` + a python size lookup) is **gone**;
+it's now an in-process Lua handler in `dotfiles/.config/hypr/autostart.lua`.
+`hl.on("window.open", function(w) … end)` fires on `openLate` (window fully mapped
+→ `w.at`/`w.size` settled) and delivers the window object. (Lua-API provenance:
+Hyprland v0.56.1 `src/config/lua/` — `LuaEventHandler.cpp` ~L94 pushes the window
+on `window.open`; `objects/LuaWindow.cpp` `__index` exposes `.at`/`.size`/`.class`;
+`bindings/LuaBindingsDispatchers.cpp` registers `hl.dsp.cursor.move({x,y})`
+absolute-global.) The script was removed; **the X11 sibling
+`keybase-popup-anchor-x11` stays** — it tails `i3-msg`, a different mechanism.
+
+**The whole "anchor/reposition the popup" premise turned out WRONG on Hyprland.**
+Recorded so nobody re-tries the dead ends (a long, painful session):
+
+- Under X11/i3 Electron dropped the popup **off-screen** (bottom, assuming a
+  bottom systray), so the daemon *moved* it flush-right — and that worked.
+- Under **Hyprland** Electron drops the popup **bottom-center of its own monitor**
+  — Keybase's MAIN-window monitor (here WS 10 / portrait), *regardless of which
+  bar's tray you click* — which is on-screen and fine. But its focus-grab **warps
+  the cursor to that monitor's CENTER**, nowhere near the menu, so the menu is
+  unusable: it blur-closes on the first mouse move.
+- Trying to move the popup made it strictly worse: `hl.dsp.window.move` slides the
+  surface out from under the pointer, Hyprland sends a Wayland **pointer-leave**,
+  and Electron treats that as a blur → **the menu vanishes instantly.** Cursor-
+  first-then-window, anchor-on-main-monitor, transform/offset-correct global
+  coords, a 120ms settle timer — all dead ends, all fighting the same two facts:
+  *Electron owns placement, and moving the surface kills it.*
+
+**The fix — stop fighting placement, fix the cursor.** Leave the menu exactly where
+Electron put it; warp the **cursor** to the menu's own center:
+
+    hl.on("window.open", function(w)
+      if not w or w.class ~= "Keybase" then return end
+      local sz, at = w.size, w.at
+      if not sz or not at or sz.x <= 0 or sz.x > 1000 then return end     -- popup vs main window
+      hl.dispatch(hl.dsp.cursor.move({ x = at.x + math.floor(sz.x/2),
+                                       y = at.y + math.floor(sz.y/2) }))   -- cursor -> menu center
+    end)
+
+`w.at`/`w.size` are the popup's live GLOBAL geometry at `openLate`; the warp lands
+the cursor in the menu (verified live: menu `at=2980,654 size=360x640` on
+HDMI-A-1 → cursor `3160,974`), and since we never touch the surface there's no
+pointer-leave, so it never blurs. Works from *either* monitor's tray icon. (The
+filter is still by width — the ~360-459 popup vs the ~2000+ main window — because
+windowrulev2 has no `size:` selector to tell them apart.)
+
+### Laptop parity (for laptop-Claude)
+
+This strategy is **machine-agnostic** — it reads the popup's *own* live position
+and size and drops the cursor in the middle. No monitor geometry, no `scale`, no
+`transform`, no `reserved`, no per-monitor offsets — so the entire class of
+laptop-regime risks that the *old geometry approach* worried about (scale 1.25,
+waybar's `reserved`, rotated/offset monitors) **simply does not apply.** It should
+just work on `git pull` + Hyprland reload.
+
+Two one-time chores on the laptop: `rm ~/.local/bin/keybase-popup-anchor` if it's
+a dangling symlink (script removed), and kill any daemon still running from a
+pre-pull session (autostart no longer launches it). Verify `hyprctl-live` is
+symlinked. The laptop comms design is still deferred, so Keybase may not even run
+there yet — the handler is a harmless no-op until a narrow `class=Keybase` window
+opens.
+
+The one thing that *could* differ across machines is the timing of Electron's own
+cursor-warp vs. `openLate`. If the cursor ever lands *outside* the menu on the
+laptop: log `w.at`/`w.size` and the computed center, click the tray, and compare
+`/tmp/kb-log` to where the menu visibly appears. If Electron re-warps the cursor
+*after* `openLate`, wrap the `cursor.move` in a short
+`hl.timer(fn, { timeout = 60, type = "oneshot" })` (guard with `pcall` — `w` may
+be gone if the popup already closed).
+
 ### Sibling reads
 
 - `docs/2026-08-28-quickshell-bar-plan.md` § Update 2026-08-29 — Keybase's
