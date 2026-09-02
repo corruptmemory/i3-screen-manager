@@ -130,3 +130,43 @@ The hand-built comms wall proves the primitives for a scripted **"Launch Chats"*
 now exist under Hyprland (the deferred item — an i3 `append_layout`-style
 auto-builder ported to a Wayland-native window-system branch). Brainstorm before
 building. See the project's Launch Chats memory.
+
+## 9. Follow-up (2026-09-02): `Super+left/right` boundary escape
+
+The original `focus_or_group` was binary: in a multi-window group it ALWAYS
+cycled tabs (wrapping), else directional focus. That trapped focus inside a group
+whenever a non-group window shared the row (e.g. a terminal beside the ws10
+Messages/WhatsApp group): you could focus INTO the group but never back OUT.
+i3's `focus left/right` escapes a tabbed container at its edge; ours didn't.
+
+Fixed by adding boundary detection with a **geometric neighbor test** (see
+`bindings.lua` `has_neighbor` / `focus_or_group`, and the CLAUDE.md Architecture
++ Common Issues entries):
+
+- In a group, interior -> cycle tab (`group.next/prev`).
+- At the edge in `dir` **with** a real adjacent tile on that side -> `focus({direction})`
+  escapes the group to it.
+- At the edge **without** a neighbor -> cycle (wrap) — preserves the isolated
+  comms-wall feel (a lone group still wraps its tabs).
+
+`current_index` is 1-based; `next`=idx+1/wrap, `prev`=idx-1/wrap; `members[]` is
+left->right tab order (v0.56.1 `LuaGroup.cpp` + `ConfigActions.cpp::changeGroupActive`
+-> `CGroup::moveCurrent`).
+
+**Key gotcha that shaped the implementation** (now also in CLAUDE.md Common
+Issues): Hyprland's `movefocus` does NOT reliably no-op when nothing is in the
+requested direction — probed live, `focus({direction="left"})` from a group with
+no left-neighbor grabbed the group *below* (off-axis), and whether it moved
+depended on focus history. So "dispatch focus, did the active window change?" is
+NOT a sound neighbor test; `has_neighbor` computes adjacency itself from
+`hl.get_workspace_windows(ws)` + `.at`/`.size` (vertical-overlap band for
+left/right). Escape is gated on that; `movefocus` is reliable once a real
+in-direction candidate exists.
+
+Verified live 2026-09-02 with synthesized `Super+arrow` keystrokes (ydotool)
+against the deployed bind, across a 9-scenario matrix (both ws10 groups + the
+terminal): escape, cycle, wrap, and enter-from-plain-window all correct. The
+bottom Discord/Keybase/Slack group (no vertically-overlapping neighbor) correctly
+keeps wrapping. Desktop live; **laptop inherits via `git pull` + reload** — the
+logic is geometry-driven and machine-agnostic, so no laptop-specific tuning is
+expected.
