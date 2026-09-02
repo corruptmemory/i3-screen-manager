@@ -136,8 +136,16 @@ building. See the project's Launch Chats memory.
 The original `focus_or_group` was binary: in a multi-window group it ALWAYS
 cycled tabs (wrapping), else directional focus. That trapped focus inside a group
 whenever a non-group window shared the row (e.g. a terminal beside the ws10
-Messages/WhatsApp group): you could focus INTO the group but never back OUT.
-i3's `focus left/right` escapes a tabbed container at its edge; ours didn't.
+Messages/WhatsApp group): you could focus INTO the group but never back OUT —
+**the real issue was simply that there was no keyboard escape to the terminal
+once a group was focused.** i3's `focus left/right` escapes a tabbed container at
+its edge; ours didn't.
+
+The result is **i3-inspired, not a precise i3 replica — "good enough for use"**
+(Jim's verdict). Known deviations from i3: an isolated group wraps its tabs at
+the edge (i3 doesn't wrap a tabbed container on `focus left/right`), and a plain
+window at the row's end wraps via raw `movefocus` (the off-axis fallback below).
+Neither matters in practice; the escape was the point.
 
 Fixed by adding boundary detection with a **geometric neighbor test** (see
 `bindings.lua` `has_neighbor` / `focus_or_group`, and the CLAUDE.md Architecture
