@@ -141,11 +141,16 @@ Messages/WhatsApp group): you could focus INTO the group but never back OUT —
 once a group was focused.** i3's `focus left/right` escapes a tabbed container at
 its edge; ours didn't.
 
-The result is **i3-inspired, not a precise i3 replica — "good enough for use"**
-(Jim's verdict). Known deviations from i3: an isolated group wraps its tabs at
-the edge (i3 doesn't wrap a tabbed container on `focus left/right`), and a plain
-window at the row's end wraps via raw `movefocus` (the off-axis fallback below).
-Neither matters in practice; the escape was the point.
+The result is **i3-inspired, and — verified live against a real i3 under the
+SAME setup (Jim A/B-tested 2026-09-02) — identical to i3 for practical
+purposes.** "Good enough" undersold it; it's on par with i3.
+
+(A first draft of this doc listed two "deviations from i3" — an isolated group
+wrapping its tabs at the edge, and a plain window at the row's end wrapping via
+raw `movefocus`. Those were asserted from *memory* of i3's `focus_wrapping`
+semantics and were never checked against a live i3. The A/B test contradicted
+them: same behavior where it counts. Kept here only as a note — a ground-truth
+test beats a remembered spec. The escape was the point, and it matches i3.)
 
 Fixed by adding boundary detection with a **geometric neighbor test** (see
 `bindings.lua` `has_neighbor` / `focus_or_group`, and the CLAUDE.md Architecture
