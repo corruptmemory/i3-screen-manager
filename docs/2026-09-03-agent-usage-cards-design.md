@@ -4,7 +4,7 @@
 AI-coding-agent usage — plan tier, rate-limit meters with reset countdowns, and
 token stats — for **Claude Code** and **Codex**, mined from Omarchy's
 `agents` panel but rebuilt on Jim's own Quickshell (`dotfiles/.config/quickshell/`)
-and his own script repo (`i3-screen-manager/bin/`).
+and his own script repo (`i3-screen-manager/`).
 
 **Status:** design approved in chat 2026-09-03 (pipeline option A). Spec →
 implementation plan → build.
@@ -47,7 +47,7 @@ re-deriving it.
 ## 2. Architecture — two layers, JSON-file seam
 
 ```
- i3-screen-manager/bin/                     dotfiles/.config/quickshell/
+ i3-screen-manager/                     dotfiles/.config/quickshell/
  ┌───────────────────────┐   JSON array    ┌──────────────────────────┐
  │ agent-usage           │ ─── stdout ───▶ │ Widgets/Agents.qml       │ bar item
  │  ├─ agent-usage-claude │  (+ writes      │  └─ Popout ──────────────┐
@@ -56,7 +56,7 @@ re-deriving it.
         (Python, RO)          state dir)
 ```
 
-- **Data layer** (`i3-screen-manager/bin/`, committed + symlinked from
+- **Data layer** (`i3-screen-manager/`, committed + symlinked from
   `~/.local/bin/` per repo convention):
   - `agent-usage-claude`, `agent-usage-codex` — vendored from Omarchy, adapted
     (rename; repoint cache dir; keep/replace `omarchy:` metadata comments with a
@@ -121,7 +121,7 @@ Top-level keys the panel reads (verified live):
 | `todayTotalTokens` | int | today token total |
 | `todayTokensByModel` | `{model: tokens}` | today per-model |
 | `recentDays` | `[{date, messageCount}]` | tokens-by-day bars — **`messageCount` is the day's token total** (legacy name), scaled to the busiest day |
-| `modelUsage` | `[{key: model, value: {inputTokens, outputTokens, cacheCreationInputTokens, cacheReadInputTokens}}]` | tokens-by-model bars, scaled to heaviest; input/output/cache split on hover |
+| `modelUsage` | `{model: {inputTokens, outputTokens, cacheCreationInputTokens, cacheReadInputTokens}}` (a **dict**, keyed by model) | tokens-by-model bars (top 4), each = the sum of that model's four token fields, scaled to the heaviest |
 | `totalPrompts`, `totalSessions`, `activeDays` | int | footer / lifetime |
 
 **`percent` is a 0..1 fraction** (confirmed against Omarchy `Panel.qml`):
@@ -201,9 +201,9 @@ Omarchy's `shell/plugins/agents/`.
 ## 9. File inventory
 
 Create:
-- `i3-screen-manager/bin/agent-usage` (bash orchestrator)
-- `i3-screen-manager/bin/agent-usage-claude` (vendored Python)
-- `i3-screen-manager/bin/agent-usage-codex` (vendored Python)
+- `i3-screen-manager/agent-usage` (bash orchestrator)
+- `i3-screen-manager/agent-usage-claude` (vendored Python)
+- `i3-screen-manager/agent-usage-codex` (vendored Python)
 - `dotfiles/.config/quickshell/Widgets/Agents.qml`
 - `dotfiles/.config/quickshell/Widgets/AgentsPanel.qml`
 - (optional) `dotfiles/.config/quickshell/assets/{claude,codex}.svg`

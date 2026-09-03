@@ -642,3 +642,31 @@ The widget self-hides for any agent not signed in there; no laptop-specific tuni
 - **Placeholder scan:** none - all steps carry real code. The one conditional is the PATH fallback in Task 3 Step 3 (bare `agent-usage` vs `$HOME/.local/bin/agent-usage`), resolved by an explicit check.
 - **Type consistency:** `records` is an array of the contract everywhere; `percent` treated as 0..1 in both `Agents.qml` (`maxPercent`) and `AgentsPanel.qml` (meters); `modelUsage` is `[{key,value:{…Tokens}}]` consumed by `topModels`/`modelTotal`; `recentDays[].messageCount` noted as tokens.
 - **Icon risk:** the robot glyph `9` is verified visually in Task 3 Step 4 (fallback noted inline).
+
+---
+
+## Post-build corrections (2026-09-03, EXECUTED)
+
+Built and shipped the same day. Three deviations from the plan-as-written, all
+caught during live verification (this is what the checkpoints are for):
+
+1. **Scripts live at the repo ROOT, not `bin/`.** This repo keeps its ~15
+   scripts at top level, symlinked from `~/.local/bin/`; there is no `bin/`
+   subdir. Every `i3-screen-manager/bin/X` above means repo-root `X`
+   (`~/projects/i3-screen-manager/agent-usage`, `.../agent-usage-claude`,
+   `.../agent-usage-codex`). The `~/.local/bin/` and `~/projects/omarchy/bin/`
+   paths were already correct and unchanged.
+2. **`modelUsage` is a dict `{model: {...Tokens}}`, not `[{key,value}]`.** The
+   spec/plan mis-stated the shape (an earlier probe's `jq to_entries` had
+   converted the dict, so it only looked like an array). `topModels` was fixed to
+   iterate object keys (and still handles the array shape defensively). This was
+   the one real bug the Task 4 visual check surfaced: model bars rendered empty
+   until the fix.
+3. **Model labels strip the `claude-` vendor tag** (`claude-opus-4-8` ->
+   `opus-4-8`) via a `shortModel()` helper; Codex's `gpt-5.6-sol` is left as-is.
+   A post-verification polish Jim chose.
+
+Vendored collectors verified live (Claude Max 20x, Codex pro); `agent-usage`
+resolved on the Quickshell session PATH with no fallback needed. Commits:
+i3-screen-manager `cdc43f3` (collectors), `9feba37` (orchestrator); dotfiles
+`7a176fe` (bar item), `6cca7fc` (cards).

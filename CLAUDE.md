@@ -462,6 +462,19 @@ Docs:
   every downstream `xrandr --output`). Full enumeration of Hyprland Lua events
   discovered along the way (probe an unknown name; the error lists all valid
   ones).
+- `docs/2026-09-03-agent-usage-cards-design.md` (+ `…-plan.md`) — **the
+  agent-usage cards** mined from Omarchy's `agents` panel and rebuilt on Jim's
+  own Quickshell: a self-hiding bar item (`󰚩 <max limit %>`) + a popout of
+  stacked per-agent cards (plan tier, rate-limit meters with reset countdowns,
+  today line, tokens-by-model bars) for **Claude Code** (Max 20x) and **Codex**
+  (pro). Two-layer JSON-file/stdout seam: read-only Python collectors vendored
+  from `basecamp/omarchy` (MIT) that hit Anthropic's OAuth usage endpoint /
+  Codex app-server RPC and scan local transcripts, a bash `agent-usage`
+  orchestrator, and QML (`Widgets/Agents.qml` + `AgentsPanel.qml`) modeled on
+  the existing `Weather` widget. **agy deferred** (Antigravity stores usage as
+  unschema'd protobuf-in-SQLite, no usage endpoint). Fleet-wide by construction;
+  the plan's Post-build corrections record the repo-root path + `modelUsage`-is-
+  a-dict fixes found during live verification.
 
 Hyprland and IceWM are both installed and toggleable from a TTY on each
 machine. PekWM was the lone exception to the "additive and reversible" rule —
@@ -497,6 +510,11 @@ Scripts, no build step. All committed in this repo and symlinked from
 
 **System maintenance & security:**
 - `aur-malware-check` — Read-only audit of installed packages against the June 2026 "Atomic" AUR supply-chain denylist. Name intersection by default; `--deep` adds a pacman-scriptlet + filesystem IOC scan, `--near` flags confusable look-alikes (you have the safe name, a malicious twin exists), `--all` widens to every installed package, `--list`/`--url` override the source. Downloads + caches the denylist (offline fallback); exit `0`/`1`/`2` = clean/exposed/error, so it drops into a login hook or `&&` chain.
+
+**Agent usage (Quickshell cards, 2026-09-03):**
+- `agent-usage-claude`, `agent-usage-codex` — **read-only Python collectors vendored from `basecamp/omarchy` (MIT)**, each printing ONE display-ready JSON usage record: authoritative rate limits (Claude via Anthropic's OAuth usage endpoint `api.anthropic.com/api/oauth/usage`, 5-hour + 7-day + Fable-weekly; Codex via the Codex app-server RPC) plus local token/prompt stats from `~/.claude/projects` / Codex session files. Adapted from upstream only by dropping the `omarchy/` cache-dir segment; honor `CLAUDE_CONFIG_DIR`/`CODEX_HOME` so they are machine-agnostic. `--limits-only` is the fast path (~1s); `--force` bypasses caches.
+- `agent-usage` — bash orchestrator: runs both collectors in parallel, validates each is JSON, prints a **merged JSON array** to stdout, and atomically caches each record to `~/.local/state/agent-usage/<id>.json`. Resolves its sibling collectors via `readlink` so it works through the `~/.local/bin` symlink. Consumed by the Quickshell `Agents` widget (which polls it like `Weather` polls `curl`) and available for any CLI/rofi reader.
+- **UI** (`dotfiles/.config/quickshell/`, fleet-wide via the whole-dir symlink): `Widgets/Agents.qml` is a self-hiding bar item (robot glyph + the highest limit `%` across ready agents, warn/crit at 0.75/0.9; hidden until an agent is `ready`), mounted in `shell.qml`'s shared right-slot cluster (NOT machine-gated). `Widgets/AgentsPanel.qml` is the popout: stacked per-agent cards (name + tier chip, a meter row per limit with reset countdown, a today line, top-4 tokens-by-model bars). `modelUsage` is a **dict** `{model: {…Tokens}}`; model labels strip the redundant `claude-` prefix. Design/plan + the record contract: `docs/2026-09-03-agent-usage-cards-design.md`. **agy deferred** (unschema'd protobuf-in-SQLite, no usage endpoint). Laptop rollout = the standard `~/.local/bin` symlink for the three scripts (QML is already inherited).
 
 ## Key Design Decisions
 
