@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# agent-usage - run the per-agent usage collectors, print a merged JSON array,
+# and cache each record to ~/.local/state/agent-usage/<id>.json. Data layer for
+# the Quickshell agents widget (Widgets/Agents.qml). Collectors are vendored
+# from basecamp/omarchy (MIT). See
+# docs/2026-09-03-agent-usage-cards-design.md.
+set -uo pipefail
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/agent-usage"
+mkdir -p "$STATE_DIR"
+BIN_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+
+agents=(claude codex)
+pass_args=("$@")   # e.g. --force / --limits-only
+
+run_one() {
+  local agent="$1" out="$2" rec dest tmp
+  if rec=$("$BIN_DIR/agent-usage-$agent" "${pass_args[@]}" 2>/dev/null) \
+       && [[ -n $rec ]] && jq -e . >/dev/null 2>&1 <<<"$rec"; then
+    printf '%s\n' "$rec" >"$out"
+    dest="$STATE_DIR/$agent.json"
+    tmp=$(mktemp "$STATE_DIR/.$agent.XXXXXX")
+    printf '%s\n' "$rec" >"$tmp" && mv "$tmp" "$dest"
+  else
+    : >"$out"   # empty file marks a failed/absent collector
+  fi
+}
+
+tmps=() pids=()
+for agent in "${agents[@]}"; do
+  tmp=$(mktemp); tmps+=("$tmp")
+  run_one "$agent" "$tmp" &
+  pids+=("$!")
+done
+for pid in "${pids[@]}"; do wait "$pid"; done
+
+# Merge non-empty records into a JSON array (agents[] order); [] if none.
+nonempty=()
+for t in "${tmps[@]}"; do [[ -s $t ]] && nonempty+=("$t"); done
+if ((${#nonempty[@]})); then jq -s '.' "${nonempty[@]}"; else echo '[]'; fi
+rm -f "${tmps[@]}"
