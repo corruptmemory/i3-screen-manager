@@ -5,3 +5,6 @@
 # session state — not part of the repo's shared config)
 *.sublime-project
 *.sublime-workspace
+
+# Python bytecode (from py_compile sanity checks)
+__pycache__/
