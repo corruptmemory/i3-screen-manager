@@ -622,17 +622,22 @@ Claude-Session: https://claude.ai/code/session_01123dqZCk5QF17sk2hYUqh3
 EOF
 ```
 
-- [ ] **Step 4: Laptop rollout (machine-local, do on `nomad-artix` when convenient)**
+- [x] **Step 4: Laptop rollout (machine-local — DONE on `nomad-artix` 2026-09-03)**
 
 Not part of the desktop build; recorded here so it is not lost. On the laptop (directly or over SSH), after `git pull` in both repos:
 ```bash
 for s in agent-usage agent-usage-claude agent-usage-codex; do
-  ln -sf ~/projects/i3-screen-manager/bin/$s ~/.local/bin/$s
+  ln -sf ~/projects/i3-screen-manager/$s ~/.local/bin/$s   # repo ROOT — there is no bin/ (see Post-build corrections)
 done
 agent-usage | jq -e 'type=="array"'          # collectors work on the laptop
 qs kill; qs -p ~/.config/quickshell          # QML already inherited via the symlink
 ```
 The widget self-hides for any agent not signed in there; no laptop-specific tuning.
+Laptop result (2026-09-03): both collectors `ready` through the symlinks on the first
+run (~4.5 s cold, Python 3.14 stdlib only). One gotcha worth knowing: if Quickshell
+was (re)started *before* the symlinks exist, its first poll logs
+`WARN: Process failed to start ... Command: QList("agent-usage")` and the item stays
+hidden until the 10-min timer re-polls — restart the bar (or wait) after symlinking.
 
 ---
 
