@@ -21,7 +21,7 @@
 # only the small floating popup is re-anchored.
 #
 # Hyprland uses a separate Lua window.open callback in dotfiles;
-# this watcher uses `i3-msg -t subscribe`. See CLAUDE.md#x11-and-input
+# this watcher uses `i3-msg -t subscribe`. See docs/agent-guide/x11-input.md
 # for the backend-specific popup behavior.
 #
 # Behaviour: on each Keybase window that is FLOATING and <= POPUP_MAX_W wide

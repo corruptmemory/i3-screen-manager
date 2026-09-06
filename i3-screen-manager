@@ -70,7 +70,7 @@ is_wayland() {
 # hyprctl call through `hyprctl-live`, which rediscovers the live signature on
 # each invocation. In-session terminals (autostart execs, keybinds) also work
 # fine; hyprctl-live queries `hyprctl instances -j` on each invocation.
-# See CLAUDE.md#hyprland-and-quickshell for session discovery.
+# See docs/agent-guide/hyprland.md for session discovery.
 hyprctl() { command hyprctl-live "$@"; }
 
 # ============================================================================

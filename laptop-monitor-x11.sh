@@ -21,7 +21,7 @@
 #   `i3-screen-rofi → Disconnect`.
 #
 # No automatic acpid wiring is supplied by this repo. See
-#   CLAUDE.md#displays for lid handling and current constraints.
+#   docs/agent-guide/displays.md for lid handling and current constraints.
 
 PIDFILE="/tmp/i3-screen-manager-inhibit.pid"
 INTERNAL="eDP-1"

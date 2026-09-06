@@ -3,7 +3,7 @@
 # Sourced (not executed) by scripts in this repo AND in the dotfiles repo.
 # Machine-local install is a symlink at $HOME/.local/lib/sh/require.sh
 # pointing at this file. See README.md#installation for the install step
-# and CLAUDE.md#x11-and-input for dependency diagnostics.
+# and docs/agent-guide/x11-input.md for dependency diagnostics.
 #
 # Sourcing pattern (verbatim in every consumer script):
 #

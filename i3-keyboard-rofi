@@ -13,7 +13,7 @@ set -euo pipefail
 
 # Silent-failure guard: shared _require helper. See
 # ~/.local/lib/sh/require.sh (symlinked from i3-screen-manager/lib/require.sh)
-# and CLAUDE.md#x11-and-input for dependency diagnostics.
+# and docs/agent-guide/x11-input.md for dependency diagnostics.
 . "$HOME/.local/lib/sh/require.sh"
 _require rofi
 
