@@ -1,607 +1,674 @@
 # i3-screen-manager
 
-Bash scripts for managing external displays, mouse settings, lid/clamshell behavior,
-keyboard layout, and Hyprland session bring-up. Project originated as an i3/X11
-toolkit; both machines migrated to Hyprland/Wayland in 2026-Q2. Script names
-retain the `i3-` prefix deliberately — they're invoked everywhere by muscle
-memory and from rofi menus, so changing the names would cost more than the
-labels are worth.
+Shared instructions for Codex and Claude Code. `AGENTS.md` is a relative symlink
+to this file; edit `CLAUDE.md` to update both.
 
-## Environment
+## Scope and Ownership
 
-- **Distro:** Artix Linux (OpenRC, both machines). Both were originally Arch.
-- **Compositor:** Hyprland on Wayland. Originally i3 on X11.
-- **Package manager:** `yay` (AUR wrapper around pacman). Both Arch and Artix packages work.
-- **Privileges:** `sudo` is available from the user account.
-- **Machines:** `nomad-artix` (ThinkPad X1 Extreme Gen 5 laptop), `godlike-artix` (desktop).
+This is an Artix Linux/OpenRC desktop toolkit: shell scripts, two Python usage
+collectors, and their operating documentation. There is no application build.
+The `i3-` command names are public interfaces used by keybindings and menus.
+Display and keyboard scripts have both Hyprland/Wayland and X11 branches.
 
-## Migration history
+The companion `~/projects/dotfiles` repository owns desktop configuration and
+Quickshell UI. Paths written as `dotfiles/...` below refer to that sibling
+repository, not to a directory in this one. Read its instructions before editing
+it. A change to a shared contract may need matching changes in both repositories.
 
-The big migration runbooks live under `docs/`. Read them when working on
-anything compositor- or tooling-adjacent:
+| Machine | Configured role |
+|---------|-----------------|
+| `nomad-artix` | ThinkPad X1 Extreme Gen 5, Intel/NVIDIA graphics, dynamic docking, battery/backlight, OpenRC-managed user audio |
+| `godlike-artix` | AMD desktop, fixed landscape plus portrait monitors, audio launched by the desktop session |
 
-- `docs/hyprland-migration.md` — initial i3/X11 → Hyprland/Wayland migration
-  (laptop, on Artix). Phase-by-phase. Captures startup, env, NVIDIA hybrid,
-  Waybar replacement of Polybar, the i3-screen-manager rewrite from xrandr to
-  hyprctl/wlr-randr.
-- `docs/desktop-artix-hyprland-migration.md` — desktop equivalent (pure AMD,
-  no NVIDIA, no laptop-specific concerns).
-- `docs/hyprland-lua-migration.md` — Hyprland 0.55+ hyprlang → Lua config
-  migration. Both machines on Lua now. Includes Hyprland-side gotchas and the
-  open waybar #5008 regression.
-- `docs/artix-laptop-setup.md` — first-boot install/setup notes for the laptop.
-- `docs/hyprland-first-boot.md` — Hyprland-specific first-boot checklist.
-- `docs/claude-code-aur-to-native-migration.md` — switching Claude Code itself
-  off the AUR `claude-code` package onto Anthropic's native installer
-  (auto-updates, no more AUR exposure). **Done on both machines** —
-  `godlike-artix` 2026-06-15, `nomad-artix` 2026-06-18. Key gotcha: the native
-  install must be finalized from a clean terminal, *not* from inside a Claude
-  Code session. The laptop run uncovered one positive finding: recent Claude
-  versions (≥ 2.1.181) self-correct the `.desktop` deep-link handler during
-  `claude install`, so the manual step 4 is now a no-op verification.
-- `docs/codex-aur-to-native-migration.md` — the same AUR→native swap for the
-  Codex CLI: off `openai-codex-bin` onto OpenAI's official installer
-  (`curl -fsSL https://chatgpt.com/codex/install.sh | sh`, self-updating
-  standalone layout under `~/.codex/packages/standalone/`). **Done on both
-  machines** — `godlike-artix` 2026-06-19, `nomad-artix` 2026-06-27. Unlike
-  the Claude Code swap, this one needs **no** clean-terminal hand-off — the Codex
-  installer has no nested-session detection, so it can be run from inside a Claude
-  Code session.
-- `docs/brave-to-brave-origin-migration.md` — switching the daily browser off
-  `brave-bin` (CLI `brave`) onto the paid, stripped **Brave Origin**
-  (`brave-origin-bin`, CLI `brave-origin`). Done on `godlike-artix` 2026-06-23;
-  **`nomad-artix` (laptop) still pending** — runbook is written for it. Key
-  gotcha: Brave Origin's main window WM_CLASS is `brave-origin`/`Brave-origin`
-  (was `brave-browser`/`Brave-browser`), while its inner-Chromium helper windows
-  still report `brave`/`Brave` — so the WM window-rules and IceWM `winoptions`
-  focus-fix had to be repointed. Most config is inherited via `git pull`
-  (dotfiles `974c91f`); the profile-slot surgery, default-browser/mimeapps, and
-  native-messaging-host copy (marksnip) are machine-local. WebMCP confirmed
-  present in Origin 149.
-- `docs/kitty-to-ghostty-terminal-swap.md` — making **Ghostty** the terminal on
-  `Super+Return` fleet-wide, plus aligning its palette to Kitty's. Desktop DONE
-  2026-07-19; **laptop config committed but NOT deployed** (Ghostty is
-  copy-deployed, so `git pull` alone does nothing — see the runbook §4). Kitty
-  stays installed; the swap is a one-line revert. Two gotchas worth knowing
-  before touching either terminal: Ghostty's `class` must be a valid GTK
-  application ID (**must contain a dot**) or it's silently ignored and the
-  floating terminal stops matching its float rule — so Hyprland uses `--class=`
-  while IceWM must use `--x11-instance-name=` (dots are `winoptions`' own field
-  separator); and Ghostty **drops malformed config lines silently**, including
-  any line with a *trailing* comment, so `ghostty +show-config` is the only
-  ground truth.
+Both Hyprland profiles select Quickshell and enable the tensaku screenshot
+bindings. X11 i3/IceWM configurations also exist. Inspect the active session,
+installed tools, and resolved config paths before making machine-specific
+claims; repository configuration alone does not establish runtime state.
 
-**IceWM is now the only active X11 WM on both machines.** PekWM was tried on
-the desktop and **declared over** (verdict: PekWM oddities read as bugs; IceWM
-noticeably more responsive and stable). On **2026-06-18** PekWM was
-**uninstalled and all its config artifacts removed** — the `pekwm` package,
-`start-pekwm`, `pekwm-send-to-ws`, `.pekwm-desktop/`,
-`polybar/config-pekwm.ini`, and `.xinitrc-desktop` are all gone. It was never
-replicated to the laptop. The full WM rotation:
+## Working Rules
 
-- **`godlike-artix` (desktop):** Hyprland (Wayland) · **i3 (X11, provisional complete success 2026-07-20)** · IceWM (X11) · ~~FVWM3~~ (X11, **rejected 2026-07-20 — provisional failure**)
-- **`nomad-artix` (laptop):** Hyprland (Wayland) · IceWM (X11, live) · **i3 (X11, scaffolded 2026-07-21 — pending first TTY-boot validation)**
+- Read the affected scripts and their consumers before changing behavior.
+  Preserve command names, arguments, output formats, and machine distinctions
+  unless the task calls for changing those interfaces.
+- Scripts are installed through `~/.local/bin` symlinks. Rofi scripts source
+  `lib/require.sh` through `~/.local/lib/sh/require.sh`; use `_require` for
+  non-universal commands so missing tools produce visible diagnostics.
+- Resolve symlinks before editing deployed files. Preserve machine-local
+  settings and understand whether a program rewrites its own config.
+- Use `hyprctl-live` for compositor queries from agent or other long-lived
+  shells. Preserve a usable display when changing docking or lid behavior.
+- Treat Bash pipelines and expected command failures deliberately under
+  `set -euo pipefail`. Keep diagnostics on stderr where stdout is an interface.
+- Retain third-party copyright and license notices in vendored code.
+- Documentation describes implemented behavior, constraints, and verification.
+  Update the relevant fact in place when behavior changes. Use Git for history;
+  do not append migration narratives, session logs, or completed task lists.
+- Give each detailed fact one primary documentation home. Keep known defects
+  separate from intended behavior, and verify discrepancies against code or
+  the active machine rather than preserving contradictory claims.
 
-**FVWM3 was tried and rejected on 2026-07-20**, the same day it was built. It
-was chosen as the only stacking X11 WM with genuinely independent per-monitor
-workspaces, and that part *worked* — the trial died on **window placement
-quirks** arriving faster than they could be fixed (Discord restoring itself to a
-remembered monitor; maximise-then-unmaximise teleporting a window back to the
-previous monitor; `xdg-open` silently stealing focus so the next window command
-hit the wrong window). Same failure mode that ended PekWM: not a missing
-feature, an accumulation of behaviours you have to hold in your head.
+## Verification
 
-Marked **provisional** because the diagnosis is incomplete — at least one of the
-three looks like a bug in the config rather than in fvwm. Config is left in
-place and is entirely additive; nothing needs undoing. See
-`docs/2026-07-20-fvwm3-x11-setup.md` §8.
+Run `bash -n` on changed Bash scripts and `sh -n` on POSIX shell scripts.
+Parse changed Python collectors without executing account probes merely for
+syntax validation. This repository has no automated runtime test suite.
+Use focused behavioral checks described in the relevant section below; report
+which live checks were actually performed.
 
-**Direction after this: back to i3** — accepting a tiling paradigm to get the
-per-monitor workspace model that the stacking world could not deliver reliably.
+Display commands, compositor reloads, bar restarts, package installs, and the
+VM setup script affect the running machine. A documentation-only change needs
+documentation checks, not a live desktop reconfiguration. The separate
+`dotfiles/.config/hypr/tests/run.sh` exercises Lua configuration with a stub;
+it does not establish real multi-monitor behavior.
 
-**i3 was rebuilt and adopted the same day, 2026-07-20 — "provisional complete
-success."** Verdict: *"most things just work."* The tiling paradigm that was
-feared turned out to be the cure, not the compromise — deterministic window
-placement is exactly what the stacking WMs lacked. Standout: an auto-building
-comms stack on workspace 10 (Messages+WhatsApp / Discord+Slack+Keybase) via i3's
-`append_layout` + swallow criteria, reachable by `Super+F1..F5`, with a "Launch
-Chats" from-scratch rebuild. See `docs/2026-07-20-i3-x11-setup.md`. Only
-"provisional" pending daily-use time; nothing is broken.
+## Displays
 
-Docs:
+Load this section for layout, docking, scaling, lid handling, monitor discovery,
+or workspace-placement changes. Sources: `i3-screen-manager`, `i3-screen-rofi`,
+`laptop-monitor.sh`, `laptop-monitor-x11.sh`, `hyprland-clamshell-restore`, and
+dotfiles' `hypr/monitors.lua`, `hypr/machine.lua`, `hypr/autostart.lua`, and
+`quickshell/shell.qml` under `.config/`.
 
-- `docs/2026-06-15-x11-wm-research.md` — the survey of living X11 WMs that led
-  to trying PekWM, then settling on IceWM.
-- `docs/2026-06-15-pekwm-x11-setup.md` (+ `…-plan.md`) — PekWM-on-XLibre on
-  `godlike-artix`. **Trial concluded; PekWM uninstalled and all config removed
-  2026-06-18.** Docs retained as the historical record only — the config they
-  reference (`.pekwm-desktop/`, `polybar/config-pekwm.ini`, `.xinitrc-desktop`,
-  `.local/bin/start-pekwm`) no longer exists in the repo.
-- `docs/2026-06-16-icewm-x11-setup.md` (+ `…-plan.md`) — **IceWM 4.0-on-XLibre
-  on the desktop** (`start-icewm`). Native taskbar (no Polybar), `icesh` control
-  CLI. Border quirk: IceWM color-computes a Win95 bevel on every `Look`, so
-  a uniform border isn't achievable — settled on 2px beveled cyan/slate.
-  Config: `dotfiles/.icewm/`, `dotfiles/.xinitrc-icewm`,
-  `dotfiles/.local/bin/start-icewm`.
-- `docs/2026-06-17-icewm-laptop-setup.md` — **IceWM on the laptop**
-  (`start-icewm-laptop`). Mirrors the desktop setup with hardware deltas:
-  NVIDIA PRIME via `xorg.conf.d/10-nvidia-prime.conf` (Intel modesetting
-  primary, NVIDIA secondary, externals bound via
-  `xrandr --setprovideroutputsource`), touchpad config, brightness keys,
-  battery widget. Config: `dotfiles/.icewm-laptop/`,
-  `dotfiles/.xinitrc-icewm-laptop`, `dotfiles/.local/bin/start-icewm-laptop`.
-  IceWM picks up the laptop config via `ICEWM_PRIVCFG` (no `~/.icewm`
-  symlink needed).
-- `docs/2026-07-20-i3-x11-setup.md` (+ `…-i3-desktop-setup-plan.md` design,
-  `…-i3-implementation-steps.md` build) — **i3 4.25.1 on the desktop: rebuilt and
-  adopted 2026-07-20, "provisional complete success."** The return to i3 after
-  FVWM3 was rejected; tiling turned out to be the cure ("most things just work"),
-  not the compromise it was feared to be. Read the outcome doc for: the measured
-  `exec` vs `exec_always` truth (`exec_always` re-runs on *restart*, NOT reload —
-  the common belief is wrong); the Electron window-identity gotchas (Discord and
-  Slack present a lowercase `res_class` main window with capital-cased tray
-  helpers, so match case-insensitively; Brave PWAs share class `Brave-origin` and
-  must be matched by `instance`); the workspace-10 comms stack built from
-  `append_layout` + swallow criteria (`i3-chat-layout`, `i3-chat-rebuild` / "Launch
-  Chats", `Super+F1..F5`); and that `~/.config` copy-deployment drift was found
-  THREE times in one build (i3, rofi, polybar) — symlinking is the structural fix.
-  Unlike FVWM3, i3 ships `i3 -C` to validate a config without launching it.
-- `docs/2026-07-21-i3-laptop-setup.md` — **i3 on the laptop, scaffolded
-  2026-07-21** (pending first TTY-boot validation). Sibling of the desktop's
-  i3 setup with the SKIP list applied for a dynamic-external-monitor life:
-  no `workspace N output` fixed pins, single-bar polybar with a battery
-  module (drops `cmos-battery` which is desktop-it87-only), brightness binds
-  added, no audio-stack launches in xinitrc (OpenRC user services own that
-  on the laptop), no `xdtpaste` bind (desktop-local script), and no
-  workspace-10 chat-wall auto-build (deferred while the user cooks on an
-  alternate design). Reuses the IceWM-laptop infrastructure verbatim:
-  `/etc/X11/xorg.conf.d/{10-nvidia-prime,40-touchpad}.conf`, HiDPI recipe,
-  `i3-screen-manager` X11 backend, `flameshot-laptop-{wayland,x11}.ini`
-  symlinks. Also lands the Ghostty user-level `.desktop` shadow that
-  prevents `--gtk-single-instance=true` re-entering via D-Bus activation.
-  Config: `dotfiles/.config/i3/config-laptop`,
-  `dotfiles/.local/bin/start-i3-laptop`, `dotfiles/.xinitrc-i3-laptop`,
-  `dotfiles/.config/polybar/config-i3-laptop.ini`.
-- `docs/2026-07-20-fvwm3-x11-setup.md` (+ `…-desktop-setup-plan.md` design,
-  `…-fvwm3-implementation-steps.md` build) — **FVWM3 on the desktop: built and
-  REJECTED the same day, 2026-07-20 (provisional failure — see §8).** Chosen as
-  the only stacking X11 WM with independent per-monitor workspaces
-  (`DesktopConfiguration per-monitor`), which did work; it died on window
-  placement quirks. Docs retained because the diagnosis is reusable and the
-  config is still on disk. Read the outcome
-  doc before touching it: the single biggest trap is that **fvwm3's user
-  directory is `~/.fvwm`, not `~/.fvwm3`**, and the `Read` failures that causes
-  are *silent*, so the first boot came up as stock 1992 FVWM with no error
-  anywhere. Also records: `CurrentScreen` is NOT monitor-scoped (it is a synonym
-  for `CurrentPageAnyDesk`; `Screen <name>` is the real one); `StartFunction`
-  runs on every restart so daemons belong in `InitFunction`; polybar's
-  EWMH-correct screen-absolute strut is applied by fvwm as monitor-relative,
-  which broke maximise on the y-offset monitor; and **Xephyr cannot validate any
-  of this** — it exposes a single RandR output, so per-monitor behaviour is
-  untestable in a nested server.
-- `docs/2026-07-20-desktop-dual-monitor-portrait.md` — **desktop went dual-head
-  2026-07-19**: ASUS PA248QV (1920x1200) pivoted to **portrait** on the right of
-  the PB328 (2560x1440), both native, vertical centers aligned (the *shorter*
-  panel carries the y-offset — X11 has no negative screen coordinates). Live and
-  verified under IceWM/X11; the Hyprland `transform` **direction** is written but
-  untested (if the panel comes up upside-down on the next Wayland boot, it's `3`,
-  not `1`). Also covers the `HDMI-1`(X11)/`HDMI-A-1`(DRM/Wayland) name split, a
-  defused Hyprland catch-all that used to force 2560x1440 onto *every* output,
-  and — separately from the layout — the research result that **IceWM cannot give
-  a monitor its own workspaces or its own bar**: `_NET_CURRENT_DESKTOP` is a
-  single global scalar, so it's architectural, and swapping in polybar fixes the
-  bar but provably cannot fix the workspaces.
-- `docs/2026-07-05-xlibre-versioning-artix-packaging.md` — **XLibre version
-  scheme + Artix packaging.** Why `world` ships `xlibre-xserver 25.0.0.x` while
-  upstream "stable" is `25.1.x`: they're *parallel branches*, and Artix stages the
-  whole `25.1.x` line in `world-gremlins` pending a normal soak+promote (not lag,
-  not a broken pin). Includes the verified ABI reality (both shipped pkgs provide
-  `VIDEODRV 28.0`), the security gap (`world`'s `25.0.0.23` predates the 2026-06-05
-  hardening — Artix skipped `25.0.0.24`), and a Watch List for the
-  `world-gremlins → world` promotion. Ties into the `25.0.0.21` vblank regression
-  under Common Issues → "X11 historical". **STATUS: SUPERSEDED by the 2026-08-30
-  vendor-repo migration doc below** — Artix dropped XLibre 2026-08-27; the
-  `world`/`world-gremlins` promotion mechanics no longer control what XLibre we run.
-  Branch model + ABI reasoning in the pre-Watch-List body remain factually correct.
-- `docs/2026-08-30-wayland-x-critique-framing.md` — **the reusable
-  Wayland-vs-X framing** the user has been developing across sessions on
-  multiple machines, now captured as thesis-form documentation so future
-  Claude Code sessions don't re-derive it. Ten sections indexed by grep-friendly
-  headers: XLibre's actual 2026 technical envelope; the self-fulfilling
-  narrative loop + FLOSS "rewrite outruns improve" coalition asymmetry;
-  coordination-vs-technical distinction (Chromium/Brave gesture absence is
-  coordination, not X limitation); security-by-default calibration (threat
-  model + POLA operational cost); Wayland protocol concept-count (6 vs X's
-  2 vs Win32's 2) empirically refuted by `~/projects/jai-wayland`;
-  design-by-XML anti-pattern; IoC / libwayland-owns-main framework critique
-  (`wl_event_loop` as the tell); Casey Muratori's 1968 *Datamation*
-  generational-reinvention thesis (Casey's Standup appearance 2026-08-29);
-  "recurring mistakes to not make"; "when this framing applies" trigger-terms
-  list. Companion open-brain captures (thoughts sibling to #346) publish
-  bite-sized versions of each thesis for cross-machine retrieval.
-- `docs/2026-08-30-xlibre-artix-drop-and-vendor-repo-migration.md` — **the "we
-  stay on XLibre" migration** after Artix's 2026-08-27 drop. XLibre spun up their
-  own signed pacman binary repo (`packages.xlibre.net/arch/{stable,oldstable,beta}`,
-  managed by the `xlibre-arch` GitHub org, successor to the archived
-  `X11Libre/*-arch-based` repos). Rung-2 install-path (vendor's own signed distribution),
-  NOT AUR — signing key `0C92313001CFCA27627B9098B97F7C613F359424` (short ID
-  `B97F7C613F359424`), `--lsign-key`'d into the local pacman keyring, external
-  `.sig` files per package verified by pacman on every install. `[xlibre-stable]`
-  above `[world]` in `/etc/pacman.conf` guarantees repo priority; `IgnorePkg = xorg-server xorg-server-common`
-  is a belt-and-suspenders belt in `[options]`. **`nomad-artix` + `godlike-artix`
-  BOTH DONE 2026-08-30** — desktop was driven remotely from the laptop over SSH
-  (pure TTY on the desktop). Input drivers now vendor-packaged (`xlibre-input-libinput
-  25.0.1-4` on both; `xlibre-input-evdev` laptop-only); xserver + common still
-  Artix-packaged at 25.1.9-1 on both (same version means -Syu didn't touch them;
-  repo priority makes the flip automatic on the next real version bump). Read the
-  doc for trust-bootstrap steps, rollback recipes, and the post-cutover 5-item
-  watch-list. **Non-migration follow-ups surfaced by the desktop -Syu (both machines
-  eventually):** `tar 1.35-5` moved backup/restore helpers to a separate
-  `tar-scripts` package; `tpm2-tss 4.2.0-2` shipped two `.pacnew` files under
-  `/etc/tpm2-tss/fapi-profiles/`.
-- `docs/2026-07-29-starling-desktop-investigation.md` — **code-level teardown of
-  Starling** (`starling.build`, the AI-written desktop) + a broader X11/Wayland
-  "structural vs folklore" audit. Not a WM-setup doc — a reference for revisiting
-  Starling and for the architecture arguments it surfaced. Headlines: Starling's
-  X11 is a **bespoke ~5.2K-line in-process C++ X server, NOT Xwayland** (compiled
-  into the same binary as its Wayland compositor; both feed Flutter's texture
-  registry; real Xwayland kept as the escape hatch for WeChat) — **reconstructed
-  from AI training exposure, not lifted** (zero X.Org tokens; NOTICE attributes it
-  to no-one; grown gap-by-gap per client). It runs **Flutter's *macOS* embedder on
-  Linux** across five languages, so Swift is inherited toll, not merit. Also a
-  **verified XLibre finding** (slots beside the XLibre doc above): XLibre ships
-  **TearFree by default + optional atomic modesetting + VariableRefresh**
-  (`README` + `modesetting.man`), and X has had every-frame-perfect presentation
-  since ~2013 via **Present + DRI3** — so "X structurally can't do tear-free/atomic
-  presentation" is folklore. The one real architectural Wayland win that survives
-  the audit is **client isolation** (X's ambient authority; portals re-grant it).
-  Closes with the **"where you put the seam" thesis** (draw-ops vs buffers vs
-  semantics) and why remote-dev tooling makes the X-vs-Wayland fight orthogonal.
-- `docs/2026-07-29-rofi-emoji-picker-fix.md` — **`Super+Control+space` emoji picker
-  root-cause + fix.** It showed *"Do not launch rofi from inside rofi."* instead of
-  an emoji menu: the `emoji` "modi" was a launcher script written for the (AUR-only,
-  off-limits) **rofi-emoji plugin**, and rofi 2.0 **auto-discovers
-  `~/.config/rofi/scripts/<name>` as a script modi**, so `-modi emoji` ran that
-  script, which re-ran rofi → the `ROFI_OUTSIDE` nested-launch guard fired. Diagnosed
-  by `strace -f -e trace=execve` on the exec chain. Replaced with a self-contained
-  `rofi -dmenu` picker (`scripts/emoji` → `xclip`) over an offline-generated
-  1419-entry `emoji.txt` (`gen-emoji.py`, from texlive's UCD `emoji-data.txt`) with a
-  searchable list theme. **The laptop needs the redeploy in §5** — `~/.config/rofi`
-  is copy-deployed on both machines, so `git pull` alone won't move the rofi files.
-- `docs/2026-08-03-dbus-reload-hook-openrc-desync.md` — **pacman `Invalid
-  operation 'reload'` post-transaction error** = an Artix packaging desync, not a
-  machine problem: `dbus-openrc 20260324-1`'s `dbus-reload.hook` calls
-  `openrc-hook reload dbus`, but `openrc 0.63.3-2`'s dispatcher only implements
-  `dbus_reload` (no generic `reload` verb), so it exits 1. Harmless
-  (PostTransaction; only skips a live dbus policy reload). Fixed with a
-  **TEMPORARY** `/etc/pacman.d/hooks/dbus-reload.hook` override that calls
-  `dbus_reload`. **Laptop (`nomad-artix`) needs the same override** (§5).
-  Diagnosis + fix confirmed on the Artix forum, where an upstream `dbus-openrc`
-  patch is already posted + maintainer-liked (§7) — so no bug to file (Gitea
-  issues closed), just watch for the rebuild. Pinned to `dbus-openrc
-  20260324-1`; **re-evaluate/remove on any `dbus-openrc` bump, or by 2026-09-03**
-  — the doc's §6 Watch List has the check-and-remove steps.
-- `docs/2026-08-10-aur-supply-chain-assessment.md` — **decision-grade
-  assessment of AUR supply-chain risk (Feb–Aug 2026)**, the security-research
-  companion to the `aur-malware-check` script. Primary-source-first (official
-  Arch news, `aur-general`/`aur-requests`, the `aurweb` GitLab MRs/issues) plus
-  trusted vendors (Truesec, Sonatype, BleepingComputer, Phoronix). Timeline of
-  the 2026 waves (May `@onionmail` crypto-wallet precursor → the June
-  `atomic-lockfile`/`js-digest` "Atomic Arch" campaign, ~400–1500 pkgs, Rust
-  infostealer + optional root-only eBPF rootkit → the late-July `openconnect-sso`
-  relapse), the **shipped-vs-proposed mitigation ledger** (aurweb `!914`
-  PM-reviewed adoption merged 2026-07-31; adoption+pushes frozen 2026-07-30/08-01;
-  2FA `#514` still open since 2024), and the verdict: **keep Arch, treat the AUR
-  as hostile-by-default — build in a clean chroot, read every `PKGBUILD` diff,
-  distrust freshly-adopted orphans.** Built via a multi-lane research pass
-  (Codex hit the GitLab API for the ledger; Perplexity + `marksnip` for primary
-  timeline/quotes); the doc records that the `agy` (Google-grounded) lane
-  fabricated specifics, so nothing from it is load-bearing. Published Artifact:
-  <https://claude.ai/code/artifact/1e67b264-50b4-4755-8bd2-2830ac2f614e>.
-- `docs/install-paths-cheatsheet.md` — **decision tree for "AUR is sus, where
-  should I install X from instead?"** Six-rung table (Artix repos → vendor
-  native installer → pipx → docker → local PKGBUILD fork → AUR-with-audit)
-  with the trust story, update model, uninstall model, and best-fit case for
-  each; the trap classes that look like a rung but aren't (`sudo pip install`,
-  `sudo npm install -g`, random Docker Hub images); worked examples that
-  shaped the doc (Claude Code + Codex + Brave Origin at rung 2, Odin at
-  rung 5, hypothetical Semgrep re-install at rung 3). Written after the
-  semgrep-bin uninstall pass on `nomad-artix` 2026-08-11 which surfaced that
-  the AUR lockdown wasn't just about Semgrep — every new install now needs a
-  decision, and the decision was worth capturing. **Updated 2026-08-13** with a
-  *Reclaiming an AUR-graduate* section: when `yay` flags an installed foreign
-  package as "not in AUR," it usually *graduated to the official repos* — the fix
-  is a rung-1 reclaim (enable the Arch `extra` overlay, which ships disabled on
-  Artix, then `pacman -Si`-scan the whole `pacman -Qm` list and reinstall the
-  hits signed), NOT an `odin-git-local`-style fork. Worked on `godlike-artix`
-  2026-08-13 for `git-delta`/`azure-cli`/`rbw`; **`nomad-artix` still needs the
-  same pass** (machine-local — `/etc/pacman.conf` isn't in the dotfiles repo).
-- `docs/2026-08-13-keybase-tray-popup-i3.md` — **Keybase tray-icon popup lands
-  off-screen (bottom-right) under i3 and can't be moused into.** Root cause:
-  Keybase's Electron tray popup is a fixed-size 360x640 window that Electron
-  anchors to the *bottom* of the screen (assuming a bottom systray) while polybar
-  is at the *top*; being far from the pointer it blur-hides before you reach it.
-  A static `for_window` rule (title `"^Keybase$"` to try to exclude the main
-  `"Keybase: Chat"` window) *seemed* like the fix, but it had a launch-race: the
-  MAIN window is transiently titled exactly `"Keybase"` at map time before
-  Electron renames it, so the static rule caught the main window too and
-  mis-placed it. The definitive fix on both machines is now the size-filtering
-  `keybase-popup-anchor-x11` watcher (an `i3-msg -t subscribe` daemon that only
-  moves windows ≤1000px wide — main window is ~2054), launched via `exec_always`
-  from each i3 config with a `BAR=` env override for polybar height. **Both
-  machines DONE 2026-08-30** — desktop `godlike-artix` (dotfiles `db7445f`,
-  i3-screen-manager `26ea990`); laptop `nomad-artix` (dotfiles `c3297f9`,
-  i3-screen-manager `6d91bfe`, uses `BAR=32` because its polybar is height=32
-  vs the desktop's 28). Includes the full diagnostic command set and a
-  post-mortem of why no static rule can solve the launch-race.
-- `docs/2026-08-13-win11-vm-kvm-setup.md` (+ `win11-vm-setup.sh` at repo root) —
-  **Windows 11 VM on Artix via QEMU/KVM + libvirt, for running Garmin Express with
-  USB passthrough** (it never worked under Wine; VirtualBox deliberately avoided).
-  Records: the virtualization check (AMD-V `svm` flag present → enabled in BIOS,
-  `/dev/kvm` live, 72 IOMMU groups — no UEFI change needed); the 10-package stack
-  (`qemu-desktop`/`libvirt`/`libvirt-openrc`/`virt-manager`/`virt-viewer`/`edk2-ovmf`/
-  `swtpm`/`dnsmasq`/`usbredir`/`spice-gtk`, all official repos — OVMF=Win11's UEFI,
-  swtpm=its TPM 2.0) with the verified "no systemd init pulled, just `systemd-libs`"
-  finding; storage pool on `/data` (930 GB free) not the tight `/`; and the
-  idempotent `win11-vm-setup.sh`. **STATUS: host setup COMPLETE + verified
-  2026-08-13** (script ran exit 0 — 93 pkgs, `libvirtd`/`virtlogd` up, `jim` in
-  `libvirt`, `default` net + `vms` pool active, `virtio-win.iso` fetched, `/data/vms`
-  set btrfs-nodatacow); the **Win11 guest itself is not yet installed** and needs
-  one more log-out/in for the `libvirt` group (reboot predated the install). Also
-  carries the virt-manager VM-build + Garmin USB-passthrough runbook.
-- `docs/2026-08-28-hyprland-fresh-start-rebuild.md` — **the "return to Hyprland"
-  fresh-start on `godlike-artix` (2026-08-28)**: design + decisions for shopping
-  Omarchy (lift ideas, not machinery), the no-frills aesthetic, and what landed
-  live — the portrait monitor rescued (`transform=3` upright + `vrr=0` to kill the
-  aquamarine adaptive-sync flicker), per-monitor workspace confinement (DP-2 1-6 /
-  HDMI-A-1 7-10), and the `i3-screen-manager` clamshell dispatch fix
-  (`hl.dsp.workspace.move`, replacing the Lua-mode-dead `moveworkspacetomonitor`).
-- `docs/2026-08-28-quickshell-bar-plan.md` — **the hand-written Quickshell bar that
-  replaced Waybar** (13-task build, EXECUTED). Lightly-modular QML shell in
-  `dotfiles/.config/quickshell/`: per-monitor workspace pools with working
-  Lua-mode clicks (fixes the #5008 Waybar regression), window title, clock, tray,
-  and the system cluster (cpu/mem/temp/net/audio/idle) with `Symbols Nerd Font`
-  icons. Records every QML gotcha (`Layout.preferredWidth`, `font.family` not
-  `families`, `format` not the FINAL `transform`, cpu `iowait`-as-idle). Waybar
-  retired but kept for a one-line revert; `mako` still owns notifications.
-- `docs/2026-08-28-quickshell-bar-and-screenshots-laptop-parity.md` — **the laptop
-  replication guide** for the Quickshell bar + tensaku screenshot flow. What to
-  install (rungs), what's SHARED (quickshell config, `screenshot` script) vs
-  machine-specific (monitor pools, bind locations), the laptop adaptations (its
-  own pool map, a battery widget), and what to deliberately NOT copy (the
-  nm-applet drop, the portrait transform/VRR, desktop workspace confinement).
-  **Read this first when doing the laptop.**
-- `docs/2026-08-28-quickshell-popouts-calendar-weather.md` — **the bar's first
-  two popouts** (EXECUTED): a month-grid **calendar** off the clock (Sunday-start,
-  ISO-week-of-Thursday numbering, pure-local, no network) and a **weather** pill
-  (Open-Meteo, no key, JSON parsed in QML) with a 4-day forecast popout. Both ride
-  one reusable `Popout.qml` (`PopupWindow` + `HyprlandFocusGrab`, cribbed from
-  Omarchy's `PopupCard.qml` minus the plugin machinery). Records the WMO-code ->
-  Material-Design nerd-glyph mapping (`String.fromCodePoint`, glyphs cmap-verified),
-  the Ridgewood weather-location desktop hardcode (**laptop must make this dynamic**),
-  and — the important future seam — that calendar *events* should eventually come
-  from `~/projects/life-dashboard/`'s local JSON (it already caches Google+MS
-  calendars), NOT a second bar-local cache.
-- `docs/2026-08-29-hyprland-unified-config-design.md` (+ `…-plan.md`) — **the
-  single adaptive Hyprland config** that replaced the two drifting per-machine
-  files (`hyprland-{desktop,laptop}.lua`). **EXECUTED on BOTH machines
-  2026-08-29** — desktop cold-boot verified same morning; laptop live-reloaded
-  from within its running Hyprland session that afternoon, then **graduated its
-  compatibility bridge the same session** (installed quickshell + hyprpicker +
-  tensaku, built the laptop-specific Battery widget, de-hardcoded Weather to a
-  machine-local JSON file, flipped `machine.lua` `bar="quickshell"` /
-  `screenshot="tensaku"`, retired waybar). Rofi parity audit +
-  `rofi-rbw --typer ydotool` cleanup that followed → see
-  `docs/2026-08-29-hyprland-rofi-parity-and-ydotool.md`. One
-  `hyprland.lua` entry `require()`s ~9 modules; `machine.lua` detects the box by
-  `/etc/hostname` and returns a hybrid record — `traits` (STATIC hardware
-  capabilities: `displays`/`clamshell`/`battery`/`trackpad`/`backlight`/`wifi`/
-  `audio_openrc`; modules branch on the capability, not on `type`), a `location`
-  SSOT seed, and `bar`/`screenshot` **selector fields** (the "compatibility
-  bridge" — the laptop rides `waybar`/`flameshot` and graduates by flipping one
-  value when its Quickshell+tensaku parity lands). `~/.config/hypr` is now a
-  whole-dir symlink into dotfiles (retired the per-machine selection symlink).
-  Refactor was **behavior-preserving** (zero observable change on either box);
-  the design doc's §6 records every per-machine disposition. Ships an offline
-  test harness (`dotfiles/.config/hypr/tests/`, `hl_stub.lua` records `hl.*`
-  calls) that verifies BOTH machine branches from either box — this is how the
-  laptop branch is validated from the desktop. Verified Hyprland-runtime facts
-  in the design doc §2 (config dir auto on `package.path`; reload rebuilds a
-  fresh `lua_State`; **config runs TWICE per reload** so `machine.lua` stays
-  cheap + side-effect-free).
-- `docs/2026-08-29-hyprland-dwindle-switch-and-i3-move-binds.md` — **switched the
-  active layout from `master` to `dwindle` fleet-wide (A/B'd live, dwindle KEPT)**
-  to recover two i3 reflexes the master layout structurally lacked: per-window
-  split direction and whole-group block-move. Root reframe: **`master` has no
-  splits at all** — split direction is a dwindle-only concept (`preselect <dir>`
-  = i3 `split h`/`split v`; `togglesplit` needs `preserve_split`). The i3 binds
-  port onto their exact chords (`Super+h`/`Super+v`/`Super+Shift+e`, read off
-  `config-desktop`). Documents the **three distinct move verbs** Hyprland splits
-  i3's `move` into — block-move (`Super+Shift+arrows`, plain `window.move`),
-  group in/out (`Super+Ctrl+Shift+arrows`, `group_aware=true`), tab-order reorder
-  (`Super+Alt+Ctrl+←/→`, `group.move_window`) — since a group "takes the space of
-  one window"; the A/B mechanism (single `vars.layout` selector, both layout
-  blocks defined for a clean revert); and the one i3 thing with **no** Hyprland
-  home (`focus parent`/`child` — no arbitrary-subtree selection). Wiki facts
-  pulled from `hyprwm/hyprland-wiki` via `gh` (live site 403s WebFetch).
-- `docs/2026-08-29-hyprland-launch-chats-wayland.md` — **the Wayland port of
-  "Launch Chats"** (the ws10 comms-wall auto-builder), which the dwindle switch
-  unblocked. i3's `append_layout` + swallow (declarative, async-safe, invisible)
-  has **no Hyprland equivalent**, so the build is imperative — launch-missing ->
-  wait-for-map -> group-by-class — hence the visible "self-assembling puzzle"
-  shuffle. The finding that made it tractable: under Wayland Brave bakes the PWA
-  app-id into the class (`brave-<id>-Default`), so every app is uniquely matchable
-  (X11's shared "Brave-origin" needed `crx_` instance matching). Ships
-  `hypr-chat-layout` (builder, **idempotent by regrouping live windows** — no
-  kill-and-rebuild, unlike i3) + `i3-chat-launch` (session dispatcher) + two PWA
-  ws-pin rules; all in dotfiles. The auto-**builder** is desktop-only (laptop
-  comms design still deferred), but the ws-pin rules themselves (Slack/Keybase/
-  Discord + Messages/WhatsApp PWAs → ws10) went fleet-wide 2026-09-01 (dotfiles
-  `rules.lua`) — so when a chat app is opened on the laptop it lands on ws10
-  alongside the desktop's convention, even without the self-assembling puzzle.
-- `docs/2026-08-31-hyprland-workspace-split-and-disconnect-fix.md` — **laptop
-  workspace split (1-6 internal / 7-10 external) + the clamshell→disconnect
-  blank-screen fix + a cluster of adjacent Hyprland hardening.** Ten commits
-  across two repos in one session. Reveals two `hl.monitor` semantics that had
-  been silently broken: (1) `hl.monitor` does NOT auto-enable a disabled
-  monitor — `disabled = false` MUST be passed explicitly, else you leave both
-  screens disabled and Hyprland's FALLBACK activates (this is exactly what
-  killed the compositor coming out of clamshell); (2) two monitors cannot
-  share position `0x0` — Hyprland quietly refuses one and the layout ends with
-  no visible active monitor. New: `i3-screen-manager apply-ws-split` subcommand
-  auto-invoked by `autostart.lua`'s `hl.on("monitor.added", …)` hook (with a
-  `sleep 3` fallback for the boot race). Also lands: fleet-wide
-  `binds.window_direction_monitor_fallback = false` (confines Super+arrow to
-  the current monitor, matching i3's f8e30d5); Quickshell `WindowTitle` becomes
-  per-monitor (was showing globally-focused window on every bar) + periodic
-  `Hyprland.refreshToplevels()` (Quickshell's toplevel associations drift after
-  workspace moves); `i3-screen-manager` scale picker targets the currently-
-  focused monitor instead of always the laptop internal; `xrandr` stdout leak
-  in the X11 PRIME hookup (Feb-2026 stale `NVIDIA-0` fallback was leaking its
-  "Could not find provider" line into `$(find_external_x11)` and poisoning
-  every downstream `xrandr --output`). Full enumeration of Hyprland Lua events
-  discovered along the way (probe an unknown name; the error lists all valid
-  ones).
-- `docs/2026-09-03-agent-usage-cards-design.md` (+ `…-plan.md`) — **the
-  agent-usage cards** mined from Omarchy's `agents` panel and rebuilt on Jim's
-  own Quickshell: a self-hiding bar item (`󰚩 <max limit %>`) + a popout of
-  stacked per-agent cards (plan tier, rate-limit meters with reset countdowns,
-  today line, tokens-by-model bars) for **Claude Code** (Max 20x) and **Codex**
-  (pro). Two-layer JSON-file/stdout seam: read-only Python collectors vendored
-  from `basecamp/omarchy` (MIT) that hit Anthropic's OAuth usage endpoint /
-  Codex app-server RPC and scan local transcripts, a bash `agent-usage`
-  orchestrator, and QML (`Widgets/Agents.qml` + `AgentsPanel.qml`) modeled on
-  the existing `Weather` widget. **agy deferred** (Antigravity stores usage as
-  unschema'd protobuf-in-SQLite, no usage endpoint). Fleet-wide by construction;
-  the plan's Post-build corrections record the repo-root path + `modelUsage`-is-
-  a-dict fixes found during live verification.
+### Backend and Scope
 
-Hyprland and IceWM are both installed and toggleable from a TTY on each
-machine. PekWM was the lone exception to the "additive and reversible" rule —
-it was a trial and has now been fully removed from the desktop (2026-06-18); it
-never reached the laptop.
+`XDG_SESSION_TYPE=wayland` or a nonempty `WAYLAND_DISPLAY` selects Hyprland;
+otherwise the CLI uses X11. The laptop layout commands assume internal output
+`eDP-1` and select the first connected non-internal output. They are not a
+general multi-external-monitor layout manager. The desktop's fixed layout
+belongs to dotfiles; `scale`/`dpi` can still be used on its focused output.
 
-## Architecture
+Wayland discovery uses `wlr-randr` to include connected but disabled outputs.
+X11 discovery uses `xrandr --query` after attempting the NVIDIA PRIME provider
+hookup. Provider errors must remain off stdout because discovery output is
+captured as an output name. X11 and Wayland names differ: the desktop's
+secondary output is `HDMI-1` on X11 and `HDMI-A-1` on Wayland. Query names
+instead of transferring them between backends by assumption.
 
-Scripts, no build step. All committed in this repo and symlinked from
-`~/.local/bin/`:
+### Layout and Scaling
 
-**Display & input management (compositor-aware — Wayland AND X11):**
-- `i3-screen-manager` — CLI for display layout (extend/clamshell/mirror/disconnect/scale/status/**apply-ws-split**). Dispatches internally on `$XDG_SESSION_TYPE`: Wayland uses `hyprctl dispatch 'hl.monitor({...})'` (Lua-mode-safe); X11 uses `xrandr`. Single source of truth; same UX both ways. (Until 2026-06-17 this was Hyprland-only and silently broken under Hyprland 0.55+ Lua mode.) **All Hyprland calls route through the `hyprctl-live` wrapper** via a shell function at the top of the script — so the tool works correctly from agent/herdr shells that outlived a Hyprland restart (2026-08-31). `apply-ws-split` is the Wayland-only, idempotent entry point auto-invoked from Hyprland's `monitor.added` event on dynamic-display machines; the split values live in `machine.lua` (SSOT) and are duplicated in `shell.qml`'s `poolFor` and this script's `EXTERNAL_WORKSPACES` bash constant. Every `hl_apply` re-enable call now carries `disabled = false` — see Common Issues.
-- `i3-screen-rofi` — Rofi menu frontend that calls `i3-screen-manager` (compositor-agnostic)
-- `i3-keyboard-rofi` — Rofi toggle for laptop (Caps→Ctrl) vs external keyboard. Dispatches on `$XDG_SESSION_TYPE`: Wayland → `hyprctl keyword input:kb_options`; X11 → `setxkbmap -option`. Same UX both ways.
-- `i3-mouse-setup` — Login-time script that applies saved mouse DPI via `solaar`. Compositor-agnostic (HID-level).
-- `i3-mouse-rofi` — Rofi menu for mouse DPI adjustment (saves choice for persistence). Compositor-agnostic.
-- `i3-cmos-battery` — CMOS battery voltage monitor. Output modes: `polybar` (colored, `%{F}` codes), `cli` (human), and `quickshell` (`<volts> <status>`, parsed by the QuickShell `CmosBattery.qml` bar widget). Single source of truth for the it87 hwmon read + CR2032 thresholds; exits silently (no output → widget self-hides) on machines without the sensor.
+The commands are `extend-left/right/above/below`, `clamshell`, `mirror`,
+`disconnect`, `scale [VALUE] [OUTPUT]`, `dpi [VALUE] [OUTPUT]`, `status`, and
+Wayland-only `apply-ws-split`. `dpi` is an alias for `scale`.
 
-**Hyprland session bring-up & maintenance:**
-- `start-hyprland` — Hyprland session launcher: env, gnome-keyring, ssh-agent at predictable socket, NVIDIA hybrid `AQ_DRM_DEVICES`, `exec /usr/bin/start-hyprland`
-- `laptop-monitor.sh` — Hyprland lid-switch handler; checks the clamshell inhibitor PID before re-enabling eDP-1
-- `laptop-monitor-x11.sh` — X11/IceWM sibling of `laptop-monitor.sh`. **Not auto-wired** (no acpid hook by default); see `docs/2026-06-17-icewm-laptop-setup.md` for the manual-trigger pattern and the acpid wiring recipe.
-- `hyprland-clamshell-restore` — Re-applies clamshell eDP-1 disable after every Hyprland config reload (wired via `hl.on("config.reloaded")` under Lua, or `exec=` under hyprlang)
-- `hypr-dpms-all` — DPMS every monitor on/off (`hypr-dpms-all on|off`) by enumerating `hyprctl monitors` and dispatching the **table form** `hl.dsp.dpms({ monitor, action })` per monitor. Called by `hypridle` (on-timeout/on-resume). Exists because the bare-string form `hl.dsp.dpms("off")` only reaches the focused monitor (the portrait HDMI-A-1 never slept) and the "on" string form was observed turning monitors OFF — see Common Issues. Robust + portable (any monitor count, no hardcoded names).
-- `hyprctl-live` — `hyprctl` wrapper that rediscovers the LIVE Hyprland instance signature (via `hyprctl instances -j`, which does NOT need a valid sig — it enumerates `$XDG_RUNTIME_DIR/hypr` directly) and forwards every argument unchanged. Solves the stale-`HYPRLAND_INSTANCE_SIGNATURE` trap in any shell that outlived a prior Hyprland: herdr-hosted agent sessions, tmux/screen panes older than the compositor, reattached long-lived processes. See Common Issues → "Stale `HYPRLAND_INSTANCE_SIGNATURE`". **In this repo, agents/scripts operating from long-lived or ambient-inherited shells should default to `hyprctl-live` instead of bare `hyprctl`.**
-- **Keybase tray-popup — a Lua `hl.on("window.open")` handler** in `dotfiles/.config/hypr/autostart.lua`, NOT a daemon (ported 2026-08-31 from the `keybase-popup-anchor` bash daemon — socat tail of `.socket2.sock` + python size lookup, re-launched on socket death — script removed). **DON'T move the menu — move the CURSOR.** The long-way-round lesson (full saga in `docs/2026-08-13-keybase-tray-popup-i3.md` § "the winning strategy"): under Hyprland, Electron drops the tray popup **bottom-center of Keybase's OWN monitor** (fine, on-screen) but its focus-grab **warps the cursor to that monitor's center**, off the menu, so it blur-closes on the first mouse move; and ANY `hl.dsp.window.move` slides the surface off the pointer → Wayland pointer-leave → Electron blur → **menu vanishes**. So the handler leaves the menu put and warps the cursor to the menu's own center: filter `w.class=="Keybase"` AND `w.size.x<=1000` (popup vs main window — windowrulev2 has no `size:` selector), then `hl.dsp.cursor.move({ x = w.at.x + w.size.x//2, y = w.at.y + w.size.y//2 })`. `window.open` fires on `openLate` so `w.at`/`w.size` are settled. **Machine-agnostic** (reads the popup's own live geometry — no monitor scale/transform/offset math), so it should just work on the laptop; works from either monitor's tray. **The X11/i3 sibling `keybase-popup-anchor-x11` stays a bash script** — it tails `i3-msg`, a different mechanism, X11-land.
-- **Group-aware `Super+left/right` focus — a Lua bind function, NOT a script** (`focus_or_group` in `dotfiles/.config/hypr/bindings.lua`; a short-lived `hypr-focus` bash helper was ported to Lua the same day, 2026-08-31, and removed). i3's `focus left/right` does two jobs with one key — cycle a tabbed container's tabs, and move between windows. Hyprland splits these into `focus({direction})` (a group is ONE tile) and `group.prev/next` (cycle within a group, never leaves), and binding a key to BOTH fires both → the ws10 comms-wall "bounce" (cycles a tab AND jumps groups every press). The Lua function reads live state IN-PROCESS — `hl.get_active_window()` → window object, `.group` → group object or nil, `.group.size` → member count — and dispatches ONE action per press. i3-INSPIRED, and **verified live against a real i3 under the SAME setup (Jim tested 2026-09-02) to behave identically for practical purposes** — "good enough" undersold it, it's on par with i3. (An earlier draft claimed two deviations — isolated-group edge-wrap and plain-window row-wrap — but those were asserted from i3-semantics *memory*, never confirmed against a live i3; the live A/B test showed parity, so treat them as unconfirmed edge differences at most. Ground-truth test beats remembered spec.) The core problem it fixes (extended 2026-09-02): **with a group focused there was NO keyboard escape back out to a plain window sharing the row** (e.g. a terminal beside the ws10 comms group) — focus went IN and got TRAPPED. The four cases: **not in a multi-window group → `focus({direction})`** (move tiles); **in a group, interior → `group.prev/next`** (cycle a tab); **in a group, AT the edge in that direction with a genuine adjacent tile → `focus({direction})`** (ESCAPE the group to that neighbor); **in a group, at the edge with NO neighbor → `group.prev/next`** (wrap the tab order — the lone-comms-wall feel). `current_index` is 1-based, `next`=idx+1/wrap, `prev`=idx-1/wrap, `members[]`=left→right tab order (all confirmed in v0.56.1 `LuaGroup.cpp`/`ConfigActions.cpp`). Pure Lua: no shell-out, no external script, fleet-wide with no deploy step. The Hyprland Lua state-read API is real (confirmed in `/usr/include/hyprland/src/config/lua/objects/` and `hyprwm/Hyprland` v0.56.1 source: `LuaBindingsQuery.cpp` registers `get_active_window`/`get_windows`/`get_workspace_windows`/…; `objects/LuaWindow.cpp` `__index` exposes `.address/.class/.group/…`; `objects/LuaGroup.cpp` exposes `.size/.members/.current/…`) and was probed live before deploying. The boundary escape uses a HAND-ROLLED geometric neighbor test (`has_neighbor`: iterate `hl.get_workspace_windows(ws)`, require a horizontal-band vertical overlap + strict left/right separation) rather than "dispatch focus and see if it moved" — because Hyprland's `movefocus` does NOT reliably no-op when nothing is in the requested direction: probed live 2026-09-02 it grabbed an OFF-AXIS window (the group *below*) and the choice was focus-history-dependent (reached via `group.prev` it jumped down; via focus-by-class it stayed). So escape is gated on a real in-direction neighbor existing; `movefocus` IS reliable once one does, so the follow-up `focus({direction})` lands on it. The geometric test is workspace-scoped so it never escapes the monitor (also belt-and-suspenders with `binds.window_direction_monitor_fallback=false`); horizontal escape only reaches a same-row tile (e.g. a terminal beside the ws10 group). Cross-group VERTICAL jumps stay on `Super+Ctrl+arrows`. **This is the reference case for the Lua-vs-script split:** Lua for logic the compositor *triggers* that only reads compositor state and returns instantly; scripts for anything externally-triggered (hypridle, rofi, login), tool-orchestrating (`screenshot`/`flameshot`), blocking (`hypr-chat-layout`'s wait-for-map would freeze the compositor thread), or cross-compositor (`i3-screen-manager` runs under X11 too). `keybase-popup-anchor` is another latent Lua candidate (it's already an event-socket tailer).
-- `screenshot` — grim/slurp capture + tensaku annotate. **FLIPPED 2026-08-29: flameshot is the primary again** — bare `Print` = flameshot's all-in-one GUI, and the grim/slurp+tensaku annotate flows are the secondary "fancier tools when I need them": `Super+Print`=region+annotate, `Shift+Print`=full+annotate, `Ctrl+Print`=region copy-only, `Super+Ctrl+Print`=annotate clipboard image (those four gated on `m.screenshot=="tensaku"`, i.e. where tensaku is installed). (2026-08-28→29 this was the reverse — tensaku primary, flameshot the `Super+Print` fallback.) Uses `hyprpicker` freeze-during-select; capture → `~/Pictures` + `wl-copy`; `--annotate` → `tensaku-edit` (annotate → back to clipboard). Needs `tensaku` (rung-2 prebuilt binary) + `hyprpicker` (rung-1). Laptop replication: `docs/2026-08-28-quickshell-bar-and-screenshots-laptop-parity.md`.
-- `screenshot.sh` — hyprshot + satty screenshot workflow (older alternative path; superseded by `screenshot` above)
-- `flameshot.sh` — flameshot wrapper with `QT_SCREEN_SCALE_FACTORS="1;1"` for correct DPI
-- `volumecontrol.sh` — pavucontrol wrapper that forces Intel Vulkan ICD to avoid NVIDIA VA-API conflicts
+Wayland uses `hl.monitor({...})` through the script's `hl_apply` helper and
+`hyprctl-live dispatch`. The helper suppresses dispatcher errors because the
+monitor-setting call can apply its side effect before the wrapper complains;
+its exit status alone does not prove success. Workspace moves use
+`hl.dsp.workspace.move({ workspace = ..., monitor = ... })`.
 
-**System maintenance & security:**
-- `aur-malware-check` — Read-only audit of installed packages against the June 2026 "Atomic" AUR supply-chain denylist. Name intersection by default; `--deep` adds a pacman-scriptlet + filesystem IOC scan, `--near` flags confusable look-alikes (you have the safe name, a malicious twin exists), `--all` widens to every installed package, `--list`/`--url` override the source. Downloads + caches the denylist (offline fallback); exit `0`/`1`/`2` = clean/exposed/error, so it drops into a login hook or `&&` chain.
+Default scales are 1.25 internal and 1.0 external. The picker offers 0.75, 1.00,
+1.25, 1.50, 1.75, and 2.00. The default target is the focused Wayland output,
+falling back to `eDP-1`. Scaling also sets preferred mode and automatic
+position; it is not a position-preserving operation. These are runtime
+settings; persistent defaults are in the session configuration.
 
-**Agent usage (Quickshell cards, 2026-09-03):**
-- `agent-usage-claude`, `agent-usage-codex` — **read-only Python collectors vendored from `basecamp/omarchy` (MIT)**, each printing ONE display-ready JSON usage record: authoritative rate limits (Claude via Anthropic's OAuth usage endpoint `api.anthropic.com/api/oauth/usage`, 5-hour + 7-day + Fable-weekly; Codex via the Codex app-server RPC) plus local token/prompt stats from `~/.claude/projects` / Codex session files. Adapted from upstream only by dropping the `omarchy/` cache-dir segment; honor `CLAUDE_CONFIG_DIR`/`CODEX_HOME` so they are machine-agnostic. `--limits-only` is the fast path (~1s); `--force` bypasses caches.
-- `agent-usage` — bash orchestrator: runs both collectors in parallel, validates each is JSON, prints a **merged JSON array** to stdout, and atomically caches each record to `~/.local/state/agent-usage/<id>.json`. Resolves its sibling collectors via `readlink` so it works through the `~/.local/bin` symlink. Consumed by the Quickshell `Agents` widget (which polls it like `Weather` polls `curl`) and available for any CLI/rofi reader.
-- **UI** (`dotfiles/.config/quickshell/`, fleet-wide via the whole-dir symlink): `Widgets/Agents.qml` is a self-hiding bar item (robot glyph + the highest limit `%` across ready agents, warn/crit at 0.75/0.9; hidden until an agent is `ready`), mounted in `shell.qml`'s shared right-slot cluster (NOT machine-gated). `Widgets/AgentsPanel.qml` is the popout: stacked per-agent cards (name + tier chip, a meter row per limit with reset countdown, a today line, top-4 tokens-by-model bars). `modelUsage` is a **dict** `{model: {…Tokens}}`; model labels strip the redundant `claude-` prefix. Design/plan + the record contract: `docs/2026-09-03-agent-usage-cards-design.md`. **agy deferred** (unschema'd protobuf-in-SQLite, no usage endpoint). Laptop rollout = the standard `~/.local/bin` symlink for the three scripts (QML is already inherited) — **DONE on `nomad-artix` 2026-09-03** (both collectors `ready` first run; note the bar must be restarted *after* symlinking, else its first poll fails on a missing binary and the item hides until the 10-min re-poll).
+X11 scaling sets session-wide `Xft.dpi` to the integer value of `96 * scale`
+through `xrdb -merge`. It ignores the output argument and needs newly launched
+apps to take effect. It does not apply per-output framebuffer scaling.
+Mirroring uses Hyprland's mirror property or X11 `--same-as`, with preferred
+modes rather than a negotiated common resolution.
 
-## Key Design Decisions
+### Transition Constraints
 
-- **Internal display is hardcoded as `eDP-1`** — standard for modern Intel laptop panels.
-- **External display is auto-detected** — `wlr-randr` (not `hyprctl monitors -j`) because hyprctl drops disabled outputs while wlr-randr sees all physically connected ones.
-- **Lid state path is discovered dynamically** — ACPI names vary (`LID`, `LID0`, etc.) across boots.
-- **Safe defaults** — if lid state can't be detected, assume closed (refuse disconnect rather than risk black screen).
-- **Clamshell uses `elogind-inhibit`** — `elogind` is Artix's logind. Holds a `handle-lid-switch` block lock via a background `sleep infinity` process, PID tracked in `/tmp/i3-screen-manager-inhibit.pid`. (Pre-Artix this used `systemd-inhibit` with identical flags.)
-- **`hyprctl keyword monitor X,disable` is unreliable** — known Hyprland issue where disable can leave a phantom monitor. Always follow with `wlr-randr --output X --off` to cut the physical DRM output.
-- **`hl.dsp.workspace.move` silently no-ops on disabled monitors** — when entering clamshell, enable the external first (at `auto` position) before moving workspaces, then disable eDP-1.
-- **`hl.monitor` alone will NOT re-enable a disabled monitor** — `disabled = false` MUST be passed explicitly (2026-08-31 discovery). Without it, the disconnect sequence was leaving BOTH monitors disabled → Hyprland's `FALLBACK` placeholder activated → both screens black + Hyprland restart required. Every `hl_apply` re-enable in `i3-screen-manager` now carries `disabled = false`.
-- **Disconnect stashes external at `10000x0` BEFORE claiming `0x0` for internal** — two monitors cannot share position `0x0`; Hyprland quietly refuses one and the layout ends with no visible active monitor (the FALLBACK case above). The pre-2026-08-31 sequence — enable internal at `auto`, then reposition internal to `0x0` after disabling external — collided because external's Hyprland-side position was still remembered at `0x0` even after `disabled = true`. New sequence puts internal at `0x0` in one shot with `disabled = false`.
-- **Workspace split (laptop, dynamic externals)** — persistent `hl.workspace_rule` entries in `monitors.lua` bake ws 1-10 as `persistent=true` on eDP-1 (guaranteeing they exist before dispatchers touch them); `apply_ws_split_wayland` in `i3-screen-manager` moves ws 7-10 to the external at extend time. Auto-applied via `autostart.lua`'s `hl.on("monitor.added", …)` hook + a `sleep 3` fallback in `hyprland.start`. Full write-up: `docs/2026-08-31-hyprland-workspace-split-and-disconnect-fix.md`.
-- **Scale instead of `Xft.dpi`** — Wayland uses output scaling. `i3-screen-manager scale` calls `hyprctl keyword monitor "$target,preferred,auto,$scale"` with a rofi picker of 0.75/1.00/1.25/1.50/1.75/2.00. The old `Xft.dpi` knob is gone — there is no X resource database.
-- **Mouse DPI via solaar** — `i3-mouse-setup` auto-detects Logitech mice at login and applies saved DPI from `~/.config/i3-mouse-manager/dpi`. `i3-mouse-rofi` provides on-the-fly adjustment that persists across reboots.
-- **CMOS battery monitoring** — `i3-cmos-battery` reads Vbat from the it87 Super I/O chip. Requires `it87` kernel module (auto-loaded via `/etc/modules-load.d/it87.conf`). Refreshes every 6 hours. Exits silently on machines without the sensor (laptops).
-- **Clamshell survives Hyprland config reload** — the `hyprland-clamshell-restore` script is wired into Hyprland (via `exec=` under hyprlang or `hl.on("config.reloaded")` under Lua) so saving the config file doesn't wake eDP-1 back up.
-- **`aur-malware-check` is a standalone tenant** — it has nothing to do with displays. It lives here because this repo is the home for the machine's hand-rolled bash scripts and it follows the same "commit here, symlink from `~/.local/bin/`" convention. It has no dependency on the rest of the toolkit and can be lifted out at any time.
+- Explicitly pass `disabled = false` when re-enabling a Hyprland monitor.
+- Enable a workspace's target monitor before moving workspaces onto it.
+- Free the internal output's destination position before restoring it. The
+  disconnect sequence moves the external to `10000x0`, enables internal at
+  `0x0`, moves workspaces back, then disables the external.
+- Pair the Hyprland disable with `wlr-randr --output OUTPUT --off` as the
+  existing scripts do; compositor state and physical output state can differ.
+- Preserve the lid guard. `disconnect` refuses if the lid is closed or cannot
+  be read from `/proc/acpi/button/lid/*/state`.
+- Clamshell uses an `elogind-inhibit` background process with PID recorded in
+  `/tmp/i3-screen-manager-inhibit.pid`. It inhibits lid-triggered suspend on
+  both backends. Extend, mirror, and disconnect stop that inhibitor.
 
-## Testing
+### Workspace Contract
 
-No automated tests. Test manually with an external monitor:
+The laptop's configured pools are 1-6 internal and 7-10 external in extend
+mode, all 1-10 on external in clamshell, and all 1-10 internal when undocked.
+Clamshell moves all existing workspaces to the external; disconnect moves
+workspaces from that external back to the internal. X11 layout commands do not
+implement this Hyprland workspace split.
 
-1. `i3-screen-manager extend-right` — external should light up to the right of internal.
-2. `i3-screen-manager mirror` — both screens same content.
-3. `i3-screen-manager clamshell` — internal off, external only. Close lid safely.
-4. `i3-screen-manager disconnect` (lid closed) — should refuse with an explanatory message.
-5. Open lid, `i3-screen-manager disconnect` — should restore internal display.
-6. `i3-screen-manager scale` — rofi picker should appear, selecting a value changes the output scale.
-7. `i3-screen-manager scale 1.5 eDP-1` — direct scale set, bypasses the picker.
-8. `i3-screen-manager status` — should show internal/external, active monitors with pos/scale, and inhibitor state.
+Keep three consumers aligned: `EXTERNAL_WORKSPACES` in the display script,
+workspace data/rules in dotfiles' `machine.lua` and `monitors.lua`, and
+Quickshell's `shell.qml` pools. Persistent workspace rules instantiate 1-10;
+`autostart.lua` invokes `apply-ws-split` on `monitor.added` and after startup.
+The command succeeds silently without an external and rejects X11 sessions.
+It moves workspaces; it is not an output-enabling command.
 
-## Common Issues
+### Known Limitations
 
-### Hyprland / Wayland
+`laptop-monitor.sh` and `hyprland-clamshell-restore` still contain legacy
+`hyprctl keyword` calls and use bare `hyprctl`. Their output-off paths also
+call `wlr-randr`, but lid-open restoration is not fully ported to Lua mode.
+The reload helper is wired through `config.reloaded`; the X11 lid script has
+no automatic acpid wiring supplied by this repo.
 
-- **`hyprctl keyword monitor` is dead under Lua mode (Hyprland 0.55+)** — returns "keyword can't work with non-legacy parsers. Use eval." The dual-compositor refactor of `i3-screen-manager` (2026-06-17) replaced it with `hyprctl dispatch 'hl.monitor({...})'`. The dispatch wrapper itself errors ("hl.dispatch: expected a dispatcher") but the `hl.monitor()` side effect runs first — verified during the 75Hz experiment 2026-06-13 and the `i3-screen-manager disconnect` smoke test 2026-06-17. The `hl_apply` helper quiets the wrapper error and accepts the side effect.
-- **Stale `HYPRLAND_INSTANCE_SIGNATURE` in long-lived shells** — any shell that outlives a Hyprland session (herdr-hosted agent sessions, tmux/screen panes older than the compositor, reattached long-lived processes) carries a dead sig in its env, so bare `hyprctl` hits a dead socket (`Couldn't connect to /run/user/1000/hypr/<old-sig>/.socket.sock. (4)`). The `hyprctl instances -j` subcommand itself doesn't need a sig — it enumerates `$XDG_RUNTIME_DIR/hypr` directly — so re-resolving is cheap. Use the `hyprctl-live` wrapper (Architecture → Hyprland session) which does this re-resolution every call before proxying. **Agents (and any script that might be invoked from a long-lived shell) should default to `hyprctl-live` in this repo.** Bare `hyprctl` remains fine inside processes launched *by* the current Hyprland session (autostart, waybar/quickshell IPC, hypridle), because those inherit the compositor's own env.
-- **`hyprctl dispatch <verb> <args>` (bareword form) is dead under Lua mode too** — sibling of the `hyprctl keyword monitor` bug above. The dispatch parser evaluates the tail as Lua, so `hyprctl dispatch dpms off` fails with `')' expected near 'off'`. Under Lua mode all dispatchers are `hl.dsp.*` calls: `hyprctl dispatch 'hl.dsp.dpms("off")'`. Caught 2026-08-29 by a stale (Apr-2026) `hypridle.conf` whose `on-timeout = hyprctl dispatch dpms off` was silently failing — hypridle doesn't log the shell command's stderr, so the symptom was "screen never blanks after 5 min idle" with no diagnostic anywhere (same silent-failure class as the missing-runtime-deps trap listed under Scripts / shell below). Fixed in `dotfiles/.config/hypr/hypridle.conf`; the same commit also swapped `systemctl suspend` → `loginctl suspend` (Artix uses OpenRC + elogind; there's no `systemctl`). The error hint `expected a dispatcher (e.g. hl.dsp.window.close())` is the discovery path for any pre-Lua-mode `hyprctl dispatch` string that "just doesn't work."
-- **`hl.dsp.dpms()` takes a TABLE, and the string form is multi-monitor-broken** — follow-up to the bullet above. `hyprctl dispatch 'hl.dsp.dpms("off")'` (bare positional string) is mis-shaped: the dpms dispatcher's Lua signature is `dpms({ monitor?, action? })`. The string form reaches only the focused monitor (so the portrait HDMI-A-1 never slept via hypridle) and the `"on"` string form was observed turning monitors **OFF** instead of on (verified live 2026-08-29 — it blanked BOTH monitors). The working form is the table `hl.dsp.dpms({ monitor = "HDMI-A-1", action = "off" })` (`action` is `"on"`/`"off"`, NOT the wiki's `"disable"`; a no-monitor call was NOT confirmed to hit all monitors, so don't rely on it). Fix: `hypr-dpms-all on|off` loops every monitor by name via the table form; `hypridle.conf` now calls it. This SUPERSEDES the "`hl.dsp.dpms("off")` is the fix" claim in the bullet above.
-- **Black screen on disconnect**: lid was closed and eDP-1 couldn't activate. The lid guard prevents this.
-- **External not detected**: `wlr-randr` should see it. NVIDIA outputs follow `*-N-N` naming (e.g. `HDMI-1-0`, `DP-1-0`).
-- **A monitor rule silently matches nothing (X11 vs Wayland output names)**: xrandr and the kernel DRM layer name the *same physical port* differently — the desktop's second monitor is `HDMI-1` under xrandr but `HDMI-A-1` to wlroots/Hyprland. Copying a working xrandr layout into a Hyprland config verbatim therefore matches no output and falls through to the catch-all, with no error. `DP-2` is spelled the same in both, which makes the mismatch easy to miss. Ground truth for the Wayland-side name, readable from an X11 session: `for c in /sys/class/drm/card*-*; do [ "$(cat $c/status)" = connected ] && basename $c; done`.
-- **Phantom monitor after clamshell**: `hl.monitor disabled=true` is unreliable like the hyprlang `keyword monitor X,disable` it replaced. Always paired with `wlr-randr --output X --off` in the scripts. If it ever recurs, rerun `i3-screen-manager clamshell`.
-- **Waybar workspace clicks do nothing under Lua mode**: known regression — waybar #5008. Hyprland 0.55+ tries to evaluate the IPC dispatch string as Lua, and waybar's old-style `dispatch workspace N` is not valid Lua. Workaround: `Super+N` keyboard shortcut (works), or mouse-wheel on the bar (works via configured `on-scroll-*`). See `docs/hyprland-lua-migration.md` § "Waybar workspace click regression". (Moot on the desktop since 2026-08-28 — the Quickshell bar replaced Waybar and its workspace clicks work; see `docs/2026-08-28-quickshell-bar-plan.md`.)
-- **Quickshell tray icon looks dead / right-click shows no menu**: the SNI context menu (e.g. Discord's "Quit") is NOT `secondaryActivate()` — that's the *middle*-click action. Right-click must call `SystemTrayItem.display(window, x, y)`, which renders a *platform* menu and therefore **requires the shell root to declare `//@ pragma UseQApplication`** (ours does). Left = `activate()`, middle = `secondaryActivate()`, `onlyMenu` items open on left too. Fixed 2026-08-28; details in `docs/2026-08-28-quickshell-bar-plan.md` § Task 3 Update.
-- **Restarting the Quickshell bar — use `qs kill`, not `pkill -f '^qs '`.** Once launched, `qs` re-execs to `/usr/bin/quickshell`, so `pkill -f '^qs '` matches nothing and a relaunch spawns a DUPLICATE bar (two stacked bars per monitor). The `Super+Shift+W` bind + any manual relaunch use `qs kill; qs -p ~/.config/quickshell`; `qs list` shows running instances. (Do NOT `pkill -f quickshell` from a tool/agent shell — the pattern self-matches the shell's own command line and kills it mid-command; use `qs kill` or `pkill -x quickshell`.) Separately, a rare upstream Quickshell 0.3.1 **SNI tray segfault** (stacktrace in Qt6Core I/O, log tail `sni.watcher: Unregistered StatusNotifierItem`) can down the bar when Keybase's flaky Electron tray icon churns — not a config bug (QML can't segfault). Both documented 2026-08-29 in `docs/2026-08-28-quickshell-bar-plan.md` § Update.
-- **GTK file dialog hangs 25 seconds**: `gvfsd-trash` D-Bus backend times out. Root fix: remove `gvfs` entirely (`sudo pacman -R gvfs evince`) and use `xreader` instead of evince. Keep `export GIO_USE_VFS=local` in `start-hyprland` as a safety net. Diagnose with `time gio info trash:///` (slow) vs `time GIO_USE_VFS=local gio info trash:///` (instant).
-- **`hl.monitor` does NOT auto-enable a disabled monitor** (see also the Key Design entry above) — passing `mode`/`position`/`scale` alone leaves a previously-disabled monitor OFF. Add `disabled = false` explicitly to re-enable. **This is why clamshell→disconnect used to blank both screens** and require a Hyprland restart. Fixed 2026-08-31 (`ece3762`, `daee2a0`); full write-up in `docs/2026-08-31-hyprland-workspace-split-and-disconnect-fix.md`.
-- **Two monitors cannot share position `0x0`** — Hyprland quietly refuses one of them, no error surfaced. Symptoms identical to the FALLBACK case: layout ends with no visible active monitor. When re-enabling internal at `0x0`, move any lingering monitor off `0x0` FIRST (disabled ≠ removed from Hyprland's coordinate state; `position` sticks around).
-- **`binds.window_direction_monitor_fallback` defaults to `true`** — `hl.dsp.focus({direction=...})` (i.e. Super+arrow) will cross monitor boundaries when there's no window in that direction on the current monitor. Fleet-wide `bindings.lua` sets this to `false` (`cffc29c`) — matches i3's confined behavior; cross-monitor moves stay available via explicit Super+N / Super+focus({monitor=…}).
-- **`movefocus` (`hl.dsp.focus({direction})`) does NOT reliably no-op when nothing is in the requested direction — it can grab an OFF-AXIS window, and the pick is focus-history-dependent.** Probed live 2026-09-02: from the ws10 top group with no window to its left, `focus({direction="left"})` reached via `group.prev()` jumped to the group *below* (off-axis, wrong direction), but reached via `focus({window="class:…"})` it correctly stayed put — same geometry, different history, different result. Consequence: you CANNOT use "dispatch focus, then check if the active window changed" as a proxy for "is there a neighbor in that direction." When you need a deterministic directional-adjacency decision (e.g. `focus_or_group`'s boundary escape in `bindings.lua`), compute it yourself from live geometry (`hl.get_workspace_windows(ws)` + `.at`/`.size`, requiring vertical overlap for a left/right neighbor). `movefocus` itself IS reliable once a real in-direction candidate exists — the misbehavior is only in the empty-direction fallback. This is why the group-focus escape is gated on a hand-rolled `has_neighbor` test, not on a movefocus round-trip.
-- **`Hyprland.toplevels` in Quickshell can be stale** — starts empty on qs startup (only sees toplevels opened via socket2 events since it connected; pre-existing windows have `workspace=-1`, `monitor=null`) and can drift after `hl.dsp.workspace.move` dispatchers. `shell.qml` runs a periodic `Hyprland.refreshToplevels()` every 3s (`90e316c`) so per-monitor `WindowTitle` filters see fresh workspace/monitor associations.
-- **Workspace urgency (attention) indicator — `HyprlandWorkspace.urgent`.** Quickshell 0.3.x exposes a live bool `urgent` on BOTH `HyprlandWorkspace` and `HyprlandToplevel` (confirmed in `/usr/lib/qt6/qml/Quickshell/Hyprland/_Ipc/quickshell-hyprland-ipc.qmltypes`; each has an `urgentChanged` notify). `Widgets/Workspaces.qml` reads `ws.urgent` and paints the workspace rectangle `Theme.crit` red (text brightened) when a window there requests attention — the i3/polybar red-number cue. `focused` takes color priority because Hyprland auto-clears urgency when the workspace is visited. Depends on `misc:focus_on_activate` being `false` (the default) so activation marks the window urgent instead of stealing focus; with it `true` you would never see urgency. Omarchy's own Workspaces widget does NOT implement this (same `occupied`/`focused` idiom, no urgent), so it is a local extension. Static red only — a flash was declined (no-frills/no-animations). Added 2026-09-03 (`da3331b`).
-- **All Hyprland Lua events available via `hl.on(...)`** (discovered 2026-08-31 by probing an unknown name — Hyprland's error message lists every valid one): `hyprland.start`, `hyprland.shutdown`, `config.reloaded`, `config.props_refreshed`, `monitor.added`, `monitor.removed`, `monitor.focused`, `monitor.layout_changed`, `workspace.created`, `workspace.removed`, `workspace.active`, `workspace.special_active`, `workspace.move_to_monitor`, `window.open`, `window.open_early`, `window.close`, `window.destroy`, `window.move_to_workspace`, `window.update_rules`, `window.class`, `window.title`, `window.fullscreen`, `window.pin`, `window.active`, `window.urgent`, `window.kill`, `layer.opened`, `layer.closed`, `input.keyboard.key`, `screenshare.state`, `keybinds.submap`. Setting an unknown event name is a cheap way to enumerate.
-- **Runtime config option setting under Lua mode**: `hl.config({ ["dotted.path.to.option"] = value })` — works both at config-load time and inside a bind function. This is how `binds.window_direction_monitor_fallback` is set; `hyprctl keyword` doesn't work under Lua mode.
-- **`rofi-rbw` auto-type — RESOLVED 2026-08-29 via ydotool.** Under X11 (i3/icewm), rofi-rbw auto-picks `xdotool` and works — bind sites there stay bare `rofi-rbw`. Under Hyprland/Wayland, rofi-rbw's auto-pick is `wtype`, which synthesizes keysyms and mangles layout-dependent characters. Fixed by forcing `--typer ydotool` on the Hyprland bind: `ydotool` talks to `ydotoold`, which opens `/dev/uinput` and injects real scancodes — the kernel then maps them like a physical keyboard. `ydotoold` is launched from Hyprland's `autostart.lua` shared-daemons block; **no udev rule needed** on these boxes because elogind already grants the logged-in user a per-user ACL on `/dev/uinput` (`getfacl /dev/uinput` shows `user:jim:rw-`); ydotoold's default socket at `$XDG_RUNTIME_DIR/.ydotool_socket` is exactly where the client looks. No session-dispatch wrapper turned out to be needed because the Hyprland config only ever runs on Wayland — a per-config `--typer` argument is enough, and X11 configs keep their auto-detected xdotool.
+Extend reads internal geometry before re-enabling the internal monitor;
+transitioning directly from clamshell needs special attention. The script
+suppresses several compositor errors, so printed success is insufficient.
+Quickshell checks named desktop pools before its dynamic laptop fallback;
+verify pool behavior when a laptop external happens to use `DP-2` or
+`HDMI-A-1`.
 
-### X11 / IceWM (laptop-specific)
+### Display Verification
 
-- **NVIDIA PRIME provider not yet bound**: external monitors don't appear in `xrandr --query` until `xrandr --setprovideroutputsource modesetting NVIDIA-G0` runs. The xinitrc-icewm-laptop fires it at session start; `i3-screen-manager`'s X11 path fires it again before any external operation (`ensure_nvidia_provider_x11`) as belt-and-suspenders. Sources disagree on the argument order (`provider source` vs `modesetting NVIDIA-*`), so the helper tries four orderings silently.
-- **Scale under X11**: no Wayland-style per-output fractional scaling. `i3-screen-manager scale` under X11 applies a server-wide `Xft.dpi` via `xrdb -merge`, which only affects newly-launched apps (existing apps don't redraw). Different model from Hyprland's hot-applied scale.
-- **Lid handling is manual under IceWM**: no native lid binding; auto-handling would require `acpid` + a script that crosses the root-to-user boundary. The current plan: enter clamshell explicitly via `i3-screen-rofi → Clamshell`. The `elogind-inhibit` inhibitor works under both compositors and prevents suspend on lid close. See `docs/2026-06-17-icewm-laptop-setup.md` § "Lid handling, deferred".
+With the relevant session and an external monitor available, check all four
+extend directions, mirror, clamshell, the closed-lid disconnect refusal,
+open-lid restoration, focused and explicit-output scaling, and status output.
+Check transitions from clamshell as well as from a normal extended layout.
+Inspect monitor state and visible output after every operation. On Hyprland,
+also check workspace pools, config reload, physical unplug/replug, and hot-plug
+at startup. On X11, check PRIME discovery and newly launched apps after DPI
+changes. Do not claim these hardware checks passed based on syntax checks.
 
-### X11 apps (both machines)
+## Hyprland and Quickshell
 
-- **Do NOT make "X structurally can't do <feature>" claims without checking current XLibre state.** Training-data pictures of X.Org's technical envelope are calibrated to Xorg-of-2020 and systematically underestimate what XLibre-of-2026 ships. Concrete counter-example (user has had to correct this twice, on two different machines, within 24 hours): **`Xnamespace` extension v1.0** ([X11Libre/xserver/doc/Xnamespace.md](https://github.com/X11Libre/xserver/blob/master/doc/Xnamespace.md)) provides server-side client isolation — namespaces with their own selections, cross-namespace resource/message blocking, token-based namespace assignment (MIT-MAGIC-COOKIE-1 per namespace), per-capability grants (`allow mouse-motion` / `allow shape` / `allow xinput`), and a `root` namespace that stays unrestricted so legacy apps keep working in the ambient-authority model they expect. That invalidates the "client isolation is structural to X" narrative. Other Wayland-supposedly-exclusive wins that ARE in XLibre: Present + DRI3 (tear-free), atomic modesetting, VariableRefresh, `TearFree` default; HDR is in-progress per user. **The one thing that IS true**: adoption of these XLibre features by distros / desktops / toolkits / apps lags what's in the codebase (see the Chromium/Brave gesture bullet below — that IS Wayland-only in Chromium's binary today). That's a coordination gap, NOT a technical limitation of X. Rule: check `github.com/X11Libre/xserver/tree/master/doc` and recent release notes before asserting a technical limitation of X — or, easier, ASK the user, who's been tracking XLibre's envelope.
-- **Chromium/Brave under X11 has NO kinetic scrolling and NO pinch-to-zoom — structural, not a flag flip.** Both features are implemented only in Chromium's Wayland Ozone backend (which reads raw libinput events directly); the X11 Ozone backend routes through the legacy GNOME/GTK scroll stack that lacks the fling and pinch code. Verified 2026-08-30 against Brave Origin 152.1.94.117: `chrome://flags` returns zero results in BOTH Available AND Unavailable tabs for `pinch`, `swipe`, and `smooth` (only `smooth-scrolling` exists — and that's JS/CSS scroll-behavior animation, not touchpad-input). The asymmetry tell: `--disable-pinch` exists (for Wayland users who want it off) but there is no reciprocal `--enable-pinch` for X11 — because the implementation isn't there. Chromium code-search for `EnablePinchZoom` / `kEnablePinchToZoom` in `ui/events/x/` and `ui/base/x/` returned zero. Structural direction is Wayland-only forever: GNOME 50 (March 2026) shipped with ZERO X11 code (Mutter's X11 backend removed 2025-11-05); Chromium's X11 backend gets bug fixes but no feature work; all 2026 gesture-adjacent CVEs (`CVE-2026-13855`, `-15764`, `-15765`) landed on Wayland UI-gesture code paths. **What DOES work under X11:** `TouchpadOverscrollHistoryNavigation` (2-finger back/forward swipe), default-on since Chromium v148 — Brave 152 has it with zero config. **If you want kinetic + pinch:** launch Brave under Hyprland/Wayland (same binary, different Ozone backend — the existing `dotfiles/.config/hypr/vars.lua` Brave launcher already does this via `--ozone-platform=wayland` + `--enable-features=…UseOzonePlatform…`). Not something the i3+X11 session can be talked into.
+Load this section for Lua config, session startup, focus/group behavior, bars,
+screenshots, or monitor sleep. Sources here: `start-hyprland`, `hyprctl-live`,
+`hypr-dpms-all`, `screenshot`, `screenshot.sh`, `flameshot.sh`. Configuration
+sources are `dotfiles/.config/hypr/` and `dotfiles/.config/quickshell/`.
 
-### Scripts / shell
+### Session and Configuration
 
-- **Silent-failure trap on missing runtime deps**: any script running `set -euo pipefail` that pipes to a shelled-out tool will exit zero-visible-output when the tool isn't installed — `set -e` propagates the failed pipe, script dies, no stderr surfaces because the tool was never given a chance to write one. First hit on `nomad-artix` 2026-08-06 when `xclip` was missing from the emoji picker's `printf … | xclip` line: menu "vanished" after selection with no diagnostic. All rofi menu scripts in the fleet now guard their required tools at the top by sourcing `lib/require.sh` (via `~/.local/lib/sh/require.sh` — one-time machine-local symlink) and calling `_require rofi tool1 tool2 …`; missing tools produce a `notify-send -u critical` + a stderr line. Pattern + shared-library design documented in `docs/2026-07-29-rofi-emoji-picker-fix.md` § 8. Apply the same guard to any new shell script that shells out to non-universal tools.
+The live Hyprland config directory points into dotfiles. `hyprland.lua` loads
+`machine`, `vars`, `envs`, `monitors`, `looknfeel`, `rules`, `autostart`, and
+`bindings`. `machine.lua` selects static capabilities by hostname; branch on
+traits for hardware behavior. `HYPR_MACHINE_OVERRIDE` supports the test harness.
+Keep config-load code cheap and free of startup side effects: configuration
+evaluation can happen more than once on a reload. Launch daemons from
+`hl.on('hyprland.start', ...)`, and keep reload-specific work in its own hook.
 
-### Hardware / kernel
+The root `start-hyprland` script is the laptop-oriented launcher. Dotfiles also
+contains a desktop launcher with the same basename. Resolve the installed
+command before editing it. Launchers set session identity, the user D-Bus
+address, keyring and SSH-agent environment, GPU settings, and then execute
+`/usr/bin/start-hyprland`. Do not invoke a session launcher inside a running
+compositor. Desktop autostart launches audio; laptop OpenRC user services own
+audio and must not be duplicated by compositor autostart.
 
-- **Mouse poll rate config ignored**: on the stock kernel, `usbhid` is built-in (not a module), so `/etc/modprobe.d/` has no effect. Use `usbhid.mousepoll=1` in GRUB's `GRUB_CMDLINE_LINUX_DEFAULT` and `grub-mkconfig -o /boot/grub/grub.cfg`.
+Use Lua-mode `hl.dsp.*` dispatchers, `hl.monitor`, and `hl.config` in this
+configuration. Legacy `hyprctl keyword` and bareword dispatcher strings do not
+provide the same interface. Prefer current code and installed API definitions
+over examples for another Hyprland version.
 
-### Package management (pacman / Artix)
+`hyprctl-live` resolves a signature via `hyprctl instances -j` on each call;
+it picks the first discovered instance. This avoids stale
+`HYPRLAND_INSTANCE_SIGNATURE` values in long-lived shells. The display CLI
+wraps all its Hyprland calls through it. DPMS, screenshot, keyboard, and lid
+helpers still use bare `hyprctl` and expect a current session environment.
 
-- **`Invalid operation 'reload'` on the dbus-reload post-transaction hook** (`upc`/`pacman -Syu`): an Artix packaging desync — `dbus-openrc 20260324-1`'s hook calls `openrc-hook reload dbus`, unsupported by `openrc 0.63.3-2`'s dispatcher (which only has `dbus_reload`). **Harmless** (PostTransaction; packages install fine; only a live dbus policy reload is skipped). Not fixable by updating — both packages are newest. **TEMPORARY** fix: `/etc/pacman.d/hooks/dbus-reload.hook` override calling `dbus_reload`. Full write-up + Watch List + laptop note in `docs/2026-08-03-dbus-reload-hook-openrc-desync.md`. **Already reported + patched upstream on the Artix forum** (Gitea issues are closed) — a `dbus-openrc` rebuild is expected, so **re-evaluate/remove the override on any `dbus-openrc` bump, or by 2026-09-03.**
+### Focus and Groups
 
-### X11 historical (now mostly moot)
+The configured layout is dwindle. `bindings.lua` owns split direction,
+whole-group moves, group membership moves, and tab reordering; these are
+separate operations and must retain their distinct bindings.
 
-These bit us under i3/X11 and are kept here only because they document past pain
-that could resurface if X11 is ever re-introduced (e.g. via an X11 app under
-XWayland, or rollback).
+`focus_or_group` gives `Super+left/right` one action per press: focus a tile
+outside a multi-window group, cycle an interior tab, leave an edge tab for a
+same-row neighboring tile, or wrap within the group when no such tile exists.
+Neighbor detection is geometric and workspace-scoped. Do not replace it with
+a trial focus dispatch: empty-direction focus can select an off-axis window.
+`binds.window_direction_monitor_fallback=false` confines directional focus to
+the monitor. Cross-group vertical focus is on `Super+Ctrl+arrows`.
 
-- **`xorg.conf.d TargetRefresh` ignored**: the `TargetRefresh` monitor option doesn't work reliably (e.g. amdgpu). Use explicit `xrandr --rate` in `~/.xinitrc` instead.
-- **xlibre-xserver 25.0.0.21 vblank regression (2026-02-22)**: 20→21 caused X lockup (`modeset(0): failed to queue next vblank event`). Userspace X server bug, NOT the desktop's PCIe/GPU hardware issue. Downgrade cached at `/var/cache/pacman/pkg/xlibre-xserver-25.0.0.20-1-x86_64.pkg.tar.zst`. Doubly moot now: we're on Hyprland (X server rarely spawns) AND we're on the 25.1.x line via the vendor repo since 2026-08-30 (see `docs/2026-08-30-xlibre-artix-drop-and-vendor-repo-migration.md`) — the 25.0.0.x branch that had the .21 bug is now `[xlibre-oldstable]` backport-only. Rollback recipe if a future 25.1 regression bites: swap the pacman.conf stanza to `[xlibre-oldstable]` + `pacman -Syyuu`.
-- **Workspace move errors via `i3-msg`**: `"No output matched"` was usually harmless — workspace was already on the target output. (`i3-msg` no longer used; Hyprland uses `hyprctl dispatch moveworkspacetomonitor`.)
+Use Lua callbacks for short compositor-event logic that reads live compositor
+state. Keep blocking waits, external tool orchestration, and cross-session
+logic in scripts. Chat layout waits must not block a Lua event callback.
+
+### Bar Contracts
+
+`shell.qml` creates one top bar per screen. Portrait screens use compact
+content; the system widget cluster belongs on landscape bars. `Theme.qml`
+owns typography and colors. Keep the existing square, opaque, restrained
+styling and immediate interactions. `Popout.qml` supplies anchoring, screen
+clamping, and click-outside dismissal through `HyprlandFocusGrab`.
+
+Keep `//@ pragma UseQApplication` in the shell root for tray platform menus.
+Tray left-click uses `activate`, middle-click `secondaryActivate`, and
+right-click `display(window, x, y)`; menu-only items also open on left-click.
+Use `qs list` to inspect instances and `qs kill` followed by
+`qs -p ~/.config/quickshell` for a deliberate restart. Broad `pkill -f`
+patterns can match the invoking shell or fail to match Quickshell's re-exec.
+
+Window titles are filtered per monitor. `Hyprland.refreshToplevels()` runs
+every three seconds so windows predating bar startup and moved workspaces
+have fresh associations. Workspace urgency uses `HyprlandWorkspace.urgent`;
+focused appearance takes priority. Inspect both landscape and portrait bars
+when changing widget widths or pools.
+
+Weather reads machine-local `~/.config/quickshell/weather-location.json`
+(`name`, `lat`, `lon`) at startup, falling back to its configured coordinates.
+It polls Open-Meteo every 20 minutes for Fahrenheit current conditions and a
+four-day forecast. The file is not supplied by the tracked config. Automatic
+travel-location discovery is not implemented. Widgets without suitable
+hardware, such as laptop CMOS monitoring, hide when their input is absent.
+
+### Capture and Sleep
+
+`Print` opens Flameshot. With `m.screenshot == 'tensaku'`, `Super+Print`
+captures/annotates a region, `Shift+Print` captures/annotates the active monitor,
+`Ctrl+Print` copies a region, and `Super+Ctrl+Print` annotates the clipboard.
+
+`screenshot` uses grim, slurp, and wl-clipboard, saving under
+`${XDG_PICTURES_DIR:-$HOME/Pictures}`. Region selection can freeze with
+hyprpicker. `full` falls back to all outputs if active-monitor lookup fails.
+`--annotate` uses `tensaku-edit` if present; clipboard mode requires it.
+`screenshot.sh` is a separate hyprshot/satty pipeline, not a Flameshot wrapper.
+`flameshot.sh` sets `QT_SCREEN_SCALE_FACTORS` for Flameshot.
+
+Flameshot's Wayland and X11 settings are copied onto `flameshot.ini` at session
+startup. Qt's config rewrites can replace a symlink, so the active file is
+intentionally copied. Stable variant names may themselves be symlinks.
+Check the session portal backends and stale portal processes for screenshot
+failures; X11 uses its legacy capture path.
+
+`hypr-dpms-all on|off` enumerates monitors and dispatches the table form
+`hl.dsp.dpms({ monitor = ..., action = 'on'|'off' })` for each. Hypridle calls
+this helper and uses elogind's `loginctl` for suspend. Do not substitute a
+single string-form DPMS call when changing multi-monitor sleep.
+
+### Hyprland Verification
+
+For config changes, run dotfiles' Lua tests, inspect `hyprctl-live configerrors`,
+then exercise the affected behavior in the actual compositor. Check both
+machine branches, reload versus startup, focus at group edges, and every
+monitor when relevant. Bar checks include duplicate instances, tray menus,
+portrait overlap, popout dismissal, urgency, and missing-data states. Capture
+checks include cancellation, clipboard output, and annotation availability.
+
+## X11 and Input
+
+Load this section for i3/IceWM, X11 window identity, keyboard/mouse settings,
+rofi dependencies, or clipboard typing. Sources here: `i3-keyboard-rofi`,
+`i3-mouse-setup`, `i3-mouse-rofi`, `keybase-popup-anchor-x11`, and `lib/require.sh`.
+Desktop configs and X11 launchers live in dotfiles.
+
+### X11 Configuration
+
+Dotfiles has `start-i3`, `start-i3-laptop`, `start-icewm`, and
+`start-icewm-laptop` under `.local/bin`, with corresponding `.xinitrc-*` files.
+For i3, `.config/i3/config` selects `config-desktop` or `config-laptop`;
+Polybar has matching configs and launchers. IceWM uses `.icewm/` on desktop
+and `ICEWM_PRIVCFG` for `.icewm-laptop/`. Resolve live symlinks before edits.
+
+i3's desktop config pins workspaces 1-6 to `DP-2` and 7-10 to `HDMI-1`.
+The laptop does not use fixed external-output pins. X11 screen layout belongs
+in the session setup or display CLI. IceWM's desktops are global; its native
+taskbar does not implement independent per-monitor workspaces.
+
+In the configured i3 setup, `exec` runs at session startup and `exec_always`
+also runs on an i3 restart; a config reload does not rerun them. Use startup
+for long-running daemons and retain single-instance guards on restart hooks.
+Validate config with `i3 -C -c PATH`. Live behavior requires the real session;
+a single-screen nested X server cannot verify physical multi-monitor layout.
+
+### Keyboard, Mouse, and Clipboard
+
+`i3-keyboard-rofi` toggles `ctrl:nocaps,shift:both_capslock_cancel` versus no
+keyboard options. X11 clears options through `setxkbmap -option` before
+applying the chosen set. Its Wayland branch still uses legacy `hyprctl
+getoption`/`keyword` and needs Lua-mode work; do not describe that branch as
+fully compatible with the current config.
+
+Mouse DPI uses solaar at the HID level on either backend. `i3-mouse-setup`
+defaults to 1200 and restores the saved value; the menu offers 800-2000.
+Mouse identity and DPI are stored under `~/.config/i3-mouse-manager/`.
+The login helper quietly skips unavailable hardware; the menu reports a
+missing solaar installation or an undetected mouse. Inspect whether `usbhid`
+is built into the running kernel before using modprobe configuration for poll
+rate; built-in driver parameters belong in the kernel command line.
+
+All four `i3-*-rofi` menus source `~/.local/lib/sh/require.sh`. Keep its symlink
+to this repo's `lib/require.sh` installed. `_require` checks commands and
+reports failures on stderr and through `notify-send` when available. Put
+dependency checks before pipelines whose failure could make a menu disappear.
+
+The dotfiles emoji picker uses wl-copy on Wayland and xclip on X11; rofi's
+selection and the clipboard tool both need to be present. `Super+period` is
+the Hyprland emoji binding; its float toggle occupies `Super+Ctrl+Space`.
+Check keysyms case-insensitively when looking for duplicate Hyprland binds.
+
+Bitwarden lookup is provided by external `rbw`/`rofi-rbw`. Hyprland launches
+`rofi-rbw --typer ydotool`; `ydotoold` must be running with `/dev/uinput`
+access and a matching runtime socket. Check the actual user ACL before adding
+device rules. X11 uses xdotool with a plain rofi-rbw binding. Keep typing tests
+to non-secret sample text. An unavailable clipboard owner can block X11 paste;
+inspect the configured clipboard manager and the owning app before blaming
+the consumer.
+
+### Keybase Popup and Application Identity
+
+`keybase-popup-anchor-x11` subscribes to i3 window events. It matches a small
+floating Keybase window by class, size, and floating state, then positions it
+below the bar on the output containing it. The main window can share the
+popup's title during startup; a title-only rule is not sufficient.
+`BAR` defaults to 28 and `POPUP_MAX_W` to 1000; the laptop launcher supplies
+its bar height. Preserve the `flock` guard and test main-window startup as
+well as popup opening.
+
+Hyprland handles the Keybase popup in dotfiles' `autostart.lua`: its
+`window.open` callback moves the cursor to the popup's center. Moving the
+Wayland popup itself can dismiss it. Keep this backend-specific behavior.
+
+Brave Origin's X11 main class is `Brave-origin`; helper windows can use other
+classes. Its X11 PWAs share that class and use `crx_<app-id>` instances.
+Wayland PWA classes include the app ID and profile. Electron main and helper
+windows can differ in capitalization. Inspect `xprop` or `hyprctl-live clients
+-j` and match the intended window, including its size/role when needed.
+
+### X11 and Input Verification
+
+Check the relevant WM config, missing-tool notification, picker cancellation,
+both keyboard modes, saved DPI restoration, and clipboard contents. For the
+Keybase watcher, test each monitor's tray, opening the main app, i3 restart,
+and duplicate-process prevention. Claims about X11 limitations must be checked
+against the installed XLibre implementation and application backend; avoid
+generalizing from another server version or an app's missing integration.
+
+## Agent Usage
+
+Load this section for the Python collectors, their caches, JSON output, or the
+agent widget. Sources: `agent-usage`, `agent-usage-claude`,
+`agent-usage-codex`, and dotfiles' `Widgets/Agents.qml` and `AgentsPanel.qml`
+under `.config/quickshell/`.
+
+### Collection and Storage
+
+The collectors are vendored from `basecamp/omarchy` (MIT); retain attribution.
+They use Python's standard library and print one JSON record each. The Bash
+orchestrator resolves sibling collectors with `readlink -f`, runs them in
+parallel, checks successful stdout with jq, and prints an array in
+Claude/Codex order. A failed collector is omitted; both failing produces `[]`.
+Success here means parseable JSON, not schema validation.
+
+Successful records are atomically cached to
+`${XDG_STATE_HOME:-$HOME/.local/state}/agent-usage/{claude,codex}.json`.
+Failures do not remove previous records. Collector caches live beneath
+`${XDG_CACHE_HOME:-$HOME/.cache}/agent-usage/`. A retained file is not proof
+of a fresh measurement. Agent credentials/transcripts are inputs; cache/state
+files are outputs. Do not expose credentials in JSON, logs, or tests.
+
+Claude reads `CLAUDE_CONFIG_DIR` (default `~/.claude`), project transcripts,
+aggregate/history fallbacks, and supported pi/omp/opencode usage. Limits come
+from its OAuth usage endpoint using the existing login. The collector does
+not refresh that login. It can reuse cached limits on failure, excluding
+windows whose reset time has passed; transport failures can set `retryAdvised`.
+
+Codex scans `CODEX_HOME` (default `~/.codex`) session and archived-session
+JSONL plus supported pi/omp/opencode sources. Limits are read via a temporary
+`codex app-server` subprocess using `initialize`, `account/read`, and
+`account/rateLimits/read`. The collector reads primary and secondary limit
+windows; do not assume it implements every shape a newer server might expose.
+The subprocess is terminated after the query. Scanner support is limited to
+the formats the code parses; a new CLI storage format needs verification.
+
+Normal local-scan reuse is 20 seconds; `--limits-only` permits reuse for 900
+seconds. `--force` bypasses that reuse. Claude also throttles successful limit
+probes over a 15-second interval unless forced; Codex probes limits each run.
+Preserve date-sensitive caches, file locking, and token accounting when
+changing these paths. In native Codex usage, cached input is already included
+in input totals and reasoning is included in output; do not count either twice.
+
+### JSON Contract
+
+| Field | Meaning |
+|-------|---------|
+| `schemaVersion` | Integer `1` |
+| `id`, `name`, `updatedAt` | Agent identifier, display name, UTC timestamp |
+| `ready`, `hasLocalStats` | Booleans used by consumers; readiness is not an authentication guarantee |
+| `tierLabel`, `usageStatusText`, `authHelpText` | Plan/status/help strings |
+| `limits` | Array with `label`, `percent`, `resetsAt`, and optional `title` |
+| `todayPrompts`, `todaySessions`, `todayTotalTokens` | Today's integer counters |
+| `todayTokensByModel` | Object mapping model names to token totals |
+| `modelUsage` | Object keyed by model, with `inputTokens`, `outputTokens`, `cacheCreationInputTokens`, `cacheReadInputTokens` |
+| `recentDays` | Array of `{date, messageCount}`; `messageCount` contains token totals |
+| `totalPrompts`, `totalSessions`, `activeDays` | Aggregate counters |
+| `retryAdvised` | Optional retry hint; not acted on by the current widget |
+
+`limits[].percent` is a fraction, not an integer percentage. Consumers multiply
+by 100 for labels and clamp meter fill. `resetsAt` is a timestamp or an empty
+string. `modelUsage` is an object, not an array; per-model totals sum its four
+token fields. Do not hardcode plan names, model names, or a fixed number of
+limit windows.
+
+### UI and Known Limitations
+
+`Agents.qml` starts a collection at bar startup and every 600000 ms. It reads
+stdout, not the saved record files. A malformed result leaves its prior UI
+state; an array replaces it. The widget filters on `ready`, displays the
+highest limit, and uses warning/critical thresholds of 0.75/0.9. Its panel
+shows agent limits, reset countdowns, today counters, and the top four models.
+
+Readiness differs between collectors: Claude requires prompts or limits;
+Codex currently sets `ready=true` even when its limit probe fails. An
+unauthenticated Codex record may therefore keep the bar item visible.
+The current QML has no manual refresh control and no fast retry for
+`retryAdvised`; do not document either as available. Antigravity has no
+collector in this repo. Account limits describe account usage; local token
+statistics only cover the sources available on this machine.
+
+### Agent-Usage Verification
+
+Check each record and the merged array with jq; verify schema types, empty
+data, absent tools/auth, expired reset windows, failures retaining old cache
+files, and simultaneous invocations. Use isolated cache/state directories and
+fixtures for automated checks. Verify fractional meters and model totals
+against the records in the actual widget when changing its contract. Syntax
+checks alone do not verify remote account limits or UI rendering.
+
+## System Maintenance
+
+Load this section for hardware, OpenRC services, the Tailscale helper, CMOS
+monitoring, or VM setup. Sources: `start-hyprland`, `i3-tailscale-rofi`,
+`i3-cmos-battery`, `volumecontrol.sh`, and `win11-vm-setup.sh`. Check active
+machine state before applying configuration outside this repository.
+
+### Service and GPU Boundaries
+
+Use OpenRC service tools on these machines and elogind's `loginctl` for session
+operations. The user D-Bus socket is `/run/user/<uid>/bus`; launchers export
+its address. Gnome-keyring owns secrets/PKCS#11; a separate OpenSSH agent uses
+`$XDG_RUNTIME_DIR/ssh-agent.sock`. Check whether that agent is live and whether
+keys are loaded separately. Keep desktop-session and laptop-user-service
+ownership of PipeWire distinct.
+
+The laptop launcher uses stable DRM PCI paths for Intel `0000:00:02.0` and
+NVIDIA `0000:01:00.0`. Hybrid mode lists Intel first in `AQ_DRM_DEVICES`, then
+NVIDIA for the external ports; discrete mode selects NVIDIA alone. Only the
+discrete branch forces `GBM_BACKEND=nvidia-drm` and NVIDIA GLX. Hybrid uses
+Intel VA-API (`iHD`). Do not apply these laptop-specific paths or driver
+overrides to the AMD desktop launcher in dotfiles.
+
+The laptop firmware supports Hybrid and Discrete graphics modes. Changing
+that mode requires a reboot and changes GPU availability and power use.
+For poor external rendering, inspect actual GPU routing, DRM modeset state,
+and frame behavior before adjusting compositor settings. A historical symptom
+does not establish the current driver stack's performance.
+
+`volumecontrol.sh` forces the Intel Vulkan ICD for pavucontrol. Treat this as
+a hardware-specific wrapper rather than a universal audio requirement.
+
+### CMOS Monitoring
+
+`i3-cmos-battery` reads an it87-family `Vbat` hwmon input in millivolts.
+Thresholds are OK at >=2800, LOW at 2500-2799, and DEAD below 2500. No sensor
+produces no output. `polybar` is the default output and emits markup;
+`quickshell` emits `<volts> <status>`; `cli`/`--cli` emits a report. Polling is
+owned by the bar. Keep thresholds and output shapes shared between consumers.
+
+### Tailscale and Open Brain
+
+`i3-tailscale-rofi` controls the local daemon and rewrites only the Open Brain
+URL in `~/.claude.json`. It does not update Codex's MCP configuration. Its LAN
+URL, tailnet endpoint, and `tailscale up --hostname=nomad-artix
+--accept-dns=false` arguments are machine-specific. Read them before adapting
+the script. Open Brain must be reachable on its configured interface/port.
+The menu also supports login and a manual URL toggle. Preserve other JSON
+fields and avoid logging authentication headers while investigating failures.
+
+### VM Setup
+
+`win11-vm-setup.sh` is a privileged host-setup program for QEMU/KVM and libvirt,
+run as the normal user with sudo available. It checks AMD `svm` and `/dev/kvm`,
+installs packages, configures libvirt group access, enables OpenRC services,
+starts NAT networking, creates the `vms` pool at `/data/vms`, and optionally
+downloads virtio drivers. On btrfs it applies nodatacow to the image directory.
+Group changes require a fresh login. It may restart services on a rerun.
+
+Its AMD preflight, storage path, and libvirt `auth_unix_rw=none` choice must be
+reviewed before use on another host. It does not create or install the Windows
+guest. Do not run it as a documentation or syntax check.
+
+For a guest, use the system libvirt connection, select UEFI/Secure Boot and a
+TPM 2.0 device, allocate suitable memory/CPU and disk in the intended pool,
+and supply the Windows installation ISO. A virtio disk needs its matching
+Windows driver; SATA avoids that installation-time dependency. Install Garmin
+Express in Windows and attach the device via USB Host Device or the console's
+USB-redirection control. USB-device passthrough is distinct from PCI/VFIO
+passthrough. Check `virsh list --all`, `net-list --all`, and `pool-list --all`
+for actual host/guest state instead of relying on an old completion checklist.
+
+### System Verification
+
+Use read-only configuration, package, service, device, and connection queries
+first. Verify both the intended state and user-visible behavior after a system
+change. Check absent-sensor output, Tailscale failure/auth paths, and the
+actual VM storage and service state when their respective tools change.
+
+## Applications
+
+Load this section for Ghostty/Brave identity and config deployment, chat layout,
+GTK dialogs, or application-specific desktop integration. Sources are chiefly
+dotfiles' launchers, `.desktop` overrides, WM rules, and terminal configs.
+
+### Configuration and Window Identity
+
+Resolve `~/.config/ghostty`, `~/.config/kitty`, and browser launcher paths on the
+machine before editing. Shared files in dotfiles and live copies can differ.
+Ghostty is the configured default terminal. Validate its parsed settings with
+`ghostty +show-config`; keep comments on their own lines. Use a valid dotted
+application ID with `--class` for Wayland rules and the configured
+`--x11-instance-name` for X11 rules. Inspect user `.desktop` overrides when
+single-instance or D-Bus activation changes window placement.
+
+Brave Origin's profile directories are machine-local. `machine.lua` supplies
+the alternate-profile directory to Hyprland launchers; do not assume identical
+`Profile N` slots across hosts. Browser/PWA flags are determined by the first
+process using the profile. If remote-debugging flags are required, launching
+a PWA first without them can prevent a later browser command from applying
+them. Inspect the running command and local launcher before changing flags.
+
+Native-messaging host manifests and MIME associations are local integration
+points. Recheck their paths when changing browser packages or profiles. For
+broken Gmail link navigation, inspect the new tab's request chain: a redirect
+into an extension resource indicates a different problem from a blocked
+request or a window-manager focus rule. Fix a request-matching extension rule
+at the affected request domain rather than assuming the originating tab's
+domain is the relevant setting.
+
+### Chat Layout
+
+Dotfiles' `i3-chat-launch` selects the session-specific builder. The i3 path
+uses `append_layout` and swallow criteria; its rebuild helper can close and
+relaunch the chat windows. The Hyprland builder `hypr-chat-layout` launches
+missing apps, selects their primary windows, parks targets on a special
+workspace, and serially forms Messages/WhatsApp and Discord/Keybase/Slack
+groups on workspace 10. Group order and group locking are part of the
+algorithm; app startup and largest-window selection handle transient helpers.
+Rerunning rebuilds the grouping of existing windows. It can visibly move
+windows and must remain a shell workflow because it waits for mapping.
+
+The desktop has the chat builder integration. Shared Hyprland rules place
+chat apps on workspace 10 on the laptop, but do not infer an automatic laptop
+chat-wall build. Consult the actual autostart entries; a provided helper is
+not necessarily enabled at login. Verify repeat invocation, missing apps,
+main-window selection, tab order, and focus restoration after builder changes.
+
+### GTK File Dialogs
+
+For slow file dialogs, compare `gio info trash:///` with the same query under
+`GIO_USE_VFS=local`. A GVfs trash-backend timeout can delay dialog construction.
+The local VFS setting bypasses GVfs backends such as trash and network shares;
+place it in the intended session/app environment if that behavior is wanted.
+Check package reverse dependencies before removing GVfs. Do not reproduce
+package-removal commands from an assumed dependency graph.
+
+### Application Verification
+
+Check the resolved config, effective settings, actual window identity, and
+fresh versus already-running app launches. Exercise both Wayland and X11
+paths when the change affects shared launchers. Prefer non-secret fixtures
+for browser, clipboard, and password-manager integration checks.
+
+## Package Installation
+
+Load this section before installing, updating, replacing, or removing tools,
+reviewing an AUR package, or changing pacman repositories. Sources:
+`aur-malware-check`, `/etc/pacman.conf`, installed package metadata, and the
+vendor's current distribution instructions.
+
+### Selection Policy
+
+Prefer these paths in order, checking suitability for the specific tool:
+
+1. Official packages from the machine's configured Artix/Arch repositories.
+2. The vendor's own native distribution, installer, or signed binary repository.
+3. An isolated language-tool installation, such as pipx for a Python CLI.
+4. A vendor container image for tools suited to occasional containerized use.
+5. A locally maintained PKGBUILD when pacman integration warrants its upkeep.
+6. An individually reviewed AUR recipe when the other paths do not fit.
+
+Inspect the vendor/source identity, update path, and removal path. Keep Python
+tools out of system site-packages; use an owned virtual environment or pipx.
+Avoid sudo-driven global npm installs for project tooling. A vendor URL or
+container namespace must actually belong to the publisher; retain available
+signature/checksum verification. Read installer behavior before executing it.
+
+### Pacman and XLibre
+
+Inspect `/etc/pacman.conf` and sync metadata before assuming a package is AUR
+only. An installed foreign package can have a matching official package now;
+`pacman -Qm` alone does not establish its source or trust. The Arch `extra`
+overlay is configured after Artix repositories on these machines; preserve
+Artix package precedence and check init-system dependencies before changing
+that arrangement. Do not perform partial upgrades as an installation shortcut.
+
+The configured XLibre vendor source is `[xlibre-stable]`, with
+`https://packages.xlibre.net/arch/stable/$arch` before `[world]` and an
+`IgnorePkg` entry for `xorg-server xorg-server-common`. Preserve signature
+checking and verify publisher keys through current authoritative instructions
+before bootstrapping trust on another machine. Query package versions, owners,
+and repositories instead of recording a version inventory as enduring fact.
+
+For a dbus reload-hook error, compare the system hook, any local override,
+and `/usr/share/libalpm/scripts/openrc-hook`. A local override can shadow a
+correct packaged hook. The relevant dispatcher verb is `dbus_reload`; check
+the installed implementation before prescribing an override. Do not carry
+completed workaround deadlines forward as active tasks.
+
+### AUR Audit Contract
+
+Run `aur-malware-check` before and after AUR operations as the repository's
+package-maintenance convention. It defaults to installed foreign packages,
+checks the Atomic-incident denylist, and can scan related filesystem and
+scriptlet indicators. It is an incident-specific check, not a general guarantee
+that a package is trustworthy. Review the recipe and changes independently.
+
+Options: `--all` includes every installed package, `--deep` scans indicators,
+`--near` checks similar names, `--list FILE` supplies a local list, and
+`--url URL` changes the source. The tool downloads/caches the list with an
+offline fallback and reports without removing packages or payload files.
+Exit codes are 0 for no exposure found, 1 for exposure found, and 2 for errors.
+
+### Package Verification
+
+Check origin, signature policy, transaction contents, and dependency effects
+before a package change, then verify installed ownership, the executable
+resolved on PATH, and relevant service or desktop behavior. Validate the audit
+tool with a local denylist and controlled package/indicator fixtures when
+changing its matching logic; a live incident-list check is not broad test
+coverage. Use current vendor documentation for native CLI installation and
+authentication instead of retaining dated migration recipes here.

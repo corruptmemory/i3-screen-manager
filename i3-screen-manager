@@ -69,8 +69,8 @@ is_wayland() {
 # error text, and this script would appear to do nothing at all. Route every
 # hyprctl call through `hyprctl-live`, which rediscovers the live signature on
 # each invocation. In-session terminals (autostart execs, keybinds) also work
-# fine — hyprctl-live's rediscovery is a cheap `ls $XDG_RUNTIME_DIR/hypr`.
-# See CLAUDE.md § Hyprland common issues → "Stale HYPRLAND_INSTANCE_SIGNATURE".
+# fine; hyprctl-live queries `hyprctl instances -j` on each invocation.
+# See CLAUDE.md#hyprland-and-quickshell for session discovery.
 hyprctl() { command hyprctl-live "$@"; }
 
 # ============================================================================

@@ -20,8 +20,8 @@
 # which starts the inhibitor + disables eDP-1 via xrandr. Leave via
 #   `i3-screen-rofi → Disconnect`.
 #
-# If you do want acpid wiring later, see the recipe in
-#   docs/2026-06-17-icewm-laptop-setup.md (section: Lid handling, deferred).
+# No automatic acpid wiring is supplied by this repo. See
+#   CLAUDE.md#displays for lid handling and current constraints.
 
 PIDFILE="/tmp/i3-screen-manager-inhibit.pid"
 INTERNAL="eDP-1"

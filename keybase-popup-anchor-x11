@@ -20,9 +20,9 @@
 # SIZE here fixes both cases: the main window stays tiled (swallow works), and
 # only the small floating popup is re-anchored.
 #
-# Same conclusion the Hyprland port reached — see
-# docs/2026-08-13-keybase-tray-popup-i3.md — so the fleet runs one watcher shape
-# per compositor: socket2 there, `i3-msg -t subscribe` here.
+# Hyprland uses a separate Lua window.open callback in dotfiles;
+# this watcher uses `i3-msg -t subscribe`. See CLAUDE.md#x11-and-input
+# for the backend-specific popup behavior.
 #
 # Behaviour: on each Keybase window that is FLOATING and <= POPUP_MAX_W wide
 # (i.e. the popup), move it flush-right under the top bar of whatever output it

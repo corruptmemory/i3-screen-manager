@@ -2,9 +2,8 @@
 #
 # Sourced (not executed) by scripts in this repo AND in the dotfiles repo.
 # Machine-local install is a symlink at $HOME/.local/lib/sh/require.sh
-# pointing at this file — see docs/2026-07-29-rofi-emoji-picker-fix.md § 8
-# for the trap-class this guards against, and 2026-07-21-i3-laptop-setup.md
-# § "One-time machine setup (symlinks)" for the install step.
+# pointing at this file. See README.md#installation for the install step
+# and CLAUDE.md#x11-and-input for dependency diagnostics.
 #
 # Sourcing pattern (verbatim in every consumer script):
 #

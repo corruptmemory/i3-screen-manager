@@ -3,7 +3,7 @@
 # and cache each record to ~/.local/state/agent-usage/<id>.json. Data layer for
 # the Quickshell agents widget (Widgets/Agents.qml). Collectors are vendored
 # from basecamp/omarchy (MIT). See
-# docs/2026-09-03-agent-usage-cards-design.md.
+# CLAUDE.md#agent-usage for the current record contract.
 set -uo pipefail
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/agent-usage"

@@ -2,7 +2,7 @@
 # Vendored from basecamp/omarchy (MIT): bin/omarchy-agent-usage-claude.
 # Read-only: prints one display-ready JSON usage record to stdout. Adapted only
 # to drop the omarchy cache-dir segment; the OAuth/limits + local-stats logic is
-# upstream's. See docs/2026-09-03-agent-usage-cards-design.md.
+# upstream's. See CLAUDE.md#agent-usage for the record contract.
 """Collect Claude Code usage into one display-ready JSON record.
 
 Everything the agents panel shows for Claude comes from this one
