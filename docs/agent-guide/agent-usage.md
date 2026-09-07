@@ -67,7 +67,10 @@ limit windows.
 ## UI and Known Limitations
 
 `Agents.qml` starts a collection at bar startup and every 600000 ms. It reads
-stdout, not the saved record files. A malformed result leaves its prior UI
+stdout, not the saved record files. If `agent-usage` is not on PATH when the
+bar starts, that first poll fails (`Process failed to start` in `qs log`) and
+the item stays hidden until the next interval; restart the bar after
+installing the symlinks. A malformed result leaves its prior UI
 state; an array replaces it. The widget filters on `ready`, displays the
 highest limit, and uses warning/critical thresholds of 0.75/0.9. Its panel
 shows agent limits, reset countdowns, today counters, and the top four models.
