@@ -2,8 +2,8 @@
 
 Read this guide for hardware, OpenRC services, the Tailscale helper, CMOS
 monitoring, or VM setup. Sources: `start-hyprland`, `i3-tailscale-rofi`,
-`i3-cmos-battery`, `volumecontrol.sh`, and `win11-vm-setup.sh`. Check active
-machine state before applying configuration outside this repository.
+`i3-cmos-battery`, `volumecontrol.sh`, `ora4-hw-pin`, and `win11-vm-setup.sh`.
+Check active machine state before applying configuration outside this repository.
 
 ## Service and GPU Boundaries
 
@@ -30,14 +30,16 @@ does not establish the current driver stack's performance.
 `volumecontrol.sh` forces the Intel Vulkan ICD for pavucontrol. Treat this as
 a hardware-specific wrapper rather than a universal audio requirement.
 
-A USB DAC with a gain-only hardware volume (the desktop's Kanto ORA4 exposes
-0 to +16 dB, no attenuation) leaves a silent range below its unity base under
-the default ACP path, because the sink volume rides the hardware route. Force
-software volume with a machine-local WirePlumber drop-in in
-`~/.config/wireplumber/wireplumber.conf.d/` that sets `api.alsa.use-acp=false`
-on the card and `api.alsa.soft-mixer=true` on the node; a node-only soft-mixer
-does not override ACP. Confirm by watching the hardware mixer stay fixed while
-the graph volume changes. This drop-in is desktop-local, not carried by dotfiles.
+The desktop's Kanto ORA4 (USB) reports a misleading hardware-volume dB scale,
+so under the default ACP path PulseAudio parks a false "base" near 54% and the
+range below it collapses to silence. A machine-local WirePlumber drop-in in
+`~/.config/wireplumber/wireplumber.conf.d/` takes the card off ACP
+(`api.alsa.use-acp=false`) and does volume in software (`api.alsa.soft-mixer=true`),
+restoring a smooth full range; `api.alsa.ignore-dB` does not linearize it under
+ACP. Software volume orphans the hardware PCM, which then powers up at 0 (silent)
+after a reboot, so `ora4-hw-pin` (run from the desktop Hyprland autostart) pins
+that control open by name each login. The drop-in is desktop-local, not carried
+by dotfiles; the pin script and its autostart line are.
 
 ## CMOS Monitoring
 

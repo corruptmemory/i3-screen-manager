@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# ora4-hw-pin — pin the Kanto ORA4 USB DAC's hardware volume open.
+#
+# The ORA4 runs under a WirePlumber soft-mixer drop-in (software volume; see
+# docs/agent-guide/system.md), which leaves its hardware "PCM Playback Volume"
+# control UNMANAGED. Left alone that control powers up at raw 0 (= silent) after
+# a reboot or USB re-enumeration, so software volume then drives a dead output.
+# This pins it to a fixed open level and unmutes, giving software volume a live
+# reference. Idempotent; resolves the card by NAME because USB card indices
+# shuffle across boots. No ORA4 present -> nothing to do, so it is harmless on
+# machines without the device.
+#
+# Usage: ora4-hw-pin [percent]   (default 25)
+set -euo pipefail
+
+level="${1:-25}%"
+card_match='Kanto'
+
+if ! command -v amixer >/dev/null; then
+  echo "ora4-hw-pin: amixer not found (install alsa-utils/alsa-tools)" >&2
+  exit 1
+fi
+
+# Wait out the login race: USB enumeration and WirePlumber init are asynchronous.
+idx=""
+for _ in $(seq 1 30); do
+  idx="$(awk -v m="$card_match" 'index($0, m) {print $1; exit}' /proc/asound/cards)"
+  if [ -n "$idx" ]; then break; fi
+  sleep 0.5
+done
+if [ -z "$idx" ]; then
+  echo "ora4-hw-pin: no '$card_match' sound card present; nothing to do" >&2
+  exit 0
+fi
+
+amixer -c "$idx" sset PCM "$level" unmute >/dev/null
+echo "ora4-hw-pin: card $idx 'PCM' -> $level, unmuted"
