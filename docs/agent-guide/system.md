@@ -30,6 +30,15 @@ does not establish the current driver stack's performance.
 `volumecontrol.sh` forces the Intel Vulkan ICD for pavucontrol. Treat this as
 a hardware-specific wrapper rather than a universal audio requirement.
 
+A USB DAC with a gain-only hardware volume (the desktop's Kanto ORA4 exposes
+0 to +16 dB, no attenuation) leaves a silent range below its unity base under
+the default ACP path, because the sink volume rides the hardware route. Force
+software volume with a machine-local WirePlumber drop-in in
+`~/.config/wireplumber/wireplumber.conf.d/` that sets `api.alsa.use-acp=false`
+on the card and `api.alsa.soft-mixer=true` on the node; a node-only soft-mixer
+does not override ACP. Confirm by watching the hardware mixer stay fixed while
+the graph volume changes. This drop-in is desktop-local, not carried by dotfiles.
+
 ## CMOS Monitoring
 
 `i3-cmos-battery` reads an it87-family `Vbat` hwmon input in millivolts.
