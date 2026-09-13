@@ -1,9 +1,10 @@
 # Agent Usage
 
 Read this guide for the Python collectors, their caches, JSON output, or the
-agent widget. Sources: `agent-usage`, `agent-usage-claude`,
-`agent-usage-codex`, and dotfiles' `Widgets/Agents.qml` and `AgentsPanel.qml`
-under `.config/quickshell/`.
+agent widgets. Sources: `agent-usage`, `agent-usage-claude`, `agent-usage-codex`,
+`agent-usage-polybar`, `agent-usage-rofi`, dotfiles' `Widgets/Agents.qml` and
+`AgentsPanel.qml` under `.config/quickshell/`, and the `agent-usage` polybar
+module in dotfiles' `.config/polybar/config-i3.ini`.
 
 ## Collection and Storage
 
@@ -74,6 +75,17 @@ installing the symlinks. A malformed result leaves its prior UI
 state; an array replaces it. The widget filters on `ready`, displays the
 highest limit, and uses warning/critical thresholds of 0.75/0.9. Its panel
 shows agent limits, reset countdowns, today counters, and the top four models.
+
+The i3/Polybar path presents the same JSON without Quickshell.
+`agent-usage-polybar` is a `custom/script` module formatter: it runs
+`agent-usage --limits-only`, prints the robot glyph (wrapped in `%{T2}` for the
+bar's nerd font) plus the highest ready-agent limit percent, colored at the same
+0.75/0.9 thresholds, and prints nothing when nothing is ready so the module
+self-collapses. Its `click-left` opens `agent-usage-rofi`, a read-only rofi list
+that renders each agent as header, text-meter limit rows with reset countdowns,
+a today line, and top-model bars, reading the cached state files (kept fresh by
+the module) with a live `agent-usage` fallback. The module is on the landscape
+bar only. Presentation lives in these scripts, not in `agent-usage`.
 
 Readiness differs between collectors: Claude requires prompts or limits;
 Codex currently sets `ready=true` even when its limit probe fails. An

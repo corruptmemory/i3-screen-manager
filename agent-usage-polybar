@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# agent-usage-polybar — polybar custom/script formatter for AI agent usage.
+#
+# Prints a robot glyph plus the highest limit percentage across ready agents,
+# colored at warn/crit thresholds (0.75/0.9), mirroring the Quickshell Agents
+# bar item. Prints nothing when no agent is ready or usage is unavailable, so
+# the polybar module self-collapses (the widget's self-hiding equivalent).
+# Consumes the compositor-agnostic `agent-usage` JSON layer; pair the module's
+# click action with `agent-usage-rofi`. See docs/agent-guide/agent-usage.md.
+#
+# The glyph is wrapped in %{T2} to select the bar's nerd font (font-1); the
+# primary bar font (TX-02, font-0) has no nerd glyphs.
+set -euo pipefail
+
+# Periodic bar module: on a missing dependency, self-hide (empty output) rather
+# than emit a desktop notification every interval. Diagnostics go to stderr.
+for t in agent-usage jq awk; do
+  command -v "$t" >/dev/null || { echo "agent-usage-polybar: missing $t" >&2; exit 0; }
+done
+
+json="$(agent-usage --limits-only 2>/dev/null || true)"
+[ -n "$json" ] || exit 0
+
+# Highest limit fraction across ready agents (0..1). Empty when nothing ready.
+pct="$(jq -r '[.[] | select(.ready == true) | (.limits // [])[] | .percent] | max // empty' <<<"$json" 2>/dev/null || true)"
+[ -n "$pct" ] || exit 0
+
+# Display integer + warn/crit color. Hex is emitted directly (script output
+# cannot reference polybar's ${colors.*}): crit uses the bar's alert #ff9580,
+# warn a yellow #f0c674 matching the Quickshell warn tone; below warn, no color
+# tag (inherits the bar foreground).
+read -r disp color < <(awk -v p="$pct" 'BEGIN{
+  d = int(p * 100 + 0.5)
+  c = "-"
+  if      (p >= 0.9)  c = "#ff9580"
+  else if (p >= 0.75) c = "#f0c674"
+  print d, c
+}')
+
+glyph='%{T2}󰚩%{T-}'
+if [ "$color" = "-" ]; then
+  printf '%s %d%%\n' "$glyph" "$disp"
+else
+  # %%{F-} renders as "%" + reset tag: the first % is literal (next char is %,
+  # not {), the second % opens the reset tag. Verified against polybar parsing.
+  printf '%%{F%s}%s %d%%%%{F-}\n' "$color" "$glyph" "$disp"
+fi

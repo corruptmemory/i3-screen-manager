@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# agent-usage-rofi — rofi "popout" for AI agent usage: the i3/Polybar equivalent
+# of the Quickshell AgentsPanel. One block per agent: header (name + tier), a
+# text-meter row per limit (label, bar, percent, reset countdown), a today line,
+# and top-model token bars. Read-only; selecting a row just closes the list.
+#
+# Reads the per-agent state `agent-usage` caches (kept fresh by the polybar
+# module) for an instant popup, falling back to a live run when the cache is
+# absent or empty. Mirrors AgentsPanel.qml's helpers and 0.75/0.9 thresholds are
+# not needed here (no color in the list); see docs/agent-guide/agent-usage.md.
+set -euo pipefail
+
+# Shared silent-failure guard (see ~/.local/lib/sh/require.sh).
+. "$HOME/.local/lib/sh/require.sh"
+_require rofi jq
+
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/agent-usage"
+
+json='[]'
+if compgen -G "$STATE"/*.json >/dev/null 2>&1; then
+  json="$(jq -s '.' "$STATE"/*.json 2>/dev/null || echo '[]')"
+fi
+# Fall back to a live run if the cache was missing or held nothing.
+if [ "$(jq 'length' <<<"$json" 2>/dev/null || echo 0)" -eq 0 ]; then
+  json="$(agent-usage 2>/dev/null || echo '[]')"
+fi
+
+# --- formatting helpers (mirror AgentsPanel.qml) ----------------------------
+fmt_tokens() {  # integer -> 1.2k / 3.4M / 5.6B
+  awk -v n="${1:-0}" 'BEGIN{
+    if      (n >= 1e9) printf "%.1fB", n/1e9
+    else if (n >= 1e6) printf "%.1fM", n/1e6
+    else if (n >= 1e3) printf "%.1fk", n/1e3
+    else               printf "%d", n
+  }'
+}
+fmt_reset() {  # ISO8601 -> "resets 3h" / "now" / ""
+  local iso="${1:-}" clean ts now d
+  [ -n "$iso" ] || { printf ''; return; }
+  clean="$(printf '%s' "$iso" | sed 's/\.[0-9]*//')"   # strip micros for date -d
+  ts="$(date -d "$clean" +%s 2>/dev/null || echo 0)"
+  [ "$ts" -gt 0 ] || { printf ''; return; }
+  now="$(date +%s)"; d=$(( ts - now ))
+  if   [ "$d" -le 0 ];     then printf 'now'
+  elif [ "$d" -lt 3600 ];  then printf 'resets %dm' "$(( d / 60 ))"
+  elif [ "$d" -lt 86400 ]; then printf 'resets %dh' "$(( d / 3600 ))"
+  else                          printf 'resets %dd' "$(( d / 86400 ))"; fi
+}
+meter() {  # fraction(0..1) -> 10-cell block bar
+  local f i out=""
+  f="$(awk -v p="${1:-0}" 'BEGIN{v=int(p*10+0.5); if(v<0)v=0; if(v>10)v=10; print v}')"
+  for ((i=0; i<f; i++));  do out+="█"; done
+  for ((i=f; i<10; i++)); do out+="░"; done
+  printf '%s' "$out"
+}
+
+# --- render one block per agent ---------------------------------------------
+lines=()
+n="$(jq 'length' <<<"$json" 2>/dev/null || echo 0)"
+for ((r=0; r<n; r++)); do
+  rec="$(jq -c ".[$r]" <<<"$json")"
+  name="$(jq -r '.name // .id // "agent"' <<<"$rec")"
+  tier="$(jq -r '.tierLabel // ""' <<<"$rec")"
+  [ -n "$tier" ] && lines+=("$name — $tier") || lines+=("$name")
+
+  # limit rows, or auth/status text when no limits are present
+  ln="$(jq '(.limits // []) | length' <<<"$rec" 2>/dev/null || echo 0)"
+  if [ "$ln" -gt 0 ]; then
+    for ((l=0; l<ln; l++)); do
+      lbl="$(jq -r ".limits[$l] | .title // .label // \"\"" <<<"$rec")"
+      pct="$(jq -r ".limits[$l].percent // 0" <<<"$rec")"
+      rst="$(jq -r ".limits[$l].resetsAt // \"\"" <<<"$rec")"
+      disp="$(awk -v p="$pct" 'BEGIN{printf "%d", p*100+0.5}')"
+      rtxt="$(fmt_reset "$rst")"
+      printf -v row '  %-16s %s %3d%%%s' "$lbl" "$(meter "$pct")" "$disp" "${rtxt:+  · $rtxt}"
+      lines+=("$row")
+    done
+  else
+    stat="$(jq -r '.usageStatusText // ""' <<<"$rec")"
+    [ -z "$stat" ] && stat="$(jq -r '.authHelpText // ""' <<<"$rec")"
+    [ -n "$stat" ] && lines+=("  $stat")
+  fi
+
+  # today line
+  tp="$(jq -r '.todayPrompts // 0' <<<"$rec")"
+  tsn="$(jq -r '.todaySessions // 0' <<<"$rec")"
+  tt="$(jq -r '.todayTotalTokens // 0' <<<"$rec")"
+  if [ "$tp" -gt 0 ] || [ "$tt" -gt 0 ]; then
+    lines+=("  Today  ${tp} prompts · ${tsn} sessions · $(fmt_tokens "$tt") tok")
+  fi
+
+  # top 4 models by summed token fields, bars scaled to the heaviest
+  mapfile -t models < <(jq -r '
+    (.modelUsage // {}) | to_entries
+    | map({name: .key,
+           total: ((.value.inputTokens//0) + (.value.outputTokens//0)
+                   + (.value.cacheCreationInputTokens//0) + (.value.cacheReadInputTokens//0))})
+    | map(select(.total > 0)) | sort_by(-.total) | .[0:4]
+    | .[] | "\(.name)\t\(.total)"' <<<"$rec" 2>/dev/null || true)
+  if [ "${#models[@]}" -gt 0 ] && [ -n "${models[0]:-}" ]; then
+    maxt="${models[0]##*$'\t'}"
+    for m in "${models[@]}"; do
+      mn="${m%%$'\t'*}"; mt="${m##*$'\t'}"
+      mn="${mn#claude-}"   # shortModel: drop the redundant vendor prefix
+      frac="$(awk -v t="$mt" -v mx="$maxt" 'BEGIN{print (mx>0)? t/mx : 0}')"
+      printf -v mrow '    %-14s %s %s' "$mn" "$(meter "$frac")" "$(fmt_tokens "$mt")"
+      lines+=("$mrow")
+    done
+  fi
+
+  [ "$r" -lt $(( n - 1 )) ] && lines+=("──────────────────────────────")
+done
+
+[ "${#lines[@]}" -gt 0 ] || lines=("No agent usage")
+
+# Informational list: -no-custom (no free-text entries), selection just closes.
+printf '%s\n' "${lines[@]}" | rofi -dmenu -i -no-custom -p "agents" >/dev/null 2>&1 || true
