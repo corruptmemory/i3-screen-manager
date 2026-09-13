@@ -20,7 +20,7 @@ symlinked into `~/.local/bin`. Installing them does not install a desktop config
 | Screenshots | `screenshot` (grim/slurp/tensaku), `screenshot.sh` (hyprshot/satty), `flameshot.sh` |
 | Desktop helpers | `i3-cmos-battery`, `keybase-popup-anchor-x11`, `volumecontrol.sh` |
 | Network menu | `i3-tailscale-rofi` |
-| Usage records | `agent-usage`, `agent-usage-claude`, `agent-usage-codex` |
+| Usage records | `agent-usage`, `agent-usage-claude`, `agent-usage-codex`; `agent-usage-polybar`, `agent-usage-rofi` (i3/Polybar bar item and popout) |
 | System utilities | `aur-malware-check`, `win11-vm-setup.sh` |
 | Shared dependency guard | `lib/require.sh` |
 
@@ -39,7 +39,7 @@ Install additional dependencies for the features being used:
 | Session launcher | gnome-keyring, OpenSSH agent tools, `/usr/bin/start-hyprland`, configured user D-Bus |
 | `screenshot` | `grim`, `slurp`, `wl-clipboard`, `hyprctl`, `jq`; optional `hyprpicker`, `tensaku-edit` |
 | Other capture / audio wrappers | `hyprshot`, `satty`, `flameshot`, or `pavucontrol`, as applicable |
-| Agent usage | Python 3.10+, `jq`; agent login and `codex` for live Codex limits |
+| Agent usage | Python 3.10+, `jq`; agent login and `codex` for live Codex limits; `rofi` and the bar's Nerd Font for the Polybar item |
 | Tailscale menu | `tailscale`, Python 3, `jq`, `curl`, `xdg-open`, configured `~/.claude.json` |
 | Keybase popup | i3, `jq`, `flock` |
 | CMOS monitoring | it87-family Vbat sensor |
@@ -64,10 +64,12 @@ done
 ```
 
 Keep `~/.local/bin` on the desktop session's PATH. Link optional tools by the
-same method; install all three siblings for the agent-usage orchestrator:
+same method; install all three siblings for the agent-usage orchestrator, and
+the Polybar pair on an i3 session:
 
 ```bash
-for script in agent-usage agent-usage-claude agent-usage-codex; do
+for script in agent-usage agent-usage-claude agent-usage-codex \
+    agent-usage-polybar agent-usage-rofi; do
     ln -sfn "$(pwd)/$script" "$HOME/.local/bin/$script"
 done
 ```
