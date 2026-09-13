@@ -37,9 +37,12 @@ range below it collapses to silence. A machine-local WirePlumber drop-in in
 (`api.alsa.use-acp=false`) and does volume in software (`api.alsa.soft-mixer=true`),
 restoring a smooth full range; `api.alsa.ignore-dB` does not linearize it under
 ACP. Software volume orphans the hardware PCM, which then powers up at 0 (silent)
-after a reboot, so `ora4-hw-pin` (run from the desktop Hyprland autostart) pins
-that control open by name each login. The drop-in is desktop-local, not carried
-by dotfiles; the pin script and its autostart line are.
+after a reboot, so `ora4-hw-pin` pins that control open by name each login. It
+runs from the desktop session startup under both compositors: Hyprland's
+`autostart.lua` audio block and i3's `.xinitrc-i3` after the PipeWire trio. The
+WirePlumber drop-in is PipeWire config, so it applies under either session
+unchanged. The drop-in is desktop-local, not carried by dotfiles; the pin script
+and its startup lines are.
 
 ## CMOS Monitoring
 
