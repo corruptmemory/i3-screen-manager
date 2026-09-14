@@ -22,6 +22,13 @@ Avoid sudo-driven global npm installs for project tooling. A vendor URL or
 container namespace must actually belong to the publisher; retain available
 signature/checksum verification. Read installer behavior before executing it.
 
+Rung-5 forks in use on both machines: `odin-git-local`, `cursor-bin-local`, and
+`git-wd40` (Git with the WD-40 patchset; it provides and conflicts with `git`).
+The first two rename the package, so the AUR never offers an update. `git-wd40`
+keeps the AUR `pkgname`, so `yay -Syu` offers to rebuild it from the AUR, which
+would drop the fork's Artix deltas; exclude it (`--ignore git-wd40`) and sync
+the fork at `~/projects/git-wd40` instead, per that repo's README.
+
 ## Pacman and XLibre
 
 Inspect `/etc/pacman.conf` and sync metadata before assuming a package is AUR
@@ -30,6 +37,10 @@ only. An installed foreign package can have a matching official package now;
 overlay is configured after Artix repositories on these machines; preserve
 Artix package precedence and check init-system dependencies before changing
 that arrangement. Do not perform partial upgrades as an installation shortcut.
+Unattended `pacman -U`/`-S` with `--noconfirm` declines package-conflict
+removals, so a package that deliberately replaces another (as `git-wd40` does
+for `git`) fails with "unresolvable package conflicts"; add `--ask 4` to answer
+that question class yes without affecting any other prompt.
 
 The configured XLibre vendor source is `[xlibre-stable]`, with
 `https://packages.xlibre.net/arch/stable/$arch` before `[world]` and an
