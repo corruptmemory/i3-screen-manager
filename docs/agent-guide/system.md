@@ -1,7 +1,7 @@
 # System Maintenance
 
 Read this guide for hardware, OpenRC services, the Tailscale helper, CMOS
-monitoring, or VM setup. Sources: `start-hyprland`, `i3-tailscale-rofi`,
+monitoring, disk reclaim, or VM setup. Sources: `start-hyprland`, `i3-tailscale-rofi`,
 `i3-cmos-battery`, `volumecontrol.sh`, `ora4-hw-pin`, and `win11-vm-setup.sh`.
 Check active machine state before applying configuration outside this repository.
 
@@ -83,6 +83,37 @@ Express in Windows and attach the device via USB Host Device or the console's
 USB-redirection control. USB-device passthrough is distinct from PCI/VFIO
 passthrough. Check `virsh list --all`, `net-list --all`, and `pool-list --all`
 for actual host/guest state instead of relying on an old completion checklist.
+
+## Storage and Disk Reclaim
+
+The desktop root filesystem is a separate, modestly sized btrfs; `/home` and
+`/data` are separate, larger disks, so user builds and downloads under `/home`
+do not pressure the root. When the root nears capacity, inspect live state
+before deleting anything: `df -hT`, `du -xh --max-depth=1 /` (the `-x` keeps
+`du` on the root filesystem rather than descending into other mounts), and on
+btrfs `btrfs filesystem usage /` with `btrfs subvolume list /` to distinguish a
+genuine data fill from unreclaimed allocation or snapshots. Resolve the actual
+mount layout with `findmnt`; do not assume `/var` is its own partition.
+
+The first and safest reclaim is the pacman package cache under
+`/var/cache/pacman/pkg`: `paccache -rk1` keeps one version of each package and
+`paccache -ruk0` drops the cache for uninstalled packages. These remove only
+re-downloadable files and never touch installed packages; preview with the `-d`
+dry-run flag before removing.
+
+Two larger consumers commonly sit on the root. The libvirt `default` storage
+pool is `/var/lib/libvirt/images`; a guest qcow2 there is sparse (its apparent
+size is the maximum the guest can grow into, not the space used) and consumes
+the small root even while a pool on `/data` has room, so prefer the `/data`
+pool for guests (see VM Setup). Docker uses the containerd image store here, so
+its images live under the `moby` namespace in `/var/lib/containerd`, not
+`/var/lib/docker`, and the `docker`/`containerd` services are started on demand
+rather than from a runlevel. Prune only dangling images (`docker image prune`):
+tagged images are not garbage, and `prune -a` would drop images merely because
+nothing is running. To read image identities offline, start the daemon briefly
+(`rc-service docker start` pulls up containerd), inspect with `docker system df`
+and `docker images`, then stop both (`rc-service docker stop` does not stop
+containerd; stop it explicitly to restore the prior state).
 
 ## System Verification
 

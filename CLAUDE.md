@@ -60,7 +60,7 @@ further references only when relevant. Read source files to confirm behavior.
 | Hyprland Lua, session startup, focus/groups, Quickshell bars/popouts/tray, screenshots, DPMS | [Hyprland and Quickshell](docs/agent-guide/hyprland.md) | Session/capture helpers; dotfiles `hypr/` and `quickshell/` |
 | i3/IceWM, keyboard/mouse, rofi dependencies, clipboard/typing, Keybase popup | [X11 and input](docs/agent-guide/x11-input.md) | Input/rofi helpers, `lib/require.sh`; dotfiles WM configs |
 | Agent collection, auth/limits, caches, JSON schema, usage widget | [Agent usage](docs/agent-guide/agent-usage.md) | `agent-usage*`; dotfiles `Agents.qml` and `AgentsPanel.qml` |
-| OpenRC/audio ownership, GPU routing, CMOS, Tailscale/Open Brain, VM host setup | [System maintenance](docs/agent-guide/system.md) | `start-hyprland`, system utilities, machine-local services |
+| OpenRC/audio ownership, GPU routing, CMOS, Tailscale/Open Brain, disk/storage reclaim, VM host setup | [System maintenance](docs/agent-guide/system.md) | `start-hyprland`, system utilities, machine-local services |
 | Ghostty/Brave config and identity, chat layout, GTK dialogs, desktop app integration | [Applications](docs/agent-guide/applications.md) | Dotfiles launchers, terminal config, WM rules |
 | Install/update/remove packages, choose distributions, review AUR, pacman/XLibre/hooks | [Package installation](docs/agent-guide/packages.md) | `aur-malware-check`, local pacman config, current vendor instructions |
 
