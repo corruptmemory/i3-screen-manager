@@ -74,7 +74,10 @@ the item stays hidden until the next interval; restart the bar after
 installing the symlinks. A malformed result leaves its prior UI
 state; an array replaces it. The widget filters on `ready`, displays the
 highest limit, and uses warning/critical thresholds of 0.75/0.9. Its panel
-shows agent limits, reset countdowns, today counters, and the top four models.
+shows agent limits, reset countdowns, today counters, and today's top four
+models. The model bars rank on `todayTokensByModel`, so they agree with the
+today line above them; lifetime `modelUsage` would bury the current workhorse
+model behind historical heavyweights.
 
 The i3/Polybar path presents the same JSON without Quickshell.
 `agent-usage-polybar` is a `custom/script` module formatter: it runs
@@ -83,7 +86,7 @@ bar's nerd font) plus the highest ready-agent limit percent, colored at the same
 0.75/0.9 thresholds, and prints nothing when nothing is ready so the module
 self-collapses. Its `click-left` opens `agent-usage-rofi`, a read-only rofi list
 that renders each agent as header, text-meter limit rows with reset countdowns,
-a today line, and top-model bars, reading the cached state files (kept fresh by
+a today line, and today's top-model bars, reading the cached state files (kept fresh by
 the module) with a live `agent-usage` fallback. The module is on the desktop's
 landscape bar only and on the laptop's single bar. Presentation lives in these
 scripts, not in `agent-usage`.

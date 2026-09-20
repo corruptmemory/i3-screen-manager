@@ -89,12 +89,13 @@ for ((r=0; r<n; r++)); do
     lines+=("  Today  ${tp} prompts · ${tsn} sessions · $(fmt_tokens "$tt") tok")
   fi
 
-  # top 4 models by summed token fields, bars scaled to the heaviest
+  # top 4 models by *today's* tokens, bars scaled to the heaviest. Ranks on
+  # todayTokensByModel (a {model: total} map) so these bars match the "Today"
+  # line above and today's workhorse model surfaces; modelUsage is lifetime and
+  # would bury the current model behind historical heavyweights.
   mapfile -t models < <(jq -r '
-    (.modelUsage // {}) | to_entries
-    | map({name: .key,
-           total: ((.value.inputTokens//0) + (.value.outputTokens//0)
-                   + (.value.cacheCreationInputTokens//0) + (.value.cacheReadInputTokens//0))})
+    (.todayTokensByModel // {}) | to_entries
+    | map({name: .key, total: (.value // 0)})
     | map(select(.total > 0)) | sort_by(-.total) | .[0:4]
     | .[] | "\(.name)\t\(.total)"' <<<"$rec" 2>/dev/null || true)
   if [ "${#models[@]}" -gt 0 ] && [ -n "${models[0]:-}" ]; then
