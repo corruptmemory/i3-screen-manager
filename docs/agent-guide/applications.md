@@ -37,9 +37,8 @@ relaunch the chat windows. The Hyprland builder `hypr-chat-layout` launches
 missing apps, selects their primary windows, parks targets on a special
 workspace, and serially forms Messages/WhatsApp and
 Discord/Keybase/Slack/Signal groups on workspace 10. The i3 skeleton's bottom
-group is Discord/Slack/Keybase/Signal, verified live under i3. Signal's X11
-class is `signal`; its native-Wayland class is assumed to match but has not
-been verified under Hyprland. Group order and group locking are part of the
+group is Discord/Slack/Keybase/Signal. Signal's class is `signal` under both
+X11 and native Wayland; both builders are verified live with it. Group order and group locking are part of the
 algorithm; app startup and largest-window selection handle transient helpers.
 Rerunning rebuilds the grouping of existing windows. It can visibly move
 windows and must remain a shell workflow because it waits for mapping.
