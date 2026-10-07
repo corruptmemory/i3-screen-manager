@@ -11,39 +11,40 @@ symlinked into `~/.local/bin`. Installing them does not install a desktop config
 
 ## Tools
 
-| Area | Commands |
-|------|----------|
-| Display CLI and menu | `i3-screen-manager`, `i3-screen-rofi` |
-| Keyboard and mouse | `i3-keyboard-rofi`, `i3-mouse-setup`, `i3-mouse-rofi` |
-| Hyprland session and sleep | `start-hyprland`, `hyprctl-live`, `hypr-dpms-all` |
-| Lid handling | `laptop-monitor.sh`, `laptop-monitor-x11.sh`, `hyprland-clamshell-restore` |
-| Screenshots | `screenshot` (grim/slurp/tensaku), `screenshot.sh` (hyprshot/satty), `flameshot.sh` |
-| Desktop helpers | `i3-cmos-battery`, `keybase-popup-anchor-x11`, `volumecontrol.sh` |
-| Network menu | `i3-tailscale-rofi` |
-| Usage records | `agent-usage`, `agent-usage-claude`, `agent-usage-codex`; `agent-usage-polybar`, `agent-usage-rofi` (i3/Polybar bar item and popout) |
-| System utilities | `aur-malware-check`, `win11-vm-setup.sh` |
-| Shared dependency guard | `lib/require.sh` |
+| Area                       | Commands                                                                                                                             |
+|----------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
+| Display CLI and menu       | `i3-screen-manager`, `i3-screen-rofi`                                                                                                |
+| Keyboard and mouse         | `i3-keyboard-rofi`, `i3-mouse-setup`, `i3-mouse-rofi`                                                                                |
+| Hyprland session and sleep | `start-hyprland`, `hyprctl-live`, `hypr-dpms-all`                                                                                    |
+| Lid handling               | `laptop-monitor.sh`, `laptop-monitor-x11.sh`, `hyprland-clamshell-restore`                                                           |
+| Screenshots                | `screenshot` (grim/slurp/tensaku), `screenshot.sh` (hyprshot/satty), `flameshot.sh`                                                  |
+| Desktop helpers            | `i3-cmos-battery`, `keybase-popup-anchor-x11`, `volumecontrol.sh`                                                                    |
+| Network menu               | `i3-tailscale-rofi`                                                                                                                  |
+| Usage records              | `agent-usage`, `agent-usage-claude`, `agent-usage-codex`; `agent-usage-polybar`, `agent-usage-rofi` (i3/Polybar bar item and popout) |
+| System utilities           | `aur-malware-check`, `artix-rank-mirrors`, `win11-vm-setup.sh`                                                                       |
+| Shared dependency guard    | `lib/require.sh`                                                                                                                     |
 
 ## Requirements
 
 The shell tools assume Linux, Bash, GNU core utilities, grep, sed, and gawk.
 Install additional dependencies for the features being used:
 
-| Feature | Dependencies |
-|---------|--------------|
-| Hyprland displays | Lua-configured Hyprland, `hyprctl`, `wlr-randr`, `jq`, installed `hyprctl-live` |
-| X11 displays / DPI | `xrandr`, `xrdb` |
-| Rofi menus | `rofi`, the installed shared helper, `notify-send` for notifications |
-| Clamshell | `elogind-inhibit`, readable ACPI lid state |
-| Keyboard / mouse | `hyprctl` or `setxkbmap`; `solaar` for Logitech DPI |
-| Session launcher | gnome-keyring, OpenSSH agent tools, `/usr/bin/start-hyprland`, configured user D-Bus |
-| `screenshot` | `grim`, `slurp`, `wl-clipboard`, `hyprctl`, `jq`; optional `hyprpicker`, `tensaku-edit` |
-| Other capture / audio wrappers | `hyprshot`, `satty`, `flameshot`, or `pavucontrol`, as applicable |
-| Agent usage | Python 3.10+, `jq`; agent login and `codex` for live Codex limits; `rofi` and the bar's Nerd Font for the Polybar item |
-| Tailscale menu | `tailscale`, Python 3, `jq`, `curl`, `xdg-open`, configured `~/.claude.json` |
-| Keybase popup | i3, `jq`, `flock` |
-| CMOS monitoring | it87-family Vbat sensor |
-| AUR audit | `pacman`, `curl` or a local denylist |
+| Feature                        | Dependencies                                                                                                           |
+|--------------------------------|------------------------------------------------------------------------------------------------------------------------|
+| Hyprland displays              | Lua-configured Hyprland, `hyprctl`, `wlr-randr`, `jq`, installed `hyprctl-live`                                        |
+| X11 displays / DPI             | `xrandr`, `xrdb`                                                                                                       |
+| Rofi menus                     | `rofi`, the installed shared helper, `notify-send` for notifications                                                   |
+| Clamshell                      | `elogind-inhibit`, readable ACPI lid state                                                                             |
+| Keyboard / mouse               | `hyprctl` or `setxkbmap`; `solaar` for Logitech DPI                                                                    |
+| Session launcher               | gnome-keyring, OpenSSH agent tools, `/usr/bin/start-hyprland`, configured user D-Bus                                   |
+| `screenshot`                   | `grim`, `slurp`, `wl-clipboard`, `hyprctl`, `jq`; optional `hyprpicker`, `tensaku-edit`                                |
+| Other capture / audio wrappers | `hyprshot`, `satty`, `flameshot`, or `pavucontrol`, as applicable                                                      |
+| Agent usage                    | Python 3.10+, `jq`; agent login and `codex` for live Codex limits; `rofi` and the bar's Nerd Font for the Polybar item |
+| Tailscale menu                 | `tailscale`, Python 3, `jq`, `curl`, `xdg-open`, configured `~/.claude.json`                                           |
+| Keybase popup                  | i3, `jq`, `flock`                                                                                                      |
+| CMOS monitoring                | it87-family Vbat sensor                                                                                                |
+| AUR audit                      | `pacman`, `curl` or a local denylist                                                                                   |
+| Mirror ranking                 | Python 3.10+, `vercmp` (pacman), `bsdtar` (libarchive), network access                                                 |
 
 Quickshell and Polybar are output consumers, not requirements for the display
 CLI. See [package installation guidance](docs/agent-guide/packages.md)
@@ -87,16 +88,16 @@ The Tailscale and VM tools contain machine-specific settings; read their
 assume **`eDP-1` and one detected external**. The desktop's fixed dual-monitor
 layout is owned by dotfiles, while focused-output scaling is available there.
 
-| Command | Behavior |
-|---------|----------|
-| `extend-left/right/above/below` | Place the external relative to the internal panel |
-| `clamshell` | External only; inhibit lid-triggered suspend |
-| `mirror` | Hyprland mirror or X11 `--same-as`, using preferred modes |
-| `disconnect` | Restore internal only; refuse if the lid is closed or unreadable |
-| `scale [VALUE] [OUTPUT]` | Wayland output scaling or session-wide X11 font DPI |
-| `dpi [VALUE] [OUTPUT]` | Alias for `scale` |
-| `status` | Detected outputs, monitor geometry, Wayland scale, inhibitor state |
-| `apply-ws-split` | Wayland only: move workspaces 7-10 to the detected external |
+| Command                         | Behavior                                                           |
+|---------------------------------|--------------------------------------------------------------------|
+| `extend-left/right/above/below` | Place the external relative to the internal panel                  |
+| `clamshell`                     | External only; inhibit lid-triggered suspend                       |
+| `mirror`                        | Hyprland mirror or X11 `--same-as`, using preferred modes          |
+| `disconnect`                    | Restore internal only; refuse if the lid is closed or unreadable   |
+| `scale [VALUE] [OUTPUT]`        | Wayland output scaling or session-wide X11 font DPI                |
+| `dpi [VALUE] [OUTPUT]`          | Alias for `scale`                                                  |
+| `status`                        | Detected outputs, monitor geometry, Wayland scale, inhibitor state |
+| `apply-ws-split`                | Wayland only: move workspaces 7-10 to the detected external        |
 
 ```bash
 i3-screen-manager status
@@ -124,17 +125,17 @@ and [input guide](docs/agent-guide/x11-input.md).
 
 The configured Hyprland bindings include:
 
-| Binding | Action |
-|---------|--------|
-| `Super+Backspace` | Display menu |
-| `Super+Ctrl+Backspace` | Keyboard menu |
-| `Super+Alt+Backspace` | Scale picker (`dpi` alias on desktop) |
-| `Super+Alt+M` | Mouse DPI, where installed |
-| `Super+Shift+B` | Bitwarden via `rofi-rbw --typer ydotool` |
-| `Super+Shift+N` | Tailscale menu on the laptop |
-| `Print` | Flameshot |
-| `Super+Print` | Region capture and annotation, with tensaku enabled |
-| `Super+Shift+W` | Quickshell restart |
+| Binding                | Action                                              |
+|------------------------|-----------------------------------------------------|
+| `Super+Backspace`      | Display menu                                        |
+| `Super+Ctrl+Backspace` | Keyboard menu                                       |
+| `Super+Alt+Backspace`  | Scale picker (`dpi` alias on desktop)               |
+| `Super+Alt+M`          | Mouse DPI, where installed                          |
+| `Super+Shift+B`        | Bitwarden via `rofi-rbw --typer ydotool`            |
+| `Super+Shift+N`        | Tailscale menu on the laptop                        |
+| `Print`                | Flameshot                                           |
+| `Super+Print`          | Region capture and annotation, with tensaku enabled |
+| `Super+Shift+W`        | Quickshell restart                                  |
 
 The authoritative bindings and machine gates are in
 `dotfiles/.config/hypr/bindings.lua`. X11 bindings belong to their WM configs.
@@ -166,7 +167,9 @@ format is Polybar markup; `quickshell` emits volts and status for the widget.
 
 `i3-tailscale-rofi` updates the Open Brain URL in Claude Code's `~/.claude.json`
 only. `aur-malware-check` reports incident-denylist matches without removing
-packages. `win11-vm-setup.sh` performs privileged host setup and does not
+packages. `artix-rank-mirrors` prints a mirrorlist ranked by content freshness
+and speed (`--arch` for the `[extra]` overlay) without editing `/etc/pacman.d`.
+`win11-vm-setup.sh` performs privileged host setup and does not
 install the Windows guest. Their interfaces and verification are in the
 [system guide](docs/agent-guide/system.md) and
 [package guide](docs/agent-guide/packages.md).

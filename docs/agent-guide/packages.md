@@ -1,8 +1,9 @@
 # Package Installation
 
 Read this guide before installing, updating, replacing, or removing tools,
-reviewing an AUR package, or changing pacman repositories. Sources:
-`aur-malware-check`, `/etc/pacman.conf`, installed package metadata, and the
+reviewing an AUR package, or changing pacman repositories or mirrors. Sources:
+`aur-malware-check`, `artix-rank-mirrors`, `/etc/pacman.conf`,
+`/etc/pacman.d/mirrorlist*`, installed package metadata, and the
 vendor's current distribution instructions.
 
 ## Selection Policy
@@ -55,6 +56,53 @@ correct packaged hook. The relevant dispatcher verb is `dbus_reload`; check
 the installed implementation before prescribing an override. Do not carry
 completed workaround deadlines forward as active tasks.
 
+## Mirror Freshness
+
+pacman fetches each repository's sync database from the first mirror in its
+list that answers. A partly synced first mirror can therefore serve a current
+`[world]` alongside a stale `[system]`, so `-Syu` installs packages built
+against libraries that have not been delivered. An unversioned dependency lets
+the transaction succeed; the failure appears at run time as `symbol lookup
+error: ... undefined symbol`, first in post-transaction hook output and then
+when programs start. `ldd` still reports every library found because symbols
+bind lazily; `ldd -r <binary>` exposes the missing one. A low-level library
+such as gdk-pixbuf or GLib can take down terminals, launchers, and compositors
+at once.
+
+To diagnose, find which library exports the missing symbol in a newer version,
+then compare `pacman -Si <pkg>` across `[system]`/`[world]` and `[core]`/`[extra]`
+with what is installed. Fix the mirror order and complete the upgrade with
+`pacman -Syu`; do not leave a mix behind. Installing the matching `[extra]`
+package can bridge a gap, but switch back to the Artix build
+(`pacman -S world/<pkg>`) once Artix carries it. When the versions match, the
+cached `[extra]` file has the same name, so the Artix signature check fails.
+Answer yes to deleting the cached file, or remove it first, then reinstall.
+Rerun the failed hooks' commands (for example `gtk-update-icon-cache` and
+`gtk-query-immodules-3.0 --update-cache`) after the repair.
+
+`artix-rank-mirrors` ranks mirrors and never edits `/etc/pacman.d` itself. It
+judges freshness by database content, because some mirrors misreport
+`Last-Modified`. For each repository it counts packages older than on any
+other probed mirror, checking `system` then `world` in stages so that only
+mirrors current on the small database download the large one. It ranks by
+stages passed, then lag, then speed, and prints the top `--count` (default 8)
+as a mirrorlist. Candidates come from `mirrorlist.pacnew`, else the cached
+`artix-mirrorlist` package, else `--source FILE`. `--arch` ranks the `[extra]`
+overlay from archlinux.org's status data (`--country`, default `US,CA`;
+`--max-candidates`, default 20). Install the output with a backup:
+
+```sh
+artix-rank-mirrors -o /tmp/mirrorlist &&
+  sudo cp -a /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.bak &&
+  sudo install -m644 /tmp/mirrorlist /etc/pacman.d/mirrorlist
+```
+
+Then delete the consumed `.pacnew`. Use `--arch` and `mirrorlist-arch` for the
+overlay. Exit codes: 0 when the first entry is current, 1 when even it lags,
+and 2 on errors or when no mirror answers. Just after an Artix push only a few
+mirrors are current; the ranking still leads with them. Exit 1 means wait and
+rerun before a large upgrade.
+
 ## AUR Audit Contract
 
 Run `aur-malware-check` before and after AUR operations as the repository's
@@ -76,7 +124,11 @@ before a package change, then verify installed ownership, the executable
 resolved on PATH, and relevant service or desktop behavior. Validate the audit
 tool with a local denylist and controlled package/indicator fixtures when
 changing its matching logic; a live incident-list check is not broad test
-coverage. Use current vendor documentation for native CLI installation and
-authentication instead of retaining dated migration recipes here.
+coverage. After changing `artix-rank-mirrors`, run both modes and check the
+exit status and the stderr ranking. Confirm that the first entry's databases
+match an official mirror (`mirror2.artixlinux.org`) and that `--source` with a
+missing file exits 2. Use current vendor documentation for native CLI
+installation and authentication instead of retaining dated migration recipes
+here.
 
 [Shared instructions and task index](../../CLAUDE.md#task-guides).
