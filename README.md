@@ -181,7 +181,9 @@ shared working instructions and a [task-to-guide index](CLAUDE.md#task-guides).
 Read the relevant guides under `docs/agent-guide/` as needed; they cover current
 contracts, constraints, and verification without preloading every topic.
 Update facts in place when changing behavior. Git contains previous
-documentation and decisions.
+documentation and decisions. Dated evaluations of alternatives (for example
+other window managers) live under `docs/research/`; they inform decisions but
+are not loaded as agent instructions.
 
 The shared root has an 8 KiB budget, with 16 KiB per topic guide. No increased
 Codex document-loading limit is required for this repository's root file.
