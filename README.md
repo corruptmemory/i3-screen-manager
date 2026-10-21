@@ -130,7 +130,7 @@ sent" or similar). A stopped proxied bridge (DeckCraft, DesignCraft, FigCraft,
 GridCraft, VectorCraft, WordCraft) reports "<app> is not running with agent
 control". Every running app must print `ok`. If `list` shows an installed
 version that differs from `verified`, recheck that app per the
-[applications guide](docs/agent-guide/applications.md#artcraft-agent-control)
+[ArtCraft guide](docs/agent-guide/artcraft.md#control-ports-and-bridges)
 before updating its row.
 
 Start a new Claude Code session to get the `mcp__<app>__*` tools; the agent
