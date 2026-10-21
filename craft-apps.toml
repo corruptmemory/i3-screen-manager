@@ -1,0 +1,86 @@
+# craft-apps.toml — the ArtCraft apps (https://getartcraft.com/apps) that
+# `craft-apps` launches with agent control and bridges to MCP clients.
+#
+# Each app gets a fixed loopback control port, the same on every machine, so a
+# controlled app and its MCP bridge always agree. The block 18701-18714 sits
+# below Linux's ephemeral port range (32768-60999), so outgoing connections
+# never take it. The apps spell their control and bridge flags differently, so
+# every row records its own argv. A row is used only once `verified` names the
+# version whose `--help` (and a live `craft-apps probe`) confirmed those flags.
+#
+# Placeholders in control_args / bridge_args:
+#   {port}        the app's control port
+#   {token_file}  ~/.local/state/craft-control/<app>.token (created 0600)
+#   {read_root}   directory the app may read through automation
+#   {write_root}  directory the app may write through automation
+
+[defaults]
+read_root = "~"
+write_root = "~"
+
+[apps.photocraft]
+port = 18701
+command = "photocraft"
+cli = "photocraft-cli"
+desktop = "ai.storyteller.photocraft.desktop"
+verified = "0.11.1"
+control_args = ["--control", "{port}", "--control-token-file", "{token_file}",
+                "--automation-read-root", "{read_root}",
+                "--automation-write-root", "{write_root}"]
+bridge_args = ["mcp", "--bridge", "127.0.0.1:{port}", "--control-token-file", "{token_file}"]
+probe_tool = "session_list"
+
+# Ports are reserved for the rest; fill in and verify each row when its package
+# is installed (check `<app> --help` and `<app>-cli mcp --help`, then probe).
+
+[apps.artcraft]
+port = 18702
+command = "artcraft"
+
+[apps.vectorcraft]
+port = 18703
+command = "vectorcraft"
+
+[apps.filmcraft]
+port = 18704
+command = "filmcraft"
+
+[apps.lightcraft]
+port = 18705
+command = "lightcraft"
+
+[apps.pdfcraft]
+port = 18706
+command = "pdfcraft"
+
+[apps.effectcraft]
+port = 18707
+command = "effectcraft"
+
+[apps.designcraft]
+port = 18708
+command = "designcraft"
+
+[apps.figcraft]
+port = 18709
+command = "figcraft"
+
+[apps.wordcraft]
+port = 18710
+command = "wordcraft"
+
+[apps.soundcraft]
+port = 18711
+command = "soundcraft"
+
+[apps.deckcraft]
+port = 18712
+command = "deckcraft"
+
+[apps.cadcraft]
+port = 18713
+command = "cadcraft"
+
+[apps.gridcraft]
+port = 18714
+command = "gridcraft"

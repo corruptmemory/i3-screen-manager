@@ -1,0 +1,541 @@
+#!/usr/bin/python3
+# craft-apps — launch ArtCraft apps with agent control and bridge them to MCP.
+# See docs/agent-guide/applications.md ("ArtCraft Agent Control").
+"""Run the ArtCraft apps (PhotoCraft, GridCraft, ...) with their loopback
+control server always on, and register their MCP bridges with Claude Code.
+
+Each app's control server is enabled only by launch flags, so `install`
+writes per-user copies of the apps' desktop entries (same file names, so they
+replace the system launchers) whose Exec runs `craft-apps launch <app>`.
+`launch` starts the app with its fixed port from craft-apps.toml, a private
+token file, and automation read/write roots. A `--control` launch bypasses the
+apps' single-instance handoff, so when the port is already taken (a controlled
+copy is running) `launch` opens any files in a separate, uncontrolled window
+and says so in a notification.
+
+`register` adds each verified app's MCP bridge to Claude Code (user scope).
+Bridges reconnect on demand, so they can be registered before the app runs:
+a call made while the app is down fails cleanly. `probe` speaks MCP to a
+bridge directly to confirm a row: tool count, then one read-only call.
+
+Exit status: 0 = success, 1 = something to fix (stale or missing launchers,
+an app that did not open its port in time), 2 = usage or runtime error.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import secrets
+import select
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import tomllib
+
+HOME = os.path.expanduser("~")
+STATE_DIR = os.path.join(HOME, ".local/state/craft-control")
+USER_APPS_DIR = os.path.join(HOME, ".local/share/applications")
+INSTALLED_SCRIPT = os.path.join(HOME, ".local/bin/craft-apps")
+MARK_KEY = "X-Craft-Apps-Source-SHA256"
+REQUIRED = ("port", "command", "cli", "desktop", "verified", "control_args", "bridge_args")
+
+
+def warn(msg: str) -> None:
+    print(f"craft-apps: {msg}", file=sys.stderr)
+
+
+def notify(title: str, body: str, urgent: bool = False) -> None:
+    """Desktop launches have no terminal, so failures also go to a notification."""
+    if shutil.which("notify-send"):
+        cmd = ["notify-send", "-a", "craft-apps"] + (["-u", "critical"] if urgent else []) + [title, body]
+        subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+# --- the app table ------------------------------------------------------------
+
+def load_table(path: str) -> tuple[dict, dict[str, dict]]:
+    with open(path, "rb") as f:
+        data = tomllib.load(f)
+    defaults = data.get("defaults", {})
+    apps = {}
+    for name, row in data.get("apps", {}).items():
+        apps[name] = dict(row, name=name)
+    return defaults, apps
+
+
+def is_verified(app: dict) -> bool:
+    return all(app.get(k) for k in REQUIRED)
+
+
+def token_file(app: dict) -> str:
+    return os.path.join(STATE_DIR, f"{app['name']}.token")
+
+
+def ensure_token(app: dict) -> str:
+    """Pre-create the token file so a bridge started before the app can read it.
+
+    The app reuses an existing token file, so both sides share this secret and
+    it never appears in a command line, a desktop file, or ~/.claude.json.
+    """
+    os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
+    os.chmod(STATE_DIR, 0o700)
+    path = token_file(app)
+    if not os.path.exists(path):
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(secrets.token_hex(32))
+    return path
+
+
+def expand(args: list[str], app: dict, defaults: dict) -> list[str]:
+    values = {
+        "port": str(app["port"]),
+        "token_file": token_file(app),
+        "read_root": os.path.expanduser(app.get("read_root", defaults.get("read_root", "~"))),
+        "write_root": os.path.expanduser(app.get("write_root", defaults.get("write_root", "~"))),
+    }
+    return [a.format(**values) for a in args]
+
+
+def port_open(port: int, timeout: float = 0.3) -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def pick_apps(apps: dict, names: list[str], verified_only: bool = True) -> list[dict]:
+    if names:
+        unknown = [n for n in names if n not in apps]
+        if unknown:
+            raise SystemExit(f"craft-apps: unknown app(s): {', '.join(unknown)}")
+        chosen = [apps[n] for n in names]
+    else:
+        chosen = list(apps.values())
+    return [a for a in chosen if is_verified(a)] if verified_only else chosen
+
+
+def installed_version(app: dict) -> str:
+    r = subprocess.run(["pacman", "-Q", app["name"]], capture_output=True, text=True)
+    return r.stdout.split()[1] if r.returncode == 0 and r.stdout.split()[1:] else ""
+
+
+# --- desktop launchers ----------------------------------------------------------
+
+def system_desktop(desktop_id: str) -> str | None:
+    dirs = os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share"
+    for d in dirs.split(":"):
+        path = os.path.join(d, "applications", desktop_id)
+        if d and os.path.isfile(path) and not path.startswith(USER_APPS_DIR):
+            return path
+    return None
+
+
+def script_path() -> str:
+    """Exec through the installed symlink, so a moved checkout only needs a relink."""
+    return INSTALLED_SCRIPT if os.path.exists(INSTALLED_SCRIPT) else os.path.realpath(__file__)
+
+
+def render_override(source_text: str, source_path: str, app: dict) -> str:
+    """Rewrite the main [Desktop Entry] Exec to `craft-apps launch <app>`.
+
+    Field codes (%F, %U, ...) carry over so file managers keep passing files.
+    Desktop Actions are left as shipped; they start the app uncontrolled.
+    """
+    digest = hashlib.sha256(source_text.encode()).hexdigest()
+    out, group, done = [], None, False
+    for line in source_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            group = stripped
+            out.append(line)
+            if group == "[Desktop Entry]":
+                out.append(f"# Generated by craft-apps from {source_path}; rerun `craft-apps install` after updates.")
+                out.append(f"{MARK_KEY}={digest}")
+            continue
+        if group == "[Desktop Entry]" and stripped.startswith("Exec=") and not done:
+            codes = [t for t in stripped[5:].split() if len(t) == 2 and t[0] == "%"]
+            out.append("Exec=" + " ".join([script_path(), "launch", app["name"], *codes]))
+            done = True
+            continue
+        if group == "[Desktop Entry]" and stripped.startswith(MARK_KEY + "="):
+            continue
+        out.append(line)
+    if not done:
+        raise ValueError(f"{source_path}: no Exec line in [Desktop Entry]")
+    return "\n".join(out) + "\n"
+
+
+def override_state(app: dict) -> tuple[str, str | None]:
+    """('ok'|'stale'|'missing'|'no-entry'|'foreign', system path)."""
+    src = system_desktop(app["desktop"])
+    if not src:
+        return "no-entry", None
+    dst = os.path.join(USER_APPS_DIR, app["desktop"])
+    if not os.path.exists(dst):
+        return "missing", src
+    with open(dst, encoding="utf-8") as f:
+        text = f.read()
+    mark = next((ln.split("=", 1)[1].strip() for ln in text.splitlines() if ln.startswith(MARK_KEY + "=")), None)
+    if mark is None:
+        return "foreign", src
+    with open(src, encoding="utf-8") as f:
+        current = hashlib.sha256(f.read().encode()).hexdigest()
+    return ("ok" if mark == current else "stale"), src
+
+
+def write_atomic(path: str, text: str) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".craft-apps.")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
+
+
+def refresh_desktop_db() -> None:
+    if shutil.which("update-desktop-database"):
+        subprocess.run(["update-desktop-database", "-q", USER_APPS_DIR], check=False)
+
+
+def cmd_install(args, defaults, apps) -> int:
+    rc = 0
+    for app in pick_apps(apps, args.apps):
+        state, src = override_state(app)
+        if state == "no-entry":
+            print(f"{app['name']:12} skipped: {app['desktop']} is not installed")
+            continue
+        if state == "foreign" and not args.force:
+            warn(f"{app['name']}: {app['desktop']} in {USER_APPS_DIR} was not written by "
+                 "craft-apps; leaving it (use --force to replace it)")
+            rc = 1
+            continue
+        with open(src, encoding="utf-8") as f:
+            text = render_override(f.read(), src, app)
+        write_atomic(os.path.join(USER_APPS_DIR, app["desktop"]), text)
+        ensure_token(app)
+        verb = {"ok": "already current", "stale": "refreshed", "foreign": "replaced"}.get(state, "written")
+        print(f"{app['name']:12} launcher {verb}: port {app['port']}")
+    refresh_desktop_db()
+    return rc
+
+
+def cmd_check(args, defaults, apps) -> int:
+    rc = 0
+    for app in pick_apps(apps, args.apps):
+        state, _ = override_state(app)
+        print(f"{app['name']:12} {state}")
+        if state in ("stale", "missing", "foreign"):
+            rc = 1
+    return rc
+
+
+def cmd_remove(args, defaults, apps) -> int:
+    for app in pick_apps(apps, args.apps, verified_only=False):
+        if "desktop" not in app:
+            continue
+        state, _ = override_state(app)
+        if state in ("ok", "stale"):
+            os.remove(os.path.join(USER_APPS_DIR, app["desktop"]))
+            print(f"{app['name']:12} launcher removed (the system one applies again)")
+    refresh_desktop_db()
+    return 0
+
+
+# --- launching ------------------------------------------------------------------
+
+def session_env() -> dict | None:
+    """The environment with a live display, for launches from long-lived shells.
+
+    A desktop launcher inherits the session's variables, but an agent shell
+    (herdr, ssh, a terminal started before the session) may carry none or stale
+    ones. Keep a variable whose socket exists; otherwise find a live Wayland
+    socket in XDG_RUNTIME_DIR, then a live X display.
+    """
+    env = dict(os.environ)
+    runtime = env.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+    env["XDG_RUNTIME_DIR"] = runtime
+    wl = env.get("WAYLAND_DISPLAY")
+    if wl and os.path.exists(wl if wl.startswith("/") else os.path.join(runtime, wl)):
+        return env
+    env.pop("WAYLAND_DISPLAY", None)
+    disp = env.get("DISPLAY", "")
+    if disp.startswith(":") and os.path.exists(f"/tmp/.X11-unix/X{disp[1:].split('.')[0]}"):
+        return env
+    env.pop("DISPLAY", None)
+    try:
+        sockets = sorted((n for n in os.listdir(runtime) if n.startswith("wayland-") and not n.endswith(".lock")),
+                         key=lambda n: os.path.getmtime(os.path.join(runtime, n)), reverse=True)
+    except OSError:
+        sockets = []
+    if sockets:
+        env["WAYLAND_DISPLAY"] = sockets[0]
+        return env
+    try:
+        xs = sorted(n for n in os.listdir("/tmp/.X11-unix") if n.startswith("X") and n[1:].isdigit())
+    except OSError:
+        xs = []
+    if xs:
+        env["DISPLAY"] = ":" + xs[0][1:]
+        return env
+    return None
+
+
+def cmd_launch(args, defaults, apps) -> int:
+    app = apps.get(args.app)
+    if app is None or not is_verified(app):
+        warn(f"{args.app}: not a verified app in the table")
+        notify("craft-apps", f"{args.app} is not a verified app in craft-apps.toml", urgent=True)
+        return 2
+    if not shutil.which(app["command"]):
+        warn(f"{app['command']} is not on PATH")
+        notify(app["name"], f"{app['command']} is not installed", urgent=True)
+        return 2
+    env = session_env()
+    if env is None:
+        warn("no graphical session found (no live Wayland socket or X display)")
+        return 2
+    port = app["port"]
+    if port_open(port):
+        if args.files:
+            subprocess.Popen([app["command"], *args.files], stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True, cwd=HOME, env=env)
+            msg = (f"Port {port} is already in use (a controlled {app['name']} is running), "
+                   "so the file(s) opened in a separate window without agent control.")
+            print(f"{app['name']}: {msg}")
+            notify(app["name"], msg)
+        else:
+            print(f"{app['name']}: already running; control on 127.0.0.1:{port}")
+        return 0
+
+    ensure_token(app)
+    argv = [app["command"], *expand(app["control_args"], app, defaults), *args.files]
+    log_path = os.path.join(STATE_DIR, f"{app['name']}.log")
+    with open(log_path, "w") as log:
+        proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                                start_new_session=True, cwd=HOME, env=env)
+    deadline = time.monotonic() + args.wait
+    while time.monotonic() < deadline:
+        if port_open(port):
+            print(f"{app['name']}: control on 127.0.0.1:{port} (pid {proc.pid}); log {log_path}")
+            return 0
+        code = proc.poll()
+        if code is not None:
+            with open(log_path, errors="replace") as f:
+                tail = "".join(f.readlines()[-8:]).strip()
+            warn(f"{app['name']} exited with status {code} before opening port {port}:\n{tail}")
+            notify(app["name"], f"Exited with status {code} before opening its control port. "
+                                f"See {log_path}", urgent=True)
+            return 2
+        time.sleep(0.25)
+    warn(f"{app['name']} (pid {proc.pid}) did not open port {port} within {args.wait:g}s; see {log_path}")
+    notify(app["name"], f"Started, but its control port {port} is not answering yet. See {log_path}",
+           urgent=True)
+    return 1
+
+
+# --- MCP registration and probing -----------------------------------------------
+
+def claude_env() -> dict:
+    env = dict(os.environ)
+    env.pop("CLAUDECODE", None)  # `claude` refuses some commands when it sees a parent session
+    return env
+
+
+def registered(name: str) -> dict | None:
+    try:
+        with open(os.path.join(HOME, ".claude.json"), encoding="utf-8") as f:
+            return (json.load(f).get("mcpServers") or {}).get(name)
+    except (OSError, ValueError):
+        return None
+
+
+def cmd_register(args, defaults, apps) -> int:
+    if not shutil.which("claude"):
+        warn("claude is not on PATH")
+        return 2
+    rc = 0
+    for app in pick_apps(apps, args.apps):
+        if not shutil.which(app["cli"]):
+            print(f"{app['name']:12} skipped: {app['cli']} is not installed")
+            continue
+        ensure_token(app)
+        cmd_args = expand(app["bridge_args"], app, defaults)
+        current = registered(app["name"])
+        if current and current.get("command") == app["cli"] and current.get("args") == cmd_args:
+            print(f"{app['name']:12} already registered")
+            continue
+        if args.dry_run:
+            print(f"{app['name']:12} would run: claude mcp add {app['name']} --scope user -- "
+                  f"{app['cli']} {' '.join(cmd_args)}")
+            continue
+        if current:
+            subprocess.run(["claude", "mcp", "remove", app["name"], "--scope", "user"],
+                           env=claude_env(), capture_output=True)
+        r = subprocess.run(["claude", "mcp", "add", app["name"], "--scope", "user", "--",
+                            app["cli"], *cmd_args], env=claude_env(), capture_output=True, text=True)
+        if r.returncode == 0:
+            print(f"{app['name']:12} registered: {app['cli']} {' '.join(cmd_args)}")
+        else:
+            warn(f"{app['name']}: claude mcp add failed: {(r.stderr or r.stdout).strip()}")
+            rc = 2
+    return rc
+
+
+def cmd_unregister(args, defaults, apps) -> int:
+    for app in pick_apps(apps, args.apps, verified_only=False):
+        if registered(app["name"]):
+            subprocess.run(["claude", "mcp", "remove", app["name"], "--scope", "user"],
+                           env=claude_env(), capture_output=True)
+            print(f"{app['name']:12} unregistered")
+    return 0
+
+
+class Bridge:
+    """Minimal MCP stdio client: newline-delimited JSON-RPC."""
+
+    def __init__(self, argv: list[str]):
+        self.proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE, text=True, bufsize=1)
+        self.next_id = 1
+
+    def send(self, method: str, params: dict | None = None, notify_only: bool = False):
+        msg = {"jsonrpc": "2.0", "method": method}
+        if params is not None:
+            msg["params"] = params
+        if not notify_only:
+            msg["id"] = self.next_id
+            self.next_id += 1
+        self.proc.stdin.write(json.dumps(msg) + "\n")
+        self.proc.stdin.flush()
+        return msg.get("id")
+
+    def wait(self, msg_id: int, timeout: float) -> dict:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            ready, _, _ = select.select([self.proc.stdout], [], [], deadline - time.monotonic())
+            if not ready:
+                break
+            line = self.proc.stdout.readline()
+            if not line:
+                err = self.proc.stderr.read().strip()
+                raise RuntimeError(f"bridge exited: {err[-400:]}")
+            try:
+                msg = json.loads(line)
+            except ValueError:
+                continue
+            if msg.get("id") == msg_id:
+                return msg
+        raise TimeoutError(f"no reply within {timeout:g}s")
+
+    def call(self, method: str, params: dict | None = None, timeout: float = 30.0) -> dict:
+        return self.wait(self.send(method, params), timeout)
+
+    def close(self):
+        self.proc.terminate()
+        try:
+            self.proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self.proc.kill()
+
+
+def cmd_probe(args, defaults, apps) -> int:
+    app = apps.get(args.app)
+    if app is None or not app.get("cli") or not app.get("bridge_args"):
+        warn(f"{args.app}: needs cli and bridge_args in the table")
+        return 2
+    ensure_token(app)
+    argv = [app["cli"], *expand(app["bridge_args"], app, defaults)]
+    print(f"bridge: {' '.join(argv)}")
+    print(f"app control port {app['port']}: {'open' if port_open(app['port']) else 'closed (app not running)'}")
+    bridge = Bridge(argv)
+    try:
+        init = bridge.call("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
+                                          "clientInfo": {"name": "craft-apps-probe", "version": "1"}})
+        info = init.get("result", {}).get("serverInfo", {})
+        print(f"initialize: {info.get('name', '?')} {info.get('version', '')}".rstrip())
+        bridge.send("notifications/initialized", notify_only=True)
+        tools = bridge.call("tools/list").get("result", {}).get("tools", [])
+        print(f"tools/list: {len(tools)} tools")
+        tool = args.tool or app.get("probe_tool")
+        if tool:
+            res = bridge.call("tools/call", {"name": tool, "arguments": {}}, timeout=60)
+            result = res.get("result") or {}
+            text = " ".join(c.get("text", "") for c in result.get("content", []) if c.get("type") == "text")
+            status = "error" if (result.get("isError") or "error" in res) else "ok"
+            detail = text or json.dumps(res.get("error", ""))
+            print(f"tools/call {tool}: {status}: {detail[:300]}")
+            return 0 if status == "ok" else 1
+        return 0
+    except (RuntimeError, TimeoutError, OSError) as e:
+        warn(f"probe failed: {e}")
+        return 2
+    finally:
+        bridge.close()
+
+
+def cmd_list(args, defaults, apps) -> int:
+    print(f"{'app':12} {'installed':12} {'verified':10} {'port':5}  {'running':8} {'launcher':9} {'mcp':4}")
+    for app in pick_apps(apps, args.apps, verified_only=False):
+        ver = installed_version(app) or "-"
+        verified = app.get("verified") or "-"
+        running = "yes" if port_open(app["port"]) else "-"
+        launcher = override_state(app)[0] if is_verified(app) else "-"
+        mcp = "yes" if registered(app["name"]) else "-"
+        print(f"{app['name']:12} {ver:12} {verified:10} {app['port']:<5}  {running:8} {launcher:9} {mcp:4}")
+    return 0
+
+
+def main() -> int:
+    default_table = os.path.join(os.path.dirname(os.path.realpath(__file__)), "craft-apps.toml")
+    ap = argparse.ArgumentParser(prog="craft-apps",
+                                 description="Launch ArtCraft apps with agent control and "
+                                             "register their MCP bridges.")
+    ap.add_argument("--table", default=default_table, metavar="FILE",
+                    help=f"app table (default: {default_table})")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    def with_apps(p, help_text="apps (default: every verified app)"):
+        p.add_argument("apps", nargs="*", help=help_text)
+        return p
+
+    with_apps(sub.add_parser("list", help="show each app's install, port, launcher and MCP state"),
+              "apps (default: all)")
+    p = with_apps(sub.add_parser("install", help="write controlled desktop launchers"))
+    p.add_argument("--force", action="store_true", help="replace a launcher craft-apps did not write")
+    with_apps(sub.add_parser("check", help="report launchers that are missing or stale"))
+    with_apps(sub.add_parser("remove", help="delete the launchers this tool wrote"), "apps (default: all)")
+    p = sub.add_parser("launch", help="start an app with its control port (desktop launchers call this)")
+    p.add_argument("app")
+    p.add_argument("files", nargs="*")
+    p.add_argument("--wait", type=float, default=30.0, metavar="SECS",
+                   help="seconds to wait for the control port (default: 30)")
+    p = with_apps(sub.add_parser("register", help="add MCP bridges to Claude Code (user scope)"))
+    p.add_argument("--dry-run", action="store_true", help="print the claude mcp commands only")
+    with_apps(sub.add_parser("unregister", help="remove MCP bridges from Claude Code"), "apps (default: all)")
+    p = sub.add_parser("probe", help="speak MCP to an app's bridge: tool count and one read-only call")
+    p.add_argument("app")
+    p.add_argument("--tool", help="tool to call with no arguments (default: the row's probe_tool)")
+    args = ap.parse_args()
+
+    try:
+        defaults, apps = load_table(args.table)
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        warn(f"cannot read {args.table}: {e}")
+        return 2
+    handler = {"list": cmd_list, "install": cmd_install, "check": cmd_check, "remove": cmd_remove,
+               "launch": cmd_launch, "register": cmd_register, "unregister": cmd_unregister,
+               "probe": cmd_probe}[args.cmd]
+    return handler(args, defaults, apps)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

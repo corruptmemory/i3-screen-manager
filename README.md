@@ -22,6 +22,7 @@ symlinked into `~/.local/bin`. Installing them does not install a desktop config
 | Network menu               | `i3-tailscale-rofi`                                                                                                                  |
 | Usage records              | `agent-usage`, `agent-usage-claude`, `agent-usage-codex`; `agent-usage-polybar`, `agent-usage-rofi` (i3/Polybar bar item and popout) |
 | System utilities           | `aur-malware-check`, `artix-rank-mirrors`, `win11-vm-setup.sh`                                                                       |
+| ArtCraft agent control     | `craft-apps` (with `craft-apps.toml`)                                                                                                |
 | Shared dependency guard    | `lib/require.sh`                                                                                                                     |
 
 ## Requirements
@@ -45,6 +46,7 @@ Install additional dependencies for the features being used:
 | CMOS monitoring                | it87-family Vbat sensor                                                                                                |
 | AUR audit                      | `pacman`, `curl` or a local denylist                                                                                   |
 | Mirror ranking                 | Python 3.10+, `vercmp` (pacman), `bsdtar` (libarchive), network access                                                 |
+| ArtCraft control               | Python 3.11+, the ArtCraft app packages, `claude` for `register`, `notify-send`                                        |
 
 Quickshell and Polybar are output consumers, not requirements for the display
 CLI. See [package installation guidance](docs/agent-guide/packages.md)
@@ -80,6 +82,30 @@ The dotfiles repo supplies keybindings, autostart hooks, and bar widgets.
 resolve its installed path because dotfiles also supplies a desktop launcher.
 The Tailscale and VM tools contain machine-specific settings; read their
 [system guide](docs/agent-guide/system.md) before using them elsewhere.
+
+### ArtCraft agent control (per machine)
+
+Install the apps first (the AUR packages build from tagged source releases;
+follow the [package guide](docs/agent-guide/packages.md), including a full
+`-Syu`). Each machine then needs its own launchers, token files, and MCP
+registration. Nothing in `~/.local/state/craft-control/` is shared or
+committed. From the repository root:
+
+```bash
+ln -sfn "$(pwd)/craft-apps" "$HOME/.local/bin/craft-apps"
+ss -ltn | grep -E ':187(0[1-9]|1[0-4])\b'  # expect nothing: reserved ports free
+craft-apps list               # installed vs verified versions, ports, state
+craft-apps install            # controlled launchers for verified apps
+craft-apps register           # MCP bridges in Claude Code (user scope)
+craft-apps probe photocraft   # app stopped: tools listed, call not sent
+craft-apps launch photocraft  # opens with control; probe again: expect ok
+craft-apps check              # all ok; rerun install after package updates
+```
+
+Start a new Claude Code session to get the `mcp__<app>__*` tools. If `list`
+shows an installed version that differs from `verified`, recheck that app per
+the [applications guide](docs/agent-guide/applications.md#artcraft-agent-control)
+before relying on its row.
 
 ## Display Commands
 
@@ -169,6 +195,8 @@ format is Polybar markup; `quickshell` emits volts and status for the widget.
 only. `aur-malware-check` reports incident-denylist matches without removing
 packages. `artix-rank-mirrors` prints a mirrorlist ranked by content freshness
 and speed (`--arch` for the `[extra]` overlay) without editing `/etc/pacman.d`.
+`craft-apps` writes desktop launchers that start the ArtCraft apps with their
+control port and registers their MCP bridges with Claude Code.
 `win11-vm-setup.sh` performs privileged host setup and does not
 install the Windows guest. Their interfaces and verification are in the
 [system guide](docs/agent-guide/system.md) and
