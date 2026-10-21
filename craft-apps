@@ -330,13 +330,16 @@ def cmd_launch(args, defaults, apps) -> int:
     ensure_token(app)
     argv = [app["command"], *expand(app["control_args"], app, defaults), *args.files]
     log_path = os.path.join(STATE_DIR, f"{app['name']}.log")
+    started = time.monotonic()  # launch time is measured from the spawn to an answering port
     with open(log_path, "w") as log:
         proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
                                 start_new_session=True, cwd=HOME, env=env)
-    deadline = time.monotonic() + args.wait
+    deadline = started + args.wait
     while time.monotonic() < deadline:
         if port_open(port):
-            print(f"{app['name']}: control on 127.0.0.1:{port} (pid {proc.pid}); log {log_path}")
+            took = time.monotonic() - started
+            print(f"{app['name']}: ready in {took:.2f} s, control on 127.0.0.1:{port} "
+                  f"(pid {proc.pid}); log {log_path}")
             return 0
         code = proc.poll()
         if code is not None:
