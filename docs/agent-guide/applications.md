@@ -61,15 +61,28 @@ package-removal commands from an assumed dependency graph.
 
 ## ArtCraft Agent Control
 
-The ArtCraft apps (PhotoCraft, GridCraft and the rest of `craft-apps.toml`)
-start a loopback JSON-lines control server only when launched with
-`--control <port>`; their `integrations.controlPort` preference is not wired up
-upstream. `craft-apps` gives each app a fixed port in 18701-18714, the same on
-every machine and below the ephemeral range, plus a token file
-`~/.local/state/craft-control/<app>.token`. The token file is mode 0600 and is
-created before first use, so a bridge started before its app can read it; the
-app reuses it. The table's `[defaults]` grant automation read and write roots
-of `~`. Without roots the apps refuse all automated file access.
+The ArtCraft apps start a loopback JSON-lines control server only when launched
+with `--control <port>`; PhotoCraft's `integrations.controlPort` preference is
+not wired up upstream. `craft-apps.toml` holds one row per app with a fixed
+port in 18701-18714 (the same on every machine, below the ephemeral range) and
+that app's own control and bridge argv, taken from its docs at the installed
+tag. A row is used only once `verified` names the version checked with
+`<app> --help`, `<app>-cli mcp --help`, and `craft-apps probe <app>` with the app
+stopped and running. Twelve apps are verified. PdfCraft has no row: its MCP
+server is headless only, with no way to attach to the running app. ArtCraft's
+row only reserves a port (it was not installed).
+
+The apps differ in two ways that matter:
+
+- File access. PhotoCraft, FigCraft and VectorCraft take automation roots at
+  launch; the table's `[defaults]` grant read and write under `~`. The other
+  running apps have no such flags and are not confined, and their bridges
+  refuse roots, so the agent reaches any file the user can.
+- Authentication. PhotoCraft reads a token from
+  `~/.local/state/craft-control/<app>.token` (0600, created before first use
+  so a bridge started first can read it). WordCraft writes a new key to
+  `~/.config/wordcraft/control-key.local-<port>` each start, and its bridge
+  reads it. The rest accept any local client on their port.
 
 `craft-apps install` copies each app's system desktop entry to
 `~/.local/share/applications/` under the same id, so the copy replaces the
@@ -86,36 +99,63 @@ finds a live Wayland socket or X display itself. A `--control` launch bypasses
 the apps' single-instance handoff. So while a controlled copy holds the port,
 `launch` with files opens them in a separate uncontrolled window and sends a
 notification; without files it reports the running copy. Failures also notify,
-since desktop launches have no terminal.
+since desktop launches have no terminal. `stop` closes controlled apps by sending SIGTERM to
+the process that holds each port; it warns when an app stays open, for
+example while asking about unsaved work.
 
-`register` adds each verified app's bridge to Claude Code at user scope as MCP
-server `<app>`; rerunning it is a no-op when nothing changed. New servers appear
-in new sessions. PhotoCraft's bridge connects on demand: a call made while the
-app is down fails with "the request was not sent" and the bridge stays up. For
-an agent, the workflow is `craft-apps launch <app>`, then the `mcp__<app>__*`
-tools. Each machine is set up per the README's
+`register` adds each verified app to Claude Code at user scope as MCP server
+`<app>`; rerunning it is a no-op when nothing changed. New servers appear in
+new sessions. Six bridges connect on demand (PhotoCraft, FilmCraft, LightCraft,
+EffectCraft, SoundCraft, and CADCraft with `--lazy`). The other six (DeckCraft,
+DesignCraft, FigCraft, GridCraft, VectorCraft, WordCraft) exit when their app
+is down, which would leave the server failed for the whole session. Their rows
+set `needs_app_at_start`, and `register` installs `craft-apps bridge <app>`
+instead: a lazy proxy that answers the handshake and tool list from
+`~/.local/state/craft-control/<app>.mcp.json`. `register` first fills that cache
+from the CLI's headless mode, whose tool list matched the connected one for all
+six, and no window opens. The proxy starts the real bridge at the first tool
+call, refreshes the cache (sending `tools/list_changed` if it changed), and
+forwards traffic unchanged. Until that first connection, it rewrites a
+headless cache's "Backend: headless" sentence to name the app and port. A call while the app is down returns a tool error
+naming `craft-apps launch`. For an agent, the workflow is
+`craft-apps launch <app>`, then the `mcp__<app>__*` tools. Each machine is set up
+per the README's
 [ArtCraft section](../../README.md#artcraft-agent-control-per-machine).
 
-Through a bridge the agent drives the live window. `command_list` documents
-each command's parameters, `command_batch` runs steps in order (one history
-step each, stopping at the first error), and `ui_screenshot` returns the
-window. File paths are relative to the automation roots (with `~` as the root,
-`Pictures/x.png`) or absolute paths inside them. Paths outside are rejected, and
-an output's parent directory must already exist. PhotoCraft's bridge saves with
-the app's current export settings: `doc_save` and `doc_export` refuse
-`quality` (JPEG/WebP) except in headless mode. Flat formats warn that layers
-were flattened; `.pcraft` keeps them.
+Through a bridge the agent drives the live window: command lists document their
+parameters, and screenshot and inspect tools read the window back. Where roots
+apply, paths are relative to them (with `~` as the root, `Pictures/x.png`) or
+absolute paths inside them. Paths outside are rejected, and an output's parent
+directory must already exist. PhotoCraft's bridge saves with the app's current
+export settings: `doc_save` and `doc_export` refuse `quality` (JPEG/WebP) except
+in headless mode. Flat formats warn that layers were flattened; `.pcraft` keeps
+them. `list` shows installed and verified versions side by side; after an app
+update, recheck its flags and probe it before changing `verified`. The control
+channel is unencrypted loopback: protect token files, and remember that most
+of these ports take commands from any local process while the app runs.
 
-The apps spell their bridge flags differently. PhotoCraft uses
-`mcp --bridge 127.0.0.1:<port>` with a token file; GridCraft and VectorCraft
-document `mcp --connect`. A row is used only once `verified` names the version
-checked with `<app> --help`, `<app>-cli mcp --help`, and `craft-apps probe <app>`.
-Run the probe with the app stopped (expect a clean connection error) and running
-(expect `ok`). Rows without `verified` only reserve a port. `list` shows the
-installed and verified versions side by side; after an app update, repeat those
-checks before changing `verified`. The control channel
-is unencrypted loopback with a bearer token: whoever holds the token controls
-the UI and runs commands, so keep token files private.
+Per-app notes from driving all twelve, each checked by reading its saved
+file back:
+
+- FigCraft and VectorCraft start with no document: run `file.new` first.
+  DeckCraft (`new_presentation`), DesignCraft (`new_document`) and GridCraft
+  (`new_workbook`) have their own new-document tools.
+- CADCraft's `command_line` treats spaces as Enter. Send TEXT content in its
+  own call after the command and its point, height, and rotation, or each
+  word becomes a separate line.
+- FilmCraft's `render_frame` in bridge mode returns the Program monitor, UI
+  included. `file.newSequenceFromClip` needs `items`, `graphics.newText`
+  places text by its left baseline until `graphics.set` gives
+  `align: center`, and `file.exportMedia` with `wait: true` blocks until the
+  file is written.
+- EffectCraft renders through `renderQueue.add`, then `renderQueue.render`.
+  Its H.264 output has only one keyframe, so check frames with frame-accurate
+  decoding (`ffmpeg -i f -ss t`), not a keyframe seek.
+- LightCraft's `import` adds to the user's real library; `photo.delete` moves
+  a test photo to Recently Deleted and leaves the file alone.
+- SoundCraft's `list_commands` appends about 60 UI `window.*` commands to
+  every filter result; `engine.plugins` lists the effects and their
+  parameters.
 
 ## Application Verification
 

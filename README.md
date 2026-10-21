@@ -85,27 +85,61 @@ The Tailscale and VM tools contain machine-specific settings; read their
 
 ### ArtCraft agent control (per machine)
 
-Install the apps first (the AUR packages build from tagged source releases;
-follow the [package guide](docs/agent-guide/packages.md), including a full
-`-Syu`). Each machine then needs its own launchers, token files, and MCP
-registration. Nothing in `~/.local/state/craft-control/` is shared or
-committed. From the repository root:
+`craft-apps` wires twelve ArtCraft apps to MCP: PhotoCraft, VectorCraft,
+FilmCraft, LightCraft, EffectCraft, DesignCraft, FigCraft, WordCraft,
+SoundCraft, DeckCraft, CADCraft and GridCraft. PdfCraft's MCP server is
+headless only and ArtCraft has no row yet, so neither is wired. Each machine
+needs its own launchers, token files, tool caches and MCP registration;
+nothing in `~/.local/state/craft-control/` is shared or committed.
+
+Install the apps first. The AUR packages build from tagged source releases
+and the Rust builds take a long time. Follow the
+[package guide](docs/agent-guide/packages.md): run `aur-malware-check` before
+and after, and finish with a full `yay -Syu`, not `-Sy`.
+
+```bash
+yay -S photocraft vectorcraft filmcraft lightcraft effectcraft designcraft \
+       figcraft wordcraft soundcraft deckcraft cadcraft gridcraft
+```
+
+Then, from the repository root:
 
 ```bash
 ln -sfn "$(pwd)/craft-apps" "$HOME/.local/bin/craft-apps"
 ss -ltn | grep -E ':187(0[1-9]|1[0-4])\b'  # expect nothing: reserved ports free
-craft-apps list               # installed vs verified versions, ports, state
-craft-apps install            # controlled launchers for verified apps
-craft-apps register           # MCP bridges in Claude Code (user scope)
-craft-apps probe photocraft   # app stopped: tools listed, call not sent
-craft-apps launch photocraft  # opens with control; probe again: expect ok
-craft-apps check              # all ok; rerun install after package updates
+craft-apps list        # installed must equal verified on every wired row
+craft-apps install     # 12 controlled launchers in ~/.local/share/applications
+craft-apps register    # caches six proxied tool lists (headless, no window),
+                       # then adds 12 user-scope MCP servers to Claude Code
+claude mcp list | grep craft   # all twelve ✔ Connected with no app running
+craft-apps check       # all ok; rerun install after package updates
 ```
 
-Start a new Claude Code session to get the `mcp__<app>__*` tools. If `list`
-shows an installed version that differs from `verified`, recheck that app per
-the [applications guide](docs/agent-guide/applications.md#artcraft-agent-control)
-before relying on its row.
+Check every app twice, once with it stopped and once with it running:
+
+```bash
+for app in $(craft-apps list | awk 'NR > 1 && $3 != "-" {print $1}'); do
+    craft-apps probe "$app" | tail -1   # stopped: a clean error (see below)
+    craft-apps launch "$app" && craft-apps probe "$app" | tail -1   # running: ok
+    craft-apps stop "$app"
+done
+```
+
+A stopped direct bridge reports a refused connection ("the request was not
+sent" or similar). A stopped proxied bridge (DeckCraft, DesignCraft, FigCraft,
+GridCraft, VectorCraft, WordCraft) reports "<app> is not running with agent
+control". Every running app must print `ok`. If `list` shows an installed
+version that differs from `verified`, recheck that app per the
+[applications guide](docs/agent-guide/applications.md#artcraft-agent-control)
+before updating its row.
+
+Start a new Claude Code session to get the `mcp__<app>__*` tools; the agent
+runs `craft-apps launch <app>` before using an app and `craft-apps stop <app>`
+afterwards. Launching from an agent shell under Hyprland (where `launch` finds
+the Wayland socket itself) was verified only on X11/i3 so far. Under Hyprland,
+run the loop above from an agent or herdr shell and confirm each window
+opens. PhotoCraft writes only into existing folders, so create an output
+folder such as `~/Pictures/craft-samples` before saving there.
 
 ## Display Commands
 

@@ -30,8 +30,17 @@ control_args = ["--control", "{port}", "--control-token-file", "{token_file}",
 bridge_args = ["mcp", "--bridge", "127.0.0.1:{port}", "--control-token-file", "{token_file}"]
 probe_tool = "session_list"
 
-# Ports are reserved for the rest; fill in and verify each row when its package
-# is installed (check `<app> --help` and `<app>-cli mcp --help`, then probe).
+# The rest are filled in from each app's docs at its installed tag
+# (docs/mcp.md, docs/control-protocol.md) and its --help. They differ:
+# - Only PhotoCraft, FigCraft and VectorCraft take automation roots on the app;
+#   the others' running apps are not confined (their docs say so) and refuse
+#   roots alongside a bridge, so the agent can reach any file the user can.
+# - Only PhotoCraft (token file) and WordCraft (a key the app writes to
+#   ~/.config/wordcraft/control-key.local-<port> each start, which its bridge
+#   reads) authenticate; the rest accept any local client on their port.
+# - CADCraft's bridge needs --lazy to start before the app is running. Six
+#   bridges have no such option and exit when their app is down; their rows
+#   set needs_app_at_start (see `craft-apps bridge`).
 
 [apps.artcraft]
 port = 18702
@@ -40,15 +49,41 @@ command = "artcraft"
 [apps.vectorcraft]
 port = 18703
 command = "vectorcraft"
+cli = "vectorcraft-cli"
+desktop = "ai.storyteller.vectorcraft.desktop"
+verified = "0.14.0"
+control_args = ["--control", "{port}", "--automation-read-root", "{read_root}",
+                "--automation-write-root", "{write_root}"]
+# An explicit --connect; with no flag the server falls back to a headless session.
+bridge_args = ["mcp", "--connect", "127.0.0.1:{port}"]
+probe_tool = "ui_inspect"
+# The bridge exits when the app is down, so register the lazy proxy.
+needs_app_at_start = true
+headless_args = ["mcp", "--headless"]
 
 [apps.filmcraft]
 port = 18704
 command = "filmcraft"
+cli = "filmcraft-cli"
+desktop = "ai.storyteller.filmcraft.desktop"
+verified = "0.10.0"
+control_args = ["--control", "{port}"]
+bridge_args = ["mcp", "--bridge", "127.0.0.1:{port}"]
+probe_tool = "ui_inspect"
 
 [apps.lightcraft]
 port = 18705
 command = "lightcraft"
+cli = "lightcraft-cli"
+desktop = "ai.storyteller.lightcraft.desktop"
+verified = "0.10.0"
+control_args = ["--control", "{port}"]
+bridge_args = ["mcp", "--connect", "127.0.0.1:{port}"]
+probe_tool = "ui_inspect"
 
+# PdfCraft: `pdfcraft-cli mcp` always runs its own headless session ("there is no
+# flag to connect it to a running app"); the app's --control takes a control file
+# that only `pdfcraft-cli ui` uses. No live bridge, so no launcher or MCP row.
 [apps.pdfcraft]
 port = 18706
 command = "pdfcraft"
@@ -56,31 +91,95 @@ command = "pdfcraft"
 [apps.effectcraft]
 port = 18707
 command = "effectcraft"
+cli = "effectcraft-cli"
+desktop = "ai.storyteller.effectcraft.desktop"
+verified = "0.13.0"
+control_args = ["--control", "{port}"]
+bridge_args = ["mcp", "--bridge", "{port}"]
+probe_tool = "ui_inspect"
 
 [apps.designcraft]
 port = 18708
 command = "designcraft"
+cli = "designcraft-cli"
+desktop = "ai.storyteller.designcraft.desktop"
+verified = "0.10.0"
+control_args = ["--control", "{port}"]
+bridge_args = ["mcp", "--connect", "{port}"]
+probe_tool = "ui_inspect"
+# The bridge exits when the app is down, so register the lazy proxy.
+needs_app_at_start = true
+headless_args = ["mcp"]
 
 [apps.figcraft]
 port = 18709
 command = "figcraft"
+cli = "figcraft-cli"
+desktop = "ai.storyteller.figcraft.desktop"
+verified = "0.8.0"
+control_args = ["--control", "{port}", "--automation-read-root", "{read_root}",
+                "--automation-write-root", "{write_root}"]
+bridge_args = ["mcp", "--attach", "{port}"]
+probe_tool = "inspect_ui"
+# The bridge exits when the app is down, so register the lazy proxy.
+needs_app_at_start = true
+headless_args = ["mcp"]
 
 [apps.wordcraft]
 port = 18710
 command = "wordcraft"
+cli = "wordcraft-cli"
+desktop = "ai.storyteller.wordcraft.desktop"
+verified = "0.9.0"
+control_args = ["--control", "{port}"]
+bridge_args = ["mcp", "--connect", "127.0.0.1:{port}"]
+probe_tool = "ui_inspect"
+# The bridge exits when the app is down, so register the lazy proxy.
+needs_app_at_start = true
+headless_args = ["mcp"]
 
 [apps.soundcraft]
 port = 18711
 command = "soundcraft"
+cli = "soundcraft-cli"
+desktop = "ai.storyteller.soundcraft.desktop"
+verified = "0.10.0"
+control_args = ["--control", "{port}"]
+bridge_args = ["mcp", "--connect", "{port}"]
+probe_tool = "ui_inspect"
 
 [apps.deckcraft]
 port = 18712
 command = "deckcraft"
+cli = "deckcraft-cli"
+desktop = "ai.storyteller.deckcraft.desktop"
+verified = "0.9.0"
+control_args = ["--control", "{port}"]
+bridge_args = ["mcp", "--connect", "{port}"]
+probe_tool = "screenshot"
+# The bridge exits when the app is down, so register the lazy proxy.
+needs_app_at_start = true
+headless_args = ["mcp"]
 
 [apps.cadcraft]
 port = 18713
 command = "cadcraft"
+cli = "cadcraft-cli"
+desktop = "ai.storyteller.cadcraft.desktop"
+verified = "0.10.0"
+control_args = ["--control", "{port}"]
+bridge_args = ["mcp", "--connect", "127.0.0.1:{port}", "--lazy"]
+probe_tool = "ui_inspect"
 
 [apps.gridcraft]
 port = 18714
 command = "gridcraft"
+cli = "gridcraft-cli"
+desktop = "ai.storyteller.gridcraft.desktop"
+verified = "0.9.0"
+control_args = ["--control", "{port}"]
+bridge_args = ["mcp", "--connect", "{port}"]
+probe_tool = "inspect_workbook"
+# The bridge exits when the app is down, so register the lazy proxy.
+needs_app_at_start = true
+headless_args = ["mcp"]

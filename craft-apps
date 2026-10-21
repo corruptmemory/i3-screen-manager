@@ -14,9 +14,14 @@ copy is running) `launch` opens any files in a separate, uncontrolled window
 and says so in a notification.
 
 `register` adds each verified app's MCP bridge to Claude Code (user scope).
-Bridges reconnect on demand, so they can be registered before the app runs:
-a call made while the app is down fails cleanly. `probe` speaks MCP to a
-bridge directly to confirm a row: tool count, then one read-only call.
+Most bridges connect on demand, so they can be registered before the app runs.
+Some exit at once when their app is down; rows mark those
+`needs_app_at_start`, and `register` points them at `craft-apps bridge <app>`,
+a lazy proxy. It answers the client's handshake and tool list from a cached
+copy (filled from the CLI's headless mode, whose tools match), starts the real
+bridge at the first tool call, and reports a not-running app as a tool error.
+`probe` speaks MCP to the registered command to confirm a row: tool count,
+then one read-only call.
 
 Exit status: 0 = success, 1 = something to fix (stale or missing launchers,
 an app that did not open its port in time), 2 = usage or runtime error.
@@ -28,6 +33,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import secrets
 import select
 import shutil
@@ -35,6 +41,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import tomllib
 
@@ -77,14 +84,18 @@ def token_file(app: dict) -> str:
     return os.path.join(STATE_DIR, f"{app['name']}.token")
 
 
-def ensure_token(app: dict) -> str:
+def ensure_token(app: dict) -> str | None:
     """Pre-create the token file so a bridge started before the app can read it.
 
     The app reuses an existing token file, so both sides share this secret and
     it never appears in a command line, a desktop file, or ~/.claude.json.
+    Only rows whose argv names {token_file} get one; the state directory (for
+    launch logs) is created either way.
     """
     os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
     os.chmod(STATE_DIR, 0o700)
+    if not any("{token_file}" in a for a in app.get("control_args", []) + app.get("bridge_args", [])):
+        return None
     path = token_file(app)
     if not os.path.exists(path):
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -342,7 +353,87 @@ def cmd_launch(args, defaults, apps) -> int:
     return 1
 
 
+def port_owner(port: int) -> int | None:
+    """Pid of the process listening on 127.0.0.1:<port>, from `ss`."""
+    r = subprocess.run(["ss", "-ltnpH", f"sport = :{port}"], capture_output=True, text=True)
+    m = re.search(r"pid=(\d+)", r.stdout)
+    return int(m.group(1)) if m else None
+
+
+def cmd_stop(args, defaults, apps) -> int:
+    """Close controlled apps: SIGTERM the process holding each app's port."""
+    rc = 0
+    for app in pick_apps(apps, args.apps):
+        pid = port_owner(app["port"])
+        if pid is None:
+            if args.apps:
+                print(f"{app['name']:12} not running")
+            continue
+        os.kill(pid, 15)
+        for _ in range(20):
+            time.sleep(0.25)
+            if not os.path.exists(f"/proc/{pid}"):
+                print(f"{app['name']:12} stopped (pid {pid})")
+                break
+        else:
+            warn(f"{app['name']} (pid {pid}) is still running; it may be asking about unsaved work")
+            rc = 1
+    return rc
+
+
 # --- MCP registration and probing -----------------------------------------------
+
+INIT_PARAMS = {"protocolVersion": "2025-06-18", "capabilities": {},
+               "clientInfo": {"name": "craft-apps", "version": "1"}}
+
+
+def server_argv(app: dict, defaults: dict) -> list[str]:
+    """The MCP server command `register` installs and `probe` tests."""
+    if app.get("needs_app_at_start"):
+        return [script_path(), "bridge", app["name"]]
+    return [app["cli"], *expand(app["bridge_args"], app, defaults)]
+
+
+def cache_path(app: dict) -> str:
+    return os.path.join(STATE_DIR, f"{app['name']}.mcp.json")
+
+
+def read_cache(app: dict) -> dict:
+    try:
+        with open(cache_path(app), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def write_cache(app: dict, info: dict) -> None:
+    os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
+    write_atomic(cache_path(app), json.dumps(info, indent=1) + "\n")
+
+
+def server_info(init: dict, tools: dict, source: str) -> dict:
+    result = init.get("result", {})
+    return {"source": source, "protocolVersion": result.get("protocolVersion"),
+            "serverInfo": result.get("serverInfo"), "instructions": result.get("instructions"),
+            "tools": tools.get("result", {}).get("tools", [])}
+
+
+def fill_cache(app: dict) -> str | None:
+    """Cache the tool list from the CLI's headless mode (no window). Returns an error."""
+    argv = [app["cli"], *app.get("headless_args", ["mcp"])]
+    bridge = Bridge(argv)
+    try:
+        init = bridge.call("initialize", INIT_PARAMS)
+        bridge.send("notifications/initialized", notify_only=True)
+        tools = bridge.call("tools/list")
+        if "result" not in init or "result" not in tools:
+            return "headless server gave no tool list"
+        write_cache(app, server_info(init, tools, "headless"))
+        return None
+    except (RuntimeError, TimeoutError, OSError) as e:
+        return str(e)
+    finally:
+        bridge.close()
 
 def claude_env() -> dict:
     env = dict(os.environ)
@@ -368,22 +459,28 @@ def cmd_register(args, defaults, apps) -> int:
             print(f"{app['name']:12} skipped: {app['cli']} is not installed")
             continue
         ensure_token(app)
-        cmd_args = expand(app["bridge_args"], app, defaults)
+        if app.get("needs_app_at_start") and not read_cache(app) and not args.dry_run:
+            err = fill_cache(app)
+            if err:
+                warn(f"{app['name']}: cannot cache its tool list from headless mode: {err}")
+                rc = 2
+                continue
+        command, *cmd_args = server_argv(app, defaults)
         current = registered(app["name"])
-        if current and current.get("command") == app["cli"] and current.get("args") == cmd_args:
+        if current and current.get("command") == command and current.get("args") == cmd_args:
             print(f"{app['name']:12} already registered")
             continue
         if args.dry_run:
             print(f"{app['name']:12} would run: claude mcp add {app['name']} --scope user -- "
-                  f"{app['cli']} {' '.join(cmd_args)}")
+                  f"{command} {' '.join(cmd_args)}")
             continue
         if current:
             subprocess.run(["claude", "mcp", "remove", app["name"], "--scope", "user"],
                            env=claude_env(), capture_output=True)
         r = subprocess.run(["claude", "mcp", "add", app["name"], "--scope", "user", "--",
-                            app["cli"], *cmd_args], env=claude_env(), capture_output=True, text=True)
+                            command, *cmd_args], env=claude_env(), capture_output=True, text=True)
         if r.returncode == 0:
-            print(f"{app['name']:12} registered: {app['cli']} {' '.join(cmd_args)}")
+            print(f"{app['name']:12} registered: {command} {' '.join(cmd_args)}")
         else:
             warn(f"{app['name']}: claude mcp add failed: {(r.stderr or r.stdout).strip()}")
             rc = 2
@@ -453,25 +550,31 @@ def cmd_probe(args, defaults, apps) -> int:
         warn(f"{args.app}: needs cli and bridge_args in the table")
         return 2
     ensure_token(app)
-    argv = [app["cli"], *expand(app["bridge_args"], app, defaults)]
+    if app.get("needs_app_at_start") and not read_cache(app):
+        err = fill_cache(app)
+        if err:
+            warn(f"cannot cache the tool list from headless mode: {err}")
+            return 2
+    argv = server_argv(app, defaults)
     print(f"bridge: {' '.join(argv)}")
     print(f"app control port {app['port']}: {'open' if port_open(app['port']) else 'closed (app not running)'}")
     bridge = Bridge(argv)
     try:
-        init = bridge.call("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
-                                          "clientInfo": {"name": "craft-apps-probe", "version": "1"}})
+        init = bridge.call("initialize", INIT_PARAMS)
         info = init.get("result", {}).get("serverInfo", {})
         print(f"initialize: {info.get('name', '?')} {info.get('version', '')}".rstrip())
         bridge.send("notifications/initialized", notify_only=True)
         tools = bridge.call("tools/list").get("result", {}).get("tools", [])
         print(f"tools/list: {len(tools)} tools")
+        if args.list_tools:
+            print("  " + " ".join(sorted(t.get("name", "?") for t in tools)))
         tool = args.tool or app.get("probe_tool")
         if tool:
             res = bridge.call("tools/call", {"name": tool, "arguments": {}}, timeout=60)
             result = res.get("result") or {}
             text = " ".join(c.get("text", "") for c in result.get("content", []) if c.get("type") == "text")
             status = "error" if (result.get("isError") or "error" in res) else "ok"
-            detail = text or json.dumps(res.get("error", ""))
+            detail = " ".join((text or json.dumps(res.get("error", ""))).split())  # one line
             print(f"tools/call {tool}: {status}: {detail[:300]}")
             return 0 if status == "ok" else 1
         return 0
@@ -480,6 +583,220 @@ def cmd_probe(args, defaults, apps) -> int:
         return 2
     finally:
         bridge.close()
+
+
+def proxy_instructions(app: dict, cache: dict) -> str | None:
+    """The server instructions to announce, corrected when the cache is headless.
+
+    A cache filled from headless mode carries the headless server's own words
+    ("Backend: headless ..."), but every call through the proxy goes to the
+    running app; say so until a live connection refreshes the cache.
+    """
+    text = cache.get("instructions")
+    if not text or cache.get("source") != "headless":
+        return text
+    live = (f"Backend: the {app['name']} app at 127.0.0.1:{app['port']}, through `craft-apps "
+            f"bridge` (it connects at the first tool call; start the app with `craft-apps "
+            f"launch {app['name']}`).")
+    fixed, n = re.subn(r"Backend: headless(?: \([^)]*\))?\.", live, text)
+    return fixed if n else text + "\n" + live
+
+
+class LazyProxy:
+    """MCP stdio proxy for a bridge that exits when its app is not running.
+
+    Answers initialize and tools/list from the cache, starts the real bridge
+    at the first tools/call, then forwards both ways unchanged. A closed app
+    strands only the requests in flight; the next call reconnects.
+    """
+
+    INIT_ID = "craft-apps:init"
+    TOOLS_ID = "craft-apps:tools"
+
+    def __init__(self, app: dict, defaults: dict):
+        self.app = app
+        self.name = app["name"]
+        self.argv = [app["cli"], *expand(app["bridge_args"], app, defaults)]
+        self.cache = read_cache(app)
+        self.child = None
+        self.client_init = None
+        self.inflight: set = set()
+        self.out_lock = threading.Lock()
+        self.state_lock = threading.Lock()
+
+    def emit(self, msg: dict) -> None:
+        with self.out_lock:
+            sys.stdout.write(json.dumps(msg) + "\n")
+            sys.stdout.flush()
+
+    def reply(self, mid, result: dict) -> None:
+        self.emit({"jsonrpc": "2.0", "id": mid, "result": result})
+
+    def tool_error(self, mid, text: str) -> None:
+        self.reply(mid, {"content": [{"type": "text", "text": text}], "isError": True})
+
+    def not_running(self) -> str:
+        return (f"{self.name} is not running with agent control. Run `craft-apps launch "
+                f"{self.name}`, then retry; this bridge connects on the next call.")
+
+    def start_child(self) -> str | None:
+        """Start and initialize the real bridge. Returns an error message, or None."""
+        if not port_open(self.app["port"]):
+            return self.not_running()
+        log_path = os.path.join(STATE_DIR, f"{self.name}.bridge.log")
+        try:
+            with open(log_path, "a") as log:
+                child = subprocess.Popen(self.argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                         stderr=log, text=True, bufsize=1)
+        except OSError as e:
+            return f"cannot start {self.argv[0]}: {e}"
+
+        def rpc(mid, method, params):
+            child.stdin.write(json.dumps({"jsonrpc": "2.0", "id": mid, "method": method,
+                                          "params": params}) + "\n")
+            child.stdin.flush()
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                if not select.select([child.stdout], [], [], deadline - time.monotonic())[0]:
+                    break
+                line = child.stdout.readline()
+                if not line:
+                    return None
+                try:
+                    msg = json.loads(line)
+                except ValueError:
+                    continue
+                if msg.get("id") == mid:
+                    return msg
+            return None
+
+        try:
+            init = rpc(self.INIT_ID, "initialize", self.client_init or INIT_PARAMS)
+            if init and "result" in init:
+                child.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
+                child.stdin.flush()
+            tools = rpc(self.TOOLS_ID, "tools/list", {}) if init and "result" in init else None
+        except (OSError, ValueError):
+            init = tools = None
+        if not tools or "result" not in tools:
+            child.kill()
+            return (f"{self.name} is listening on port {self.app['port']} but its bridge did not "
+                    f"connect; see {log_path}")
+        info = server_info(init, tools, "app")
+        changed = info["tools"] != self.cache.get("tools")
+        write_cache(self.app, info)
+        self.cache = info
+        with self.state_lock:
+            self.child = child
+        threading.Thread(target=self.pump, args=(child,), daemon=True).start()
+        if changed:
+            self.emit({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"})
+        return None
+
+    def pump(self, child) -> None:
+        for line in child.stdout:
+            try:
+                msg = json.loads(line)
+            except ValueError:
+                continue
+            if "method" not in msg:
+                with self.state_lock:
+                    self.inflight.discard(msg.get("id"))
+            self.emit(msg)
+        with self.state_lock:
+            if self.child is child:
+                self.child = None
+            stranded = list(self.inflight)
+            self.inflight.clear()
+        for mid in stranded:
+            self.emit({"jsonrpc": "2.0", "id": mid, "error": {"code": -32000, "message":
+                       f"the connection to {self.name} closed; if the app was quit, run "
+                       f"`craft-apps launch {self.name}` and retry"}})
+
+    def forward(self, line: str, mid) -> bool:
+        with self.state_lock:
+            child = self.child
+            if child is None:
+                return False
+            if mid is not None:
+                self.inflight.add(mid)
+        try:
+            child.stdin.write(line + "\n")
+            child.stdin.flush()
+            return True
+        except (OSError, ValueError):
+            with self.state_lock:
+                self.inflight.discard(mid)
+                if self.child is child:
+                    self.child = None
+            return False
+
+    def run(self) -> None:
+        while True:
+            line = sys.stdin.readline()
+            if not line:
+                break
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                msg = json.loads(line)
+            except ValueError:
+                continue
+            method, mid = msg.get("method"), msg.get("id")
+            is_request = method is not None and "id" in msg
+            if method is None:  # the client answering a server request
+                self.forward(line, None)
+                continue
+            if method == "initialize":
+                self.client_init = msg.get("params") or INIT_PARAMS
+                result = {"protocolVersion": self.client_init.get("protocolVersion")
+                                             or self.cache.get("protocolVersion") or "2025-06-18",
+                          "capabilities": {"tools": {"listChanged": True}},
+                          "serverInfo": self.cache.get("serverInfo") or {"name": self.name, "version": "unknown"}}
+                instructions = proxy_instructions(self.app, self.cache)
+                if instructions:
+                    result["instructions"] = instructions
+                self.reply(mid, result)
+                continue
+            if method == "notifications/initialized":
+                continue
+            if method == "ping" and is_request:
+                self.reply(mid, {})
+                continue
+            if self.forward(line, mid if is_request else None):
+                continue
+            if method == "tools/call":
+                err = self.start_child()
+                if err is None and self.forward(line, mid):
+                    continue
+                self.tool_error(mid, err or self.not_running())
+            elif not is_request:
+                continue
+            elif method == "tools/list":
+                self.reply(mid, {"tools": self.cache.get("tools", [])})
+            elif method == "resources/list":
+                self.reply(mid, {"resources": []})
+            elif method == "resources/templates/list":
+                self.reply(mid, {"resourceTemplates": []})
+            elif method == "prompts/list":
+                self.reply(mid, {"prompts": []})
+            else:
+                self.emit({"jsonrpc": "2.0", "id": mid, "error": {"code": -32601,
+                           "message": f"{method}: {self.name} is not connected yet"}})
+        with self.state_lock:
+            child = self.child
+        if child:
+            child.terminate()
+
+
+def cmd_bridge(args, defaults, apps) -> int:
+    app = apps.get(args.app)
+    if app is None or not app.get("cli") or not app.get("bridge_args"):
+        warn(f"{args.app}: needs cli and bridge_args in the table")
+        return 2
+    LazyProxy(app, defaults).run()
+    return 0
 
 
 def cmd_list(args, defaults, apps) -> int:
@@ -518,12 +835,18 @@ def main() -> int:
     p.add_argument("files", nargs="*")
     p.add_argument("--wait", type=float, default=30.0, metavar="SECS",
                    help="seconds to wait for the control port (default: 30)")
+    with_apps(sub.add_parser("stop", help="close controlled apps (SIGTERM to the process on each port)"),
+              "apps (default: every running verified app)")
     p = with_apps(sub.add_parser("register", help="add MCP bridges to Claude Code (user scope)"))
     p.add_argument("--dry-run", action="store_true", help="print the claude mcp commands only")
     with_apps(sub.add_parser("unregister", help="remove MCP bridges from Claude Code"), "apps (default: all)")
+    p = sub.add_parser("bridge", help="lazy MCP proxy for an app whose bridge needs the app running "
+                                      "(registered in place of the bridge; not run by hand)")
+    p.add_argument("app")
     p = sub.add_parser("probe", help="speak MCP to an app's bridge: tool count and one read-only call")
     p.add_argument("app")
     p.add_argument("--tool", help="tool to call with no arguments (default: the row's probe_tool)")
+    p.add_argument("--list-tools", action="store_true", help="print the bridge's tool names")
     args = ap.parse_args()
 
     try:
@@ -533,7 +856,7 @@ def main() -> int:
         return 2
     handler = {"list": cmd_list, "install": cmd_install, "check": cmd_check, "remove": cmd_remove,
                "launch": cmd_launch, "register": cmd_register, "unregister": cmd_unregister,
-               "probe": cmd_probe}[args.cmd]
+               "probe": cmd_probe, "bridge": cmd_bridge, "stop": cmd_stop}[args.cmd]
     return handler(args, defaults, apps)
 
 
