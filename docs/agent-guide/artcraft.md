@@ -1,10 +1,11 @@
 # ArtCraft Apps
 
 Read this guide to launch, bridge, or drive the ArtCraft apps
-(https://getartcraft.com/apps), or to record a demo of them. Sources are this
-repository's `craft-apps` with its table `craft-apps.toml`, and each app's
-`docs/mcp.md` and `docs/control-protocol.md` at its installed tag. The notes
-hold for the `verified` versions in the table; recheck them after an update.
+(https://getartcraft.com/apps), to check what they run on the GPU, or to record
+a demo of them. Sources are this repository's `craft-apps` with its table
+`craft-apps.toml`, and each app's `docs/mcp.md` and `docs/control-protocol.md`
+at its installed tag. The notes hold for the `verified` versions in the table;
+recheck them after an update.
 
 ## Control Ports and Bridges
 
@@ -156,6 +157,48 @@ twelve to finished files:
   (`timeline.select {clips}`). `graphics.newText` sets text by its left
   baseline until `graphics.set` gives `align: center`. One second is
   254016000000 ticks.
+
+## GPU Use
+
+Checked on `godlike-artix` (RX 7900 GRE, Mesa RADV) against each app's source
+at the version given; recheck after an update. LightCraft, PhotoCraft and
+FilmCraft draw their windows with eframe on wgpu and load RADV's Vulkan
+driver. `craft-apps launch` passes the environment through, so the variables
+below work as `VAR=1 craft-apps launch <app>`, and stderr lands in the app's
+log. What else runs on the GPU:
+
+- LightCraft 0.10.0: the develop pipeline runs as WGSL compute for loupe
+  renders and 8-bit exports; AI denoise and face detection have GPU paths of
+  their own. Raw decode and demosaic, thumbnails, LUT profiles, refined and AI
+  (sky, subject) masks, inpaint, and 16-bit, float and HDR output use the CPU.
+  A render that fails on the GPU or passes the 2047 MiB buffer limit falls
+  back to the CPU; a lost device moves the rest of the session there.
+  `LIGHTCRAFT_PROFILE=1` logs `gpu <stage>: N ms` for each GPU render (seen
+  for a 4096 px render); `app.gpu` reports the adapter and the last fallback;
+  `LIGHTCRAFT_GPU=0` forces the CPU.
+- PhotoCraft 0.11.1: the GPU composites only the live canvas (layers, blend
+  modes, masks, adjustment and fill layers, layer styles). Filters,
+  destructive adjustments, brushes, the gradient tool, and every save, export
+  and flatten run on the CPU. `help.systemInfo` shows "Image compositor:
+  GPU/CPU"; `ui.inspect` gives `perf.timings.lastRefresh` (`gpu-*` means the
+  GPU composited) and `gpuFallback`. `--safe-gpu`, `WGPU_BACKEND` and
+  `PHOTOCRAFT_CPU_COMPOSE` change the path.
+- FilmCraft 0.10.0: the Program monitor composites on the GPU (YUV to RGB,
+  scaling, blend modes, about 33 effects, dissolves); the Source monitor,
+  masks, adjustment layers and titles render on the CPU. H.264 and HEVC decode
+  through VA-API (the log says "hardware decoding through VA-API"); the other
+  codecs are FilmCraft's own software decoders. Encoding is always software
+  here: hardware encoding is VideoToolbox or NVENC only, though this card's
+  VA-API encodes H.264, HEVC and AV1. Export renders on the CPU unless
+  `file.exportMedia` gets `gpuRendering: "auto"` (the Export dialog's
+  checkbox), and even then frames the GPU cannot take render on the CPU. The
+  default log filter hides the wgpu adapter line;
+  `RUST_LOG=warn,filmcraft*=info,egui_wgpu=debug` shows it. `perf.stats`
+  reports `gpu` (null when compositing on the CPU) and hardware versus
+  software decoded frames; `FILMCRAFT_CPU_COMPOSITE` forces CPU compositing.
+- EffectCraft 0.13.0 chose wgpu's GL backend and turned its GPU compositor
+  off ("needs DirectX 12, Vulkan, Metal or WebGPU") although Vulkan works for
+  the apps above; the cause has not been investigated.
 
 ## Recording a Demo
 
