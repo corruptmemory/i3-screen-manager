@@ -115,8 +115,9 @@ twelve to finished files:
 - WordCraft: `text.insert` is a command, so a whole section fits one `batch`
   with `para.style`, `insert.picture {path, width}` (points), `insert.table`
   and `text.tab`. Alignment set before typing in a Title paragraph is lost:
-  align after with `select_text` and `para.align`. There is no find-and-select
-  command beyond `select_text`.
+  align after with `select_text` and `para.align`. `select_text {text,
+  occurrence}` is a tool, not a command, so formatting each span costs a
+  select call and a command call; keep the target text unique.
 - DesignCraft: text that does not fit its frame goes overset with no error
   (a 78 pt headline showed one word); size it to fit or check overset in
   `inspect_document`. `text.select {story, anchor, focus}` takes byte offsets.
@@ -124,6 +125,8 @@ twelve to finished files:
   `object.fill {swatch, ids}` applies it.
 - FigCraft: start with `file.new`; it may also restore an earlier tab.
   `batch` is one undo step and rolls back entirely on any error.
+  `{"$step": n}` stands for step n's id anywhere in later params, `ids`
+  included, so a follow-up `node.set` fits in the same batch.
   `image.place {path, parent, x, y, width, height, mode}`; `node.set` takes
   gradient `fills` with `#RRGGBBAA` stops; `view.zoomFit` frames the work.
 - DeckCraft: themes include Ember and Nocturne. `design.background {color, index}`
@@ -141,7 +144,11 @@ twelve to finished files:
   `layer.addItem {item, time, position, duration}`. A key at the comp's end
   warns that it is outside the layer but still interpolates. Render with
   `renderQueue.add`, then `renderQueue.render {wait: true}`. The H.264 output
-  has one keyframe; check frames with `ffmpeg -i f -ss t`.
+  has one keyframe; check frames with `ffmpeg -i f -ss t`. Its bridge keeps
+  its connection to an app that has exited: the first call after a relaunch
+  fails with "connection closed by the app" (outcome unknown; nothing ran in
+  the new app) and a retry reconnects. The other lazy bridges reconnect
+  silently.
 - FilmCraft: `render_frame` in bridge mode returns the Program monitor, UI
   included, and two concurrent calls collide (one fails "No such file").
   There is no play command; press Space with `ui_key`. Stills keep their
@@ -152,13 +159,28 @@ twelve to finished files:
 
 ## Recording a Demo
 
-Claude Code (2.1.306, auto mode) shows a one-line paraphrase of each assistant
-message written between tool calls and folds shell output into "Ran N shell
-commands". Banners or timings meant for a viewer therefore need their own
-visible window, or an overlay added afterwards. Check a frame early in the
-recording. When `ffmpeg` runs under `setsid -f`, the background PID is the
-wrapper: take the recorder's PID from `pgrep -n -x ffmpeg` to stop it with
-SIGINT. A short keyframe interval (`-g 60`) lets the finished recording be cut
-by stream copy within two seconds of the wanted start.
+Claude Code (2.1.306, auto mode) shows short assistant messages written
+between tool calls verbatim, replaces long ones with a one-line paraphrase,
+and folds shell output into "Ran N shell commands". Banners or timings meant
+for a viewer therefore need their own window, or an overlay added afterwards.
+The recorded reel used a Ghostty window with its own X11 instance name
+(`--x11-instance-name`; an undotted `--class` is ignored), floated by i3 over
+the top of the terminal column so the tiled terminal and app keep their
+halves. It redraws a figlet banner whenever a small JSON state file changes.
+One shell call per app stops the previous app, logs the chapter, updates the
+banner and runs `craft-apps launch`, whose timing line the banner shows.
+
+Rehearse first and keep every successful call. Given the same calls, a
+freshly launched app wrote byte-identical files, and most ids (layers,
+clips, shapes) came out the same, so the recording replays the log with no
+discovery calls; discovery was most of the dead air in an earlier take.
+Audio plays in real time and `craft-apps stop` cuts it off, so wait out a
+playback before the next app. Check a frame early in the recording, and audio
+levels only afterwards. When `ffmpeg` runs under `setsid -f`, the background
+PID is the wrapper: take the recorder's PID from `pgrep -n -x ffmpeg` to stop
+it with SIGINT. A short keyframe interval (`-g 60`) lets the finished
+recording be cut by stream copy within two seconds of the wanted start.
+YouTube ignores a description's chapter list when any chapter is shorter than
+10 s or the first does not start at 0:00.
 
 [Shared instructions and task index](../../CLAUDE.md#task-guides).
