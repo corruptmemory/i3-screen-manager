@@ -1,8 +1,9 @@
 # System Maintenance
 
 Read this guide for hardware, OpenRC services, the Tailscale helper, CMOS
-monitoring, disk reclaim, or VM setup. Sources: `start-hyprland`, `i3-tailscale-rofi`,
-`i3-cmos-battery`, `volumecontrol.sh`, `ora4-hw-pin`, and `win11-vm-setup.sh`.
+monitoring, the local dictionary server, disk reclaim, or VM setup. Sources:
+`start-hyprland`, `i3-tailscale-rofi`, `i3-cmos-battery`, `volumecontrol.sh`,
+`ora4-hw-pin`, `win11-vm-setup.sh`, and dotfiles' `etc/init.d/dictd`.
 Check active machine state before applying configuration outside this repository.
 
 ## Service and GPU Boundaries
@@ -83,6 +84,114 @@ Express in Windows and attach the device via USB Host Device or the console's
 USB-redirection control. USB-device passthrough is distinct from PCI/VFIO
 passthrough. Check `virsh list --all`, `net-list --all`, and `pool-list --all`
 for actual host/guest state instead of relying on an old completion checklist.
+
+## Local Dictionary Server
+
+`dictd` serves offline dictionaries to Emacs's `dictionary` package (`M-#` in
+emacs-again). It is an OpenRC system service from dotfiles'
+`etc/init.d/dictd` and `etc/conf.d/dictd`, run under `supervise-daemon` as
+`nobody`, bound to `127.0.0.1:2628`, logging to `/var/log/dictd.log`. Keep the
+loopback bind: the packaged `/etc/dict/dictd.conf` says `allow *`, and dictd
+otherwise listens on every interface. No syslog daemon runs on these machines,
+so `--syslog` would discard dictd's messages. Copy both files into `/etc` with
+`install`, not symlinks, so the root-run script is not writable by the user.
+
+The databases are AUR packages; each one's install scriptlet appends a
+`database` block to `/etc/dict/dictd.conf`, but only when `dictd` is already
+installed, and then calls `systemctl`, which prints "command not found" on
+Artix. They total about 365 MiB, most of it Wiktionary.
+
+### Setting up a machine
+
+Run the steps in order, in bash: the audit loop uses bash parameter expansion,
+which fish lacks. `sudo` and `yay` prompt for a password, so a person runs
+those.
+
+1. **Prerequisites.** Pull `~/projects/dotfiles`, `~/projects/i3-screen-manager`,
+   and emacs-again (`~/.config/emacs`). `locale -a | grep -x en_US.utf8` must
+   print `en_US.utf8`: dictd refuses UTF-8 databases such as Wiktionary under
+   any other locale. If it prints nothing, uncomment `en_US.UTF-8 UTF-8` in
+   `/etc/locale.gen` and run `sudo locale-gen`.
+
+2. **Audit gate** (the [packages.md](packages.md) AUR contract). Run
+   `aur-malware-check --near`, then confirm each recipe is still the commit
+   that was reviewed:
+
+   ```bash
+   for pw in wordnet=f3c5f33856a2 dict-gcide=9b4795542288 \
+             dict-foldoc=bde87cbc6ecb dict-jargon=87e46c39562b \
+             dict-devils=4f9db17a6e67 dict-freedict-fra-eng-bin=0411896bcc00 \
+             dict-freedict-eng-fra-bin=03bec6d0e0e1 \
+             dict-moby-thesaurus=ddc946b2e46b dict-wikt-en-all=9dca22cb68f8; do
+     p=${pw%=*} want=${pw#*=}
+     got=$(git ls-remote "https://aur.archlinux.org/$p.git" refs/heads/master | cut -c1-12)
+     [ "$got" = "$want" ] && echo "same     $p" || echo "CHANGED  $p ($want -> $got)"
+   done
+   ```
+
+   `same` means the review below still applies. For `CHANGED`, clone the
+   recipe and read `git diff <want>..HEAD` (PKGBUILD, `.install`, helper
+   scripts, sources, checksums) before installing, then update the commit here.
+   The review found: every source checksum-pinned except `dict-foldoc`'s
+   rolling data file (`SKIP`); `dict-foldoc` also runs `curl` against
+   foldoc.org whenever its PKGBUILD is sourced; `dict-moby-thesaurus` fetches
+   from a third-party GitHub branch with pinned checksums; `wordnet` and
+   `dict-jargon` download over plain `http` with pinned checksums; the
+   `dict-gcide` and `dict-foldoc` build-time `sed` scripts contain no `e`, `w`,
+   or `r` commands; `wordnet-dictd` inherits the WordNet suite's runtime
+   dependencies, adding `tcl` and `tk`. The `-bin` FreeDict packages avoid the
+   AUR-only `freedict-tools`.
+
+3. **Server package first**, so the database scriptlets register:
+   `sudo pacman -S dictd`.
+
+4. **`dict-gcide` signing key**, imported from GNU's maintainer keyring rather
+   than a keyserver (it is Sergey Poznyakoff's):
+
+   ```bash
+   cd "$(mktemp -d)"
+   curl -fsSLO https://ftp.gnu.org/gnu/gnu-keyring.gpg
+   gpg --no-default-keyring --keyring "$PWD/gnu-keyring.gpg" \
+       --export 4BE4E62655488EB92ABB468F79FFD94BFCE230B1 | gpg --import
+   ```
+
+5. **Databases.** Each install prints `Adding configuration for … to
+   /etc/dict/dictd.conf`; the `systemctl: command not found` lines are
+   expected. Afterwards run `aur-malware-check --near --deep`.
+
+   ```bash
+   yay -S wordnet-dictd dict-gcide dict-foldoc dict-jargon dict-devils \
+          dict-freedict-fra-eng-bin dict-freedict-eng-fra-bin \
+          dict-moby-thesaurus dict-wikt-en-all
+   ```
+
+6. **Service.**
+
+   ```bash
+   sudo install -m 0755 ~/projects/dotfiles/etc/init.d/dictd /etc/init.d/dictd
+   sudo install -m 0644 ~/projects/dotfiles/etc/conf.d/dictd /etc/conf.d/dictd
+   sudo rc-update add dictd default
+   sudo rc-service dictd start
+   ```
+
+7. **Verify.** `rc-service dictd status` reports `started`;
+   `ps -o user= -C dictd` prints `nobody`; `ss -ltn 'sport = :2628'` shows only
+   `127.0.0.1:2628`; `grep -c '^database' /etc/dict/dictd.conf` prints `9`;
+   `dict -h 127.0.0.1 -D` lists `fra-eng foldoc wn jargon eng-fra wikt-en-all
+   devils moby-thesaurus gcide`. `/var/log/dictd.log` holds startup and lookup
+   lines.
+
+8. **Emacs.** emacs-again needs no extra packages (`dictionary.el` is
+   built in). Restart Emacs; `M-#` on a word opens `*Dictionary*` as a Popper
+   popup at half the frame.
+
+### Upkeep
+
+The init files are copies, so a dotfiles pull does not redeploy them: after
+changing either, re-run the two `install` lines and `sudo rc-service dictd
+restart`. After installing another database package, restart the service so
+dictd reads the new block. Removing a package deletes its block unless the
+block was edited.
 
 ## Storage and Disk Reclaim
 
