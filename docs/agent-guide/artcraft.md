@@ -175,7 +175,7 @@ driver. `craft-apps launch` passes the environment through, so the variables
 below work as `VAR=1 craft-apps launch <app>`, and stderr lands in the app's
 log. What else runs on the GPU:
 
-- LightCraft 0.10.0: the develop pipeline runs as WGSL compute for loupe
+- LightCraft 0.11.0: the develop pipeline runs as WGSL compute for loupe
   renders and 8-bit exports; AI denoise and face detection have GPU paths of
   their own. Raw decode and demosaic, thumbnails, LUT profiles, refined and AI
   (sky, subject) masks, inpaint, and 16-bit, float and HDR output use the CPU.
@@ -184,7 +184,7 @@ log. What else runs on the GPU:
   `LIGHTCRAFT_PROFILE=1` logs `gpu <stage>: N ms` for each GPU render (seen
   for a 4096 px render); `app.gpu` reports the adapter and the last fallback;
   `LIGHTCRAFT_GPU=0` forces the CPU.
-- PhotoCraft 0.11.1: the GPU composites only the live canvas (layers, blend
+- PhotoCraft 0.12.0: the GPU composites only the live canvas (layers, blend
   modes, masks, adjustment and fill layers, layer styles). Filters,
   destructive adjustments, brushes, the gradient tool, and every save, export
   and flatten run on the CPU. `help.systemInfo` shows "Image compositor:
