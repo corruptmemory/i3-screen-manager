@@ -14,11 +14,18 @@ with `--control <port>`; PhotoCraft's `integrations.controlPort` preference is
 not wired up upstream. `craft-apps.toml` holds one row per app with a fixed
 port in 18701-18714 (the same on every machine, below the ephemeral range) and
 that app's own control and bridge argv, taken from its docs at the installed
-tag. A row is used only once `verified` names the version checked with
-`<app> --help`, `<app>-cli mcp --help`, and `craft-apps probe <app>` with the app
-stopped and running. Twelve apps are verified. PdfCraft has no row: its MCP
+tag. A row is used only once `verified` names a version whose flags were
+checked against that release's source or docs and whose bridge passed
+`craft-apps probe <app>` with the app stopped and running. Do not check flags
+by running the GUI binary: DesignCraft has no `--help` and opens the word as a
+file behind an error dialog, and the GridCraft and LightCraft CLIs reject
+`mcp --help`. Twelve apps are verified. PdfCraft has no row: its MCP
 server is headless only, with no way to attach to the running app. ArtCraft's
-row only reserves a port (it was not installed).
+row only reserves a port (it was not installed). The AUR recipes build the
+tagged `github.com/storytold/<app>` tarball, pinned by SHA-256, with
+`cargo fetch --locked` and an offline `--frozen` build; on an update, review
+the recipe diff and any new `git+` sources in the release's `Cargo.lock` as
+the [package guide](packages.md#aur-audit-contract) describes.
 
 The apps differ in two ways that matter:
 
@@ -104,7 +111,8 @@ twelve to finished files:
   photo to Recently Deleted and leaves the file. `list_controls` sections:
   `light`, `color`, `effects` (texture, clarity, dehaze only), `vignette`,
   `grading` (shadow/midtone/highlight/global hue, saturation, luminance),
-  `grain`. `export {longEdge: 0}` writes the full cropped size.
+  `grain`. `export {longEdge: 0}` writes the full cropped size. The 0.11.0
+  bridge lists 595 tools once connected (28 while the app is down).
 - GridCraft: `insert_chart` takes the range's first column as categories and
   needs a contiguous range. Column autofit is
   `home.autofitColumnWidth {cols}`; `sheet.rename {name}`. `screenshot` only
@@ -196,9 +204,9 @@ log. What else runs on the GPU:
   `RUST_LOG=warn,filmcraft*=info,egui_wgpu=debug` shows it. `perf.stats`
   reports `gpu` (null when compositing on the CPU) and hardware versus
   software decoded frames; `FILMCRAFT_CPU_COMPOSITE` forces CPU compositing.
-- EffectCraft 0.13.0 chose wgpu's GL backend and turned its GPU compositor
-  off ("needs DirectX 12, Vulkan, Metal or WebGPU") although Vulkan works for
-  the apps above; the cause has not been investigated.
+- EffectCraft 0.13.0 and 0.14.0 chose wgpu's GL backend and turned its GPU
+  compositor off ("needs DirectX 12, Vulkan, Metal or WebGPU") although Vulkan
+  works for the apps above; the cause has not been investigated.
 
 ## Recording a Demo
 

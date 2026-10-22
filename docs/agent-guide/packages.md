@@ -110,6 +110,11 @@ package-maintenance convention. It defaults to installed foreign packages,
 checks the Atomic-incident denylist, and can scan related filesystem and
 scriptlet indicators. It is an incident-specific check, not a general guarantee
 that a package is trustworthy. Review the recipe and changes independently.
+When a recipe or a `Cargo.lock` pins a GitHub commit, confirm the commit is on
+a branch of that repository: `gh api repos/O/R/compare/SHA...BRANCH` reports
+`ahead` or `identical`, or `gh api repos/O/R/commits/SHA/branches-where-head`
+names one. GitHub serves commits that exist only in a fork through the parent
+repository's URLs, so a pinned hash alone does not prove where it came from.
 
 Options: `--all` includes every installed package, `--deep` scans indicators,
 `--near` checks similar names, `--list FILE` supplies a local list, and
