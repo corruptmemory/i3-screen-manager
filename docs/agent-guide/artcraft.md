@@ -48,8 +48,8 @@ uncontrolled. A marker key records the source entry's SHA-256. `check` reports
 `remove` restores the system launcher.
 
 `launch` starts the app with its row's `control_args`, waits for the port
-(`--wait`), and prints how long the app took from spawn to an answering port
-(about 0.25 s for each app on `godlike-artix`). It logs to
+(`--wait SECS`, default 30), and prints how long the app took from spawn to an
+answering port (about 0.25 s for each app on `godlike-artix`). It logs to
 `~/.local/state/craft-control/<app>.log`. When the shell's display variables
 are missing or stale, as in agent or herdr shells, it finds a live Wayland
 socket or X display itself. A `--control` launch bypasses the apps'
@@ -99,10 +99,21 @@ the result (a render, screenshot, or read-back) before moving on: several apps
 report success while the output is wrong. Rough edges found by driving all
 twelve to finished files:
 
-- PhotoCraft: `doc_save` and `doc_export` refuse `quality` except in headless
-  mode, and flat formats warn that layers were flattened. Hiding layers marks
-  the document dirty, and unsaved work blocks a SIGTERM quit: save first.
-  `filter.render.tree` with `newLayer: true` draws procedural trees.
+- PhotoCraft 0.14.0: automation refuses commands that take ambient file paths
+  ("uses ambient filesystem paths"): every `file.*` except `file.new`,
+  `file.close*` and a few path-free ones, plus `image.mode.rgb`. So `doc_place`
+  (it maps to `file.placeEmbedded`) always fails in bridge mode. To combine
+  images, open each with `doc_open`, then `layer.copyToDocument {document,
+  source, layers, at}`, which activates the destination and refuses an Indexed
+  source (convert palette PNGs first). `doc_select` and `doc_close` are
+  headless-only. Type sizes are points at the document's ppi (72 when new):
+  set `image.imageSize {resolution: 300, resample: "none"}` first. `doc_save`
+  and `doc_export` refuse `quality` except in headless mode, and flat formats
+  warn that layers were flattened. Hiding layers marks a document dirty.
+  SIGTERM quits without asking; the next launch restores unsaved documents
+  from `~/.local/state/photocraft/Recovery`, and `file.closeAll` discards them
+  without a prompt. `filter.render.tree` and `filter.render.flame` (along the
+  `path.set` work path) take `newLayer: true`.
 - VectorCraft: start with `file.new {name, width, height, units, backgroundContents}`.
   `draw_shape` and `draw_path` give new art a 1 pt black stroke unless
   `stroke: "none"`. `apply_effect blur.gaussian {radius}` softens glow

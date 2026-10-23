@@ -23,7 +23,7 @@ port = 18701
 command = "photocraft"
 cli = "photocraft-cli"
 desktop = "ai.storyteller.photocraft.desktop"
-verified = "0.12.0"
+verified = "0.14.0"
 control_args = ["--control", "{port}", "--control-token-file", "{token_file}",
                 "--automation-read-root", "{read_root}",
                 "--automation-write-root", "{write_root}"]
