@@ -85,6 +85,11 @@ fingerprints with `ssh_key_fingerprints` from `https://api.github.com/meta`. To 
 checking is on, run `ssh -T -o UserKnownHostsFile=FILE git@github.com` with a wrong key in
 `FILE`: it must fail with `REMOTE HOST IDENTIFICATION HAS CHANGED`.
 
+`Host *` has its `ForwardAgent` and `ForwardX11` lines commented out, so a host with no
+setting of its own gets neither, including bare `192.168.*` addresses. Named blocks that
+set `ForwardAgent yes`, such as `node-0`, keep it, and `ssh -A` forwards for one
+connection. `SendEnv AWS_*` and `GIT_*` are still in `Host *`.
+
 ## VM Setup
 
 `win11-vm-setup.sh` is a privileged host-setup program for QEMU/KVM and libvirt,

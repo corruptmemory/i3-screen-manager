@@ -122,6 +122,13 @@ Options: `--all` includes every installed package, `--deep` scans indicators,
 offline fallback and reports without removing packages or payload files.
 Exit codes are 0 for no exposure found, 1 for exposure found, and 2 for errors.
 
+Reviewed and rejected: AUR `screenconnect-bin`. It contains no software and needs the
+installer from a ScreenConnect instance, hardcodes one instance's ID, and ships a systemd
+unit that runs the client as root at boot. Take the client from the instance instead. Read
+and scan the installer before running it, and confirm it is a technician client, not an
+unattended agent that lets the instance's operators in. Neither machine has it yet; both
+have the Java runtime the recipe depends on.
+
 ## Malware Scanning
 
 Dotfiles' `etc/pacman.d/hooks/90-pkg-scan.hook` runs
@@ -161,10 +168,16 @@ language tools. It hashes the tool folders and startup files, diffs them against
 baseline, checks vendor checksums for Claude Code and herdr, and scans only changed
 files. A changed file in a version folder, a checksum mismatch, or a detection is a
 red flag and exits 1. Review the report, then run `tool-audit --accept`; it never
-updates the baseline itself. `--full` scans all tool folders, which ran over 15
-minutes on the laptop. Add tools to `TOOL_ROOTS`; missing folders are skipped.
-Keep a copy of `~/.local/state/tool-audit/baseline.tsv.gz` on another machine,
-because anything running as the user can rewrite the local one.
+updates the baseline itself. `--full` scans all tool folders, which took about 20
+minutes on the desktop and over 15 on the laptop. Add tools to `TOOL_ROOTS`; missing
+folders are skipped. Keep a copy of `~/.local/state/tool-audit/baseline.tsv.gz` on
+another machine, because anything running as the user can rewrite the local one. Each
+machine holds the other's beside its own as `peer-HOSTNAME.tsv.gz`; refresh it after
+an `--accept`.
+
+Project `node_modules` folders are outside the tool folders. Scan one with `clamscan -r`
+and the limits above, but ClamAV is a weak check on npm code, so also read
+`hasInstallScript` and any non-registry `resolved` URL in its `package-lock.json`.
 
 To set up a machine, run these from dotfiles' `etc/` directory:
 

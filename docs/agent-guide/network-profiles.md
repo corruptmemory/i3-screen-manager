@@ -131,4 +131,9 @@ daemon, kill the runner, and stop the service in turn: each must leave no daemon
 and process arguments for the key afterward, reading the search term from a file so the
 search does not match itself.
 
+After a reboot, `i3-net-profile status` must report the chosen profile as `ok`, or as
+`vpn-down` for a VPN profile until it is chosen again. `sudo ufw status` must show its rules,
+`rc-status` must show `ufw` and `clamd` started, and port 22 must follow the profile when
+probed from the other machine. No VPN daemon and no `/run/net-profile` may remain.
+
 [Shared instructions and task index](../../CLAUDE.md#task-guides).
