@@ -1,7 +1,7 @@
 # System Maintenance
 
-Read this guide for hardware, OpenRC services, the Tailscale helper, CMOS
-monitoring, the local dictionary server, disk reclaim, or VM setup. Sources:
+Read this guide for hardware, OpenRC services, the Tailscale helper, SSH host keys,
+CMOS monitoring, the local dictionary server, disk reclaim, or VM setup. Sources:
 `start-hyprland`, `i3-tailscale-rofi`, `i3-cmos-battery`, `volumecontrol.sh`,
 `ora4-hw-pin`, `win11-vm-setup.sh`, and dotfiles' `etc/init.d/dictd`.
 Check active machine state before applying configuration outside this repository.
@@ -70,6 +70,21 @@ the script. Open Brain must be reachable on its configured interface/port.
 The menu also supports login and a manual URL toggle. Preserve other JSON
 fields and avoid logging authentication headers while investigating failures.
 
+## SSH Host Keys
+
+`~/.ssh/config` is machine-local and in no repository. On both machines `Host *` sets
+`StrictHostKeyChecking accept-new` and `UpdateHostKeys yes`: a new public host is
+recorded on first use, and a changed key fails the connection. `github.com` and
+`gitlab.com` use that default. Private addresses (`192.168.*`, `10.*`, `100.*`, `*.lan`,
+`*.localdomain`) and several named hosts turn checking off on purpose, because they get
+re-addressed; an earlier block always wins, so check `ssh -G HOST` for the effective value.
+
+GitHub is reached through `ssh.github.com:443`, so its keys are stored under
+`[ssh.github.com]:443`, not `github.com`. Before adding them, compare `ssh-keyscan`'s
+fingerprints with `ssh_key_fingerprints` from `https://api.github.com/meta`. To prove
+checking is on, run `ssh -T -o UserKnownHostsFile=FILE git@github.com` with a wrong key in
+`FILE`: it must fail with `REMOTE HOST IDENTIFICATION HAS CHANGED`.
+
 ## VM Setup
 
 `win11-vm-setup.sh` is a privileged host-setup program for QEMU/KVM and libvirt,
@@ -81,7 +96,8 @@ Group changes require a fresh login. It may restart services on a rerun.
 
 Its AMD preflight, storage path, and libvirt `auth_unix_rw=none` choice must be
 reviewed before use on another host. It does not create or install the Windows
-guest. Do not run it as a documentation or syntax check.
+guest. Do not run it as a documentation or syntax check. With UFW on, guests need
+the rules in [Network profiles](network-profiles.md#setting-up-a-machine).
 
 For a guest, use the system libvirt connection, select UEFI/Secure Boot and a
 TPM 2.0 device, allocate suitable memory/CPU and disk in the intended pool,

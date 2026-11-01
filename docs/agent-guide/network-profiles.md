@@ -30,8 +30,8 @@ both machines share, so any network numbered that way gets the exception; choose
 `away` when traveling.
 
 `i3-net-profile status|list|polybar|set NAME` calls the root-owned
-`/etc/net-profile/net-profile` through a narrow sudoers rule, because the desktop's
-`sudo` prompts and a bar cannot. `i3-net-profile-rofi` is the menu, and choosing the
+`/etc/net-profile/net-profile` through a narrow sudoers rule, so a bar can run it even
+where `sudo` prompts. `i3-net-profile-rofi` is the menu, and choosing the
 active profile re-applies it. The Polybar `net-profile` module shows a shield and the
 profile, and a click opens the menu. Red means UFW is off or credentials were left in
 RAM. Yellow names another problem, or shows `?` when the helper is missing. The
@@ -102,13 +102,30 @@ i3-net-profile set home
 sudo rc-update add ufw default && sudo rc-service ufw start
 ```
 
-Install a changed or new profile file with the `install -m644` line.
+Install a changed or new profile file with the `install -m644` line. Over SSH, first arm
+a timer that runs `ufw --force disable`, and cancel it once a new connection works. Detach
+it with stdin, stdout, and stderr redirected, or `ssh` waits for it to finish.
+
+A libvirt host also needs these, or its guests lose DHCP, DNS, and outbound TCP. Ping keeps
+working because UFW passes ICMP echo, so it proves nothing. Libvirt's nftables table does
+not help: a packet must pass every table's chains, so UFW's drop wins. Added by hand, the
+rules stay in every profile:
+
+```sh
+sudo ufw allow in on virbr0 to any port 53 comment 'libvirt guests'
+sudo ufw allow in on virbr0 to any port 67 proto udp comment 'libvirt guests'
+sudo ufw route allow in on virbr0 comment 'libvirt guests'
+```
 
 ## Verification
 
 Probe port 22 from the other machine in each profile: open in `home`, blocked in every
 other. Testing from the same machine proves nothing, because loopback traffic is always
-allowed. A VPN must run only in its own profile. With a VPN profile active, kill the
+allowed. To check guest networking without booting a guest, attach a network namespace to
+`virbr0` through a veth pair, give it an address, and test DNS to the bridge address and TCP
+out. A DHCP probe needs a raw socket, and a new bridge port takes about 8 seconds to settle,
+so an earlier miss means nothing. This was checked that way; a real guest has not been
+booted behind UFW. A VPN must run only in its own profile. With a VPN profile active, kill the
 daemon, kill the runner, and stop the service in turn: each must leave no daemon and no
 `/run/net-profile/SERVICE`, or a red bar until a profile is chosen. Search disk, logs,
 and process arguments for the key afterward, reading the search term from a file so the

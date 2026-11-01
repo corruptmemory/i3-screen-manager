@@ -166,8 +166,7 @@ minutes on the laptop. Add tools to `TOOL_ROOTS`; missing folders are skipped.
 Keep a copy of `~/.local/state/tool-audit/baseline.tsv.gz` on another machine,
 because anything running as the user can rewrite the local one.
 
-To set up a machine, `sudo` prompts on the desktop, so a person runs these from
-dotfiles' `etc/` directory:
+To set up a machine, run these from dotfiles' `etc/` directory:
 
 ```sh
 sudo pacman -S --needed clamav clamav-openrc
