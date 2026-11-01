@@ -113,6 +113,10 @@ def walk_files(root):
         for name in filenames + links:
             if name.endswith(NOISE_SUFFIXES) or name in NOISE_FILES:
                 continue
+            # Claude Code marks each plugin it loads with .in_use/PID, so every session
+            # swaps them. Skip only that shape, so the folder cannot hide another file.
+            if name.isdigit() and os.path.basename(dirpath) == ".in_use":
+                continue
             path = os.path.join(dirpath, name)
             yield from describe(path)
 
