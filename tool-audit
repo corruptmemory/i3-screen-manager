@@ -1,0 +1,454 @@
+#!/usr/bin/env python3
+"""tool-audit: audit tools installed outside pacman and yay.
+
+Vendor installers, self-updaters, and language tools never pass the pacman hook
+(dotfiles' etc/pacman.d/scripts/pkg-scan), so this covers them on demand:
+
+  1. Hash the tool folders and startup files, and diff against a saved baseline.
+  2. Check installed binaries against vendor-published checksums where they exist.
+  3. Scan only what changed with ClamAV. Scanning everything is the expensive part,
+     so --full is a separate, occasional choice.
+
+Run it by hand. It never updates the baseline by itself: review the report, then
+run --accept. A red flag is a changed file inside an immutable version folder, a
+vendor checksum mismatch, or a ClamAV detection. New version folders are normal.
+
+Exit status: 0 no red flags, 1 red flags, 2 error. See docs/agent-guide/packages.md.
+"""
+
+import argparse
+import gzip
+import glob
+import hashlib
+import json
+import os
+import platform
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.error
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+HOME = Path.home()
+PROJECTS = HOME / "projects"
+
+# Folders holding installed tools. Missing ones are skipped, so each machine can
+# have a different set; add new tools here.
+TOOL_ROOTS = [
+    "~/.local/bin",
+    "~/.local/share/claude/versions",
+    "~/.codex/packages",
+    "~/.grok",
+    "~/.cargo/bin",
+    "~/go/bin",
+    "~/.local/share/pipx",
+    "~/.local/share/uv",
+    "~/.local/share/mise",
+    "~/.rustup/toolchains",
+    "~/.npm/_npx",
+    "~/.claude/plugins/cache",
+]
+
+# A version folder never changes once written, so any change inside one is a red flag.
+IMMUTABLE = [
+    "~/.local/share/claude/versions",
+    "~/.codex/packages/standalone/releases",
+]
+
+# Places malware uses to survive a restart or capture credentials. A change here is
+# always worth a look, though a `git pull` of dotfiles explains many of them.
+WATCHED = [
+    "~/.bashrc",
+    "~/.bash_profile",
+    "~/.profile",
+    "~/.zshrc",
+    "~/.xinitrc*",
+    "~/.xprofile",
+    "~/.config/fish/config.fish",
+    "~/.config/fish/conf.d/*",
+    "~/.config/autostart/*",
+    "~/.config/rc/runlevels/*/*",
+    "~/.ssh/authorized_keys",
+    "~/.ssh/config",
+    "~/.ssh/rc",
+    "~/.gitconfig",
+    "~/.npmrc",
+    "~/.config/pip/pip.conf",
+    "~/.cargo/config.toml",
+    "~/.claude/settings.json",
+    "~/.codex/config.toml",
+    "/etc/ld.so.preload",
+    "/etc/profile.d/*",
+    "/etc/local.d/*",
+    "/etc/pam.d/*",
+    "/etc/udev/rules.d/*",
+    "/etc/pacman.d/hooks/*",
+    "/etc/pacman.d/scripts/*",
+    "/etc/net-profile/net-profile",
+    "/etc/net-profile/profiles/*",
+    "/etc/net-profile/vpn/*",
+    "/etc/init.d/zerotier-one",
+]
+
+# Rewritten by normal use, so hashing them only produces noise.
+NOISE_NAMES = {"__pycache__", ".cache"}
+NOISE_SUFFIXES = (".pyc", ".lock")
+NOISE_FILES = {"selection-history", "auto-update-version"}
+
+SCAN_LIMIT = "2000M"
+SCAN_JOBS = 4
+FILES_PER_JOB = 500
+
+
+def walk_files(root):
+    """Yield (recorded path, file to hash or None, symlink target or None)."""
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in NOISE_NAMES]
+        # A symlinked directory appears in dirnames but os.walk will not enter it.
+        links = [d for d in dirnames if os.path.islink(os.path.join(dirpath, d))]
+        for name in filenames + links:
+            if name.endswith(NOISE_SUFFIXES) or name in NOISE_FILES:
+                continue
+            path = os.path.join(dirpath, name)
+            yield from describe(path)
+
+
+def describe(path):
+    if os.path.islink(path):
+        target = os.path.realpath(path)
+        # A link's destination is what matters: a re-pointed link is a change. Files
+        # outside ~/projects are also hashed by content; your own repos are in git.
+        if os.path.isfile(target) and not target.startswith(str(PROJECTS) + os.sep):
+            yield path, target, None
+        else:
+            yield path, None, target
+    elif os.path.isfile(path):
+        yield path, path, None
+
+
+def expand_watched(patterns):
+    for pattern in patterns:
+        for match in sorted(glob.glob(os.path.expanduser(pattern))):
+            if not os.path.isdir(match) or os.path.islink(match):
+                yield from describe(match)
+
+
+def sha256_chunk(chunk):
+    # Each worker captures its own stdout. Parallel writers sharing one pipe would
+    # interleave on large output and corrupt records, faking thousands of changes.
+    proc = subprocess.run(["sha256sum", "-z", "--", *chunk],
+                          stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    digests = {}
+    for record in proc.stdout.split(b"\0"):
+        if record:
+            digest, _, name = record.partition(b"  ")
+            digests[os.fsdecode(name)] = digest.decode()
+    return digests
+
+
+def sha256_many(paths):
+    """Hash files in parallel. Returns {path: hexdigest}."""
+    unique = sorted(set(paths))
+    chunks = [unique[i:i + 200] for i in range(0, len(unique), 200)]
+    digests = {}
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        for result in pool.map(sha256_chunk, chunks):
+            digests.update(result)
+    return digests
+
+
+def snapshot(roots, watched):
+    """Return {path: value} where value is a content hash or 'link:<target>'."""
+    entries = []
+    for root in roots:
+        if os.path.isdir(root):
+            entries.extend(walk_files(root))
+    entries.extend(expand_watched(watched))
+    digests = sha256_many([to_hash for _, to_hash, _ in entries if to_hash])
+    state = {}
+    for path, to_hash, target in entries:
+        if target is not None:
+            state[path] = "link:" + target
+        else:
+            state[path] = digests.get(to_hash, "unreadable")
+    claude_json = HOME / ".claude.json"
+    if claude_json.is_file():
+        state["~/.claude.json:mcpServers"] = mcp_digest(claude_json)
+    return state
+
+
+def mcp_digest(path):
+    """Hash only the MCP server definitions: they launch programs at every session."""
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return "unreadable"
+    servers = {"user": data.get("mcpServers", {})}
+    for project, conf in data.get("projects", {}).items():
+        if conf.get("mcpServers"):
+            servers[project] = conf["mcpServers"]
+    return hashlib.sha256(json.dumps(servers, sort_keys=True).encode()).hexdigest()
+
+
+def load_baseline(path):
+    state = {}
+    with gzip.open(path, "rt", errors="surrogateescape") as f:
+        for line in f:
+            key, _, value = line.rstrip("\n").rpartition("\t")
+            state[key] = value
+    return state
+
+
+def save_baseline(path, state):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    with gzip.open(tmp, "wt", errors="surrogateescape") as f:
+        for key in sorted(state):
+            f.write(f"{key}\t{state[key]}\n")
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+
+
+def group_label(path):
+    """Shorten a path to the tool folder it belongs to, for compact reporting."""
+    text = path.replace(str(HOME), "~")
+    parts = text.split("/")
+    return "/".join(parts[:5]) if text.startswith("~") else text
+
+
+def report_group(title, paths, limit=12):
+    if not paths:
+        return
+    groups = {}
+    for path in paths:
+        groups[group_label(path)] = groups.get(group_label(path), 0) + 1
+    print(f"\n{title}: {len(paths)} file(s)")
+    ordered = sorted(groups.items(), key=lambda kv: -kv[1])
+    for label, count in ordered[:limit]:
+        print(f"  {count:>7}  {label}")
+    if len(ordered) > limit:
+        print(f"  ...and {len(ordered) - limit} more location(s)")
+
+
+def fetch_json(url):
+    request = urllib.request.Request(url, headers={"User-Agent": "tool-audit"})
+    with urllib.request.urlopen(request, timeout=20) as response:
+        return json.load(response)
+
+
+def sha256_file(path):
+    return sha256_many([str(path)]).get(str(path), "")
+
+
+def check_claude():
+    link = HOME / ".local/bin/claude"
+    if not link.exists():
+        return None
+    binary = Path(os.path.realpath(link))
+    version = binary.name
+    platform_key = {"x86_64": "linux-x64", "aarch64": "linux-arm64"}.get(platform.machine(), "")
+    manifest = fetch_json(f"https://downloads.claude.ai/claude-code-releases/{version}/manifest.json")
+    return "claude", version, manifest["platforms"][platform_key]["checksum"], sha256_file(binary)
+
+
+def check_herdr():
+    binary = HOME / ".local/bin/herdr"
+    if not binary.exists():
+        return None
+    out = subprocess.run([str(binary), "--version"], capture_output=True, text=True, timeout=10)
+    version = out.stdout.split()[-1]
+    release = fetch_json(f"https://api.github.com/repos/herdrdev/herdr/releases/tags/v{version}")
+    asset = f"herdr-linux-{platform.machine()}"
+    digest = next(a["digest"] for a in release["assets"] if a["name"] == asset)
+    return "herdr", version, digest.removeprefix("sha256:"), sha256_file(binary)
+
+
+VENDOR_CHECKS = [check_claude, check_herdr]
+# Listed so the report states what was not verified instead of implying coverage.
+NOT_VERIFIABLE = {
+    "codex": "publishes digests for its archive, not the unpacked binary",
+    "agy": "no published checksum found",
+    "grok": "no check written yet",
+}
+
+
+def vendor_checks():
+    """Returns the number of mismatches. A failed lookup is reported, not a red flag."""
+    print("\nVendor checksums:")
+    mismatches = 0
+    for check in VENDOR_CHECKS:
+        name = check.__name__.removeprefix("check_")
+        try:
+            result = check()
+        except (urllib.error.URLError, OSError, KeyError, ValueError, StopIteration,
+                IndexError, subprocess.SubprocessError) as err:
+            print(f"  {name:<8} COULD NOT CHECK: {err}")
+            continue
+        if result is None:
+            continue
+        name, version, want, got = result
+        if want == got:
+            print(f"  {name:<8} {version}: matches vendor checksum")
+        else:
+            print(f"  {name:<8} {version}: RED FLAG: does not match vendor checksum")
+            mismatches += 1
+    for name, why in NOT_VERIFIABLE.items():
+        if shutil.which(name):
+            print(f"  {name:<8} not verified: {why}")
+    return mismatches
+
+
+def clamscan(paths):
+    """Scan files. Returns (detections, error text or None)."""
+    if not shutil.which("clamscan"):
+        return [], "clamscan is not installed"
+    files = sorted({os.path.realpath(p) for p in paths if os.path.isfile(p)})
+    if not files:
+        return [], None
+    # Largest first, so round-robin keeps the processes evenly loaded.
+    files.sort(key=lambda p: -os.path.getsize(p))
+    procs = min(SCAN_JOBS, len(files) // FILES_PER_JOB + 1)
+    # Prefer efficiency cores on hybrid Intel CPUs: a full-speed scan hits the
+    # thermal limit on the laptop. Idle priority alone does not cool anything.
+    pin = []
+    atom = Path("/sys/devices/cpu_atom/cpus")
+    if atom.is_file() and atom.read_text().strip():
+        pin = ["taskset", "-c", atom.read_text().strip()]
+    detections = []
+    errors = []
+    with tempfile.TemporaryDirectory(prefix="tool-audit.") as tmp:
+        running = []
+        for i in range(procs):
+            listing = Path(tmp) / f"part{i}"
+            listing.write_text("\n".join(files[i::procs]) + "\n", errors="surrogateescape")
+            running.append(subprocess.Popen(
+                ["nice", "-n19", "ionice", "-c3", *pin, "clamscan", "--no-summary", "--infected",
+                 f"--max-filesize={SCAN_LIMIT}", f"--max-scansize={SCAN_LIMIT}", f"--file-list={listing}"],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace"))
+        for proc in running:
+            output, _ = proc.communicate()
+            detections += [ln for ln in output.splitlines() if ln.endswith(" FOUND")]
+            if proc.returncode not in (0, 1):
+                errors += [ln for ln in output.splitlines() if "ERROR" in ln][:3] or [f"exit {proc.returncode}"]
+    oversized = [p for p in files if os.path.getsize(p) > 2000 * 1024 * 1024]
+    if oversized:
+        errors.append("too large to scan: " + ", ".join(oversized))
+    return detections, "; ".join(errors) or None
+
+
+def run_scan(paths, label):
+    print(f"\nClamAV on {label}: {len(paths)} file(s)...", flush=True)
+    started = time.time()
+    detections, error = clamscan(paths)
+    print(f"  took {time.time() - started:.0f} s")
+    for line in detections:
+        print(f"  RED FLAG: {line}")
+    if error:
+        print(f"  INCOMPLETE: {error}")
+    elif not detections:
+        print("  no detections")
+    return len(detections)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Audit tools installed outside pacman and yay.",
+        epilog="Exit status: 0 no red flags, 1 red flags, 2 error.")
+    parser.add_argument("--accept", action="store_true",
+                        help="save the current state as the baseline, after reviewing a report")
+    parser.add_argument("--full", action="store_true",
+                        help="scan every tool folder with ClamAV, not just changes (slow and hot)")
+    parser.add_argument("--no-scan", action="store_true", help="skip ClamAV")
+    parser.add_argument("--offline", action="store_true", help="skip vendor checksum lookups")
+    parser.add_argument("--state-dir", type=Path, default=HOME / ".local/state/tool-audit",
+                        help="where the baseline lives (default: %(default)s)")
+    parser.add_argument("--root", action="append", metavar="DIR",
+                        help="audit this folder instead of the built-in list; repeatable")
+    parser.add_argument("--immutable", action="append", metavar="DIR",
+                        help="treat this folder as an immutable version folder; repeatable")
+    parser.add_argument("--no-watch", action="store_true",
+                        help="skip the startup and persistence files")
+    args = parser.parse_args()
+
+    roots = args.root or [os.path.expanduser(r) for r in TOOL_ROOTS]
+    roots = [os.path.abspath(r) for r in roots]
+    watched = [] if args.no_watch else WATCHED
+    immutable = [os.path.abspath(os.path.expanduser(d)) for d in (args.immutable or IMMUTABLE)]
+    baseline_path = args.state_dir / "baseline.tsv.gz"
+
+    started = time.time()
+    state = snapshot(roots, watched)
+    print(f"Hashed {len(state)} entries in {time.time() - started:.1f} s")
+
+    if args.accept:
+        save_baseline(baseline_path, state)
+        print(f"Baseline saved: {baseline_path}")
+        print("Keep a copy on another machine: anything running as you can rewrite this one.")
+        return 0
+
+    red_flags = 0
+    changed_paths = []
+    changes_seen = False
+    if not baseline_path.exists():
+        print(f"No baseline yet at {baseline_path}.")
+        print("Nothing to compare. Run --accept to save one; add --full first for an initial scan.")
+    else:
+        old = load_baseline(baseline_path)
+        added = [p for p in state if p not in old]
+        removed = [p for p in old if p not in state]
+        changed = [p for p in state if p in old and state[p] != old[p]]
+        in_immutable = [p for p in changed if any(p.startswith(d + os.sep) for d in immutable)]
+        watched_now = {p for p, _, _ in expand_watched(watched)}
+        startup = [p for p in changed + added if p in watched_now or p.startswith("~/.claude.json")]
+        ordinary = [p for p in changed if p not in in_immutable and p not in startup]
+        new_files = [p for p in added if p not in startup]
+        print(f"Baseline saved {time.ctime(baseline_path.stat().st_mtime)}: "
+              f"{len(changed)} changed, {len(added)} new, {len(removed)} removed")
+        if in_immutable:
+            red_flags += len(in_immutable)
+            print(f"\nRED FLAG: {len(in_immutable)} file(s) changed inside immutable version folders:")
+            for path in in_immutable[:20]:
+                print(f"  {path}")
+        if startup:
+            print(f"\nStartup and credential-capture files changed: {len(startup)}. Review each:")
+            for path in startup[:40]:
+                print(f"  {path}")
+        report_group("Changed in place (self-updates do this; check it was expected)", ordinary)
+        report_group("New", new_files)
+        report_group("Removed", removed)
+        changed_paths = [p for p in changed + added if not p.startswith("~/")]
+        changes_seen = bool(changed or added or removed)
+
+    if not args.offline:
+        red_flags += vendor_checks()
+
+    if not args.no_scan:
+        if args.full:
+            all_files = [p for p in state if not p.startswith("~/") and not state[p].startswith("link:")]
+            red_flags += run_scan(all_files, "all tool folders")
+        elif changed_paths:
+            red_flags += run_scan(changed_paths, "changed and new files")
+        elif baseline_path.exists():
+            print("\nClamAV: nothing changed, so nothing to scan.")
+
+    if red_flags:
+        print(f"\nRESULT: {red_flags} RED FLAG(S). Do not --accept until explained.")
+        return 1
+    print("\nRESULT: no red flags.")
+    if changes_seen:
+        print("Run --accept once the changes above are explained.")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        sys.exit(2)
+    except OSError as err:
+        print(f"tool-audit: {err}", file=sys.stderr)
+        sys.exit(2)

@@ -1,8 +1,8 @@
 # Package Installation
 
 Read this guide before installing, updating, replacing, or removing tools,
-reviewing an AUR package, or changing pacman repositories or mirrors. Sources:
-`aur-malware-check`, `artix-rank-mirrors`, `/etc/pacman.conf`,
+reviewing an AUR package, malware scanning, or changing pacman repositories or
+mirrors. Sources: `aur-malware-check`, `tool-audit`, `artix-rank-mirrors`, `/etc/pacman.conf`,
 `/etc/pacman.d/mirrorlist*`, installed package metadata, and the
 vendor's current distribution instructions.
 
@@ -121,6 +121,69 @@ Options: `--all` includes every installed package, `--deep` scans indicators,
 `--url URL` changes the source. The tool downloads/caches the list with an
 offline fallback and reports without removing packages or payload files.
 Exit codes are 0 for no exposure found, 1 for exposure found, and 2 for errors.
+
+## Malware Scanning
+
+Dotfiles' `etc/pacman.d/hooks/90-pkg-scan.hook` runs
+`etc/pacman.d/scripts/pkg-scan` on every install and upgrade. Both are copied
+into `/etc` with the `install` commands in their headers, not symlinked, because
+the script runs as root. It is a PreTransaction hook: it runs after download and
+signature checks, before extraction and scriptlets. `AbortOnFail` works only
+there; a PostTransaction hook runs after scriptlets and cannot block.
+
+The hook receives package names, not paths. Repo files are found with
+`pacman -Sp --print-format '%f'` in the cache; `pacman -U` files, which is how
+yay installs AUR builds, come from the parent's command line, with relative paths
+resolved against ancestor processes because pacman changes directory.
+
+- **ClamAV** scans each package after extraction, as the `clamav` user, since
+  ClamAV 1.5 does not unpack zstd: an EICAR file in a `.pkg.tar.zst` scans clean.
+  Default limits also skip large files while reporting clean, so the limits are
+  raised, and anything still too large is reported as not scanned.
+- **Scriptlet lint** applies to `-U` packages: `.INSTALL` is checked for
+  fetch-and-run commands, the form of the June 2026 AUR attack.
+- **Blocking** happens only on a positive finding. A scanner failure warns and
+  continues, and the summary says `INCOMPLETE`, so a broken scanner cannot block
+  updates. `sudo touch /run/pkg-scan-skip-once` skips one transaction, for a false
+  positive. Results are logged to `/var/log/pkg-scan.log`.
+- **Not covered:** recipes run as the user during `makepkg`, before pacman starts,
+  so build-time behavior needs the recipe review above.
+
+Each scan process takes about 1 GiB and 5 seconds to load signatures, so one
+package costs about 8 seconds. A 15-package update, 875 MiB unpacked, took 88
+seconds with 4 processes. On hybrid Intel CPUs scans pin to the efficiency cores,
+because 4 unpinned idle-priority processes reached the i7-12800H's 100 C limit.
+The `clamd` service keeps signatures current with `START_CLAMD=no` in
+`/etc/conf.d/clamd`, which leaves only the `freshclam` daemon running.
+
+`tool-audit` covers what pacman never sees: vendor installers, self-updaters, and
+language tools. It hashes the tool folders and startup files, diffs them against a
+baseline, checks vendor checksums for Claude Code and herdr, and scans only changed
+files. A changed file in a version folder, a checksum mismatch, or a detection is a
+red flag and exits 1. Review the report, then run `tool-audit --accept`; it never
+updates the baseline itself. `--full` scans all tool folders, which ran over 15
+minutes on the laptop. Add tools to `TOOL_ROOTS`; missing folders are skipped.
+Keep a copy of `~/.local/state/tool-audit/baseline.tsv.gz` on another machine,
+because anything running as the user can rewrite the local one.
+
+To set up a machine, `sudo` prompts on the desktop, so a person runs these from
+dotfiles' `etc/` directory:
+
+```sh
+sudo pacman -S --needed clamav clamav-openrc
+sudo sed -i 's/^START_CLAMD=yes/START_CLAMD=no/' /etc/conf.d/clamd
+sudo sed -i 's/^NotifyClamd /#NotifyClamd /' /etc/clamav/freshclam.conf
+sudo freshclam
+sudo rc-update add clamd default && sudo rc-service clamd start
+sudo install -d /etc/pacman.d/hooks /etc/pacman.d/scripts
+sudo install -m755 -o root -g root pacman.d/scripts/pkg-scan /etc/pacman.d/scripts/
+sudo install -m644 -o root -g root pacman.d/hooks/90-pkg-scan.hook /etc/pacman.d/hooks/
+```
+
+To verify, build a dummy package containing the EICAR string and `pacman -U` it:
+the transaction must abort with nothing installed. A clean package and a repo
+reinstall must pass with `result: clean`. For `tool-audit`, two runs in a row must
+report 0 changed, and a test file in `~/.config/autostart` must be listed.
 
 ## Package Verification
 

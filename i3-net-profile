@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# i3-net-profile — show and switch the network profile: firewall rules plus VPNs.
+#
+# Usage: i3-net-profile [status|list|polybar|set NAME]
+#   status    print the active profile and its state (default)
+#   list      print each profile: NAME, vpn or -, description (tab separated)
+#   polybar   print a polybar custom/script line: shield glyph plus profile name
+#   set NAME  switch profile, and notify the desktop
+#
+# Profiles are files in /etc/net-profile/profiles, applied by the root-owned helper
+# /etc/net-profile/net-profile through a narrow sudoers rule. i3-net-profile-rofi is
+# the menu. See docs/agent-guide/network-profiles.md. Every profile keeps the firewall
+# on, so "off" in the bar means something outside this tool disabled UFW.
+set -uo pipefail
+
+HELPER=/etc/net-profile/net-profile
+
+helper() { sudo -n "$HELPER" "$@"; }
+
+polybar_line() {
+    # Glyphs are written as UTF-8 bytes so the source stays plain text. %{T2} selects
+    # the bar's nerd font (font-1); the primary bar font has no nerd glyphs.
+    local shield_check=$'\xf3\xb0\x95\xa5' shield_home=$'\xf3\xb0\x9a\x8a'
+    local shield_lock=$'\xf3\xb0\xa6\x9d' shield_off=$'\xf3\xb0\xa6\x9e'
+    local warn='#f0c674' alert='#ff9580' line name state kind glyph
+    if ! line=$(helper status 2>/dev/null) || [[ -z $line ]]; then
+        printf '%%{F%s}%%{T2}%s%%{T-} ?%%{F-}\n' "$warn" "$shield_off"
+        return 0
+    fi
+    IFS=$'\t' read -r name state kind <<<"$line"
+    glyph=$shield_check
+    [[ $name == home ]] && glyph=$shield_home
+    [[ $kind == vpn ]] && glyph=$shield_lock
+    case "$state" in
+        ok) printf '%%{T2}%s%%{T-} %s\n' "$glyph" "$name" ;;
+        off) printf '%%{F%s}%%{T2}%s%%{T-} FW OFF%%{F-}\n' "$alert" "$shield_off" ;;
+        leftover) printf '%%{F%s}%%{T2}%s%%{T-} %s: credentials left in RAM%%{F-}\n' "$alert" "$shield_off" "$name" ;;
+        vpn-down) printf '%%{F%s}%%{T2}%s%%{T-} %s: VPN down%%{F-}\n' "$warn" "$glyph" "$name" ;;
+        drift) printf '%%{F%s}%%{T2}%s%%{T-} %s: rules changed%%{F-}\n' "$warn" "$glyph" "$name" ;;
+        *) printf '%%{F%s}%%{T2}%s%%{T-} no profile%%{F-}\n' "$warn" "$shield_off" ;;
+    esac
+}
+
+set_profile() {
+    local out item rbw rc=0
+    if ! item=$(helper secret "$1" 2>&1); then
+        echo "i3-net-profile: $item" >&2
+        return 1
+    fi
+    # A profile already running needs no credentials, so unlock nothing to re-apply it.
+    if [[ -z $item || $(helper status 2>/dev/null | cut -f1,2) == "$1"$'\t'ok ]]; then
+        out=$(helper set "$1" 2>&1 </dev/null) || rc=$?
+    else
+        # rbw prompts for the master password if the vault is locked. The output goes
+        # straight down the pipe, so the secret never sits in a variable or an argument.
+        rbw=$(command -v rbw || echo "$HOME/.cargo/bin/rbw")
+        out=$("$rbw" get --raw "$item" 2>/dev/null | helper set "$1" 2>&1) || rc=$?
+    fi
+    if ((rc == 0)); then
+        echo "$out"
+        command -v notify-send >/dev/null && notify-send "Network profile" "Now: $1"
+        return 0
+    fi
+    echo "i3-net-profile: $out" >&2
+    command -v notify-send >/dev/null && notify-send -u critical "Network profile" "Could not fully switch to $1: $out"
+    return 1
+}
+
+case "${1:-status}" in
+    status) helper status ;;
+    list) helper list ;;
+    polybar) polybar_line ;;
+    set)
+        if (($# != 2)); then
+            echo "usage: i3-net-profile set NAME" >&2
+            exit 2
+        fi
+        set_profile "$2"
+        ;;
+    *)
+        sed -n '3,8p' "$0" | sed 's/^# \?//' >&2
+        exit 2
+        ;;
+esac

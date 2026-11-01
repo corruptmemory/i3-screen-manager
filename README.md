@@ -19,9 +19,9 @@ symlinked into `~/.local/bin`. Installing them does not install a desktop config
 | Lid handling               | `laptop-monitor.sh`, `laptop-monitor-x11.sh`, `hyprland-clamshell-restore`                                                           |
 | Screenshots                | `screenshot` (grim/slurp/tensaku), `screenshot.sh` (hyprshot/satty), `flameshot.sh`                                                  |
 | Desktop helpers            | `i3-cmos-battery`, `keybase-popup-anchor-x11`, `volumecontrol.sh`                                                                    |
-| Network menu               | `i3-tailscale-rofi`                                                                                                                  |
+| Network                    | `i3-tailscale-rofi`, `i3-net-profile`, `i3-net-profile-rofi`                                                                         |
 | Usage records              | `agent-usage`, `agent-usage-claude`, `agent-usage-codex`; `agent-usage-polybar`, `agent-usage-rofi` (i3/Polybar bar item and popout) |
-| System utilities           | `aur-malware-check`, `artix-rank-mirrors`, `win11-vm-setup.sh`                                                                       |
+| System utilities           | `aur-malware-check`, `tool-audit`, `artix-rank-mirrors`, `win11-vm-setup.sh`                                                         |
 | ArtCraft agent control     | `craft-apps` (with `craft-apps.toml`)                                                                                                |
 | Shared dependency guard    | `lib/require.sh`                                                                                                                     |
 
@@ -76,6 +76,11 @@ for script in agent-usage agent-usage-claude agent-usage-codex \
     ln -sfn "$(pwd)/$script" "$HOME/.local/bin/$script"
 done
 ```
+
+Link `i3-net-profile`, `i3-net-profile-rofi`, and `tool-audit` the same way. Their setup, including the
+root-owned files dotfiles stages for them, is in the
+[network profiles](docs/agent-guide/network-profiles.md) and
+[package](docs/agent-guide/packages.md) guides.
 
 The dotfiles repo supplies keybindings, autostart hooks, and bar widgets.
 `start-hyprland` is a TTY session launcher, not an in-session autostart command;

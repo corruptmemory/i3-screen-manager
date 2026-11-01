@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# i3-net-profile-rofi — menu for choosing the network profile. The bar's click action.
+#
+# Lists every profile in /etc/net-profile/profiles with its description, marks the
+# active one, and applies the choice with i3-net-profile. Choosing the active profile
+# re-applies it, which repairs a stopped VPN or changed rules.
+# Adding a profile file is all it takes for it to appear here.
+set -euo pipefail
+
+# Silent-failure guard: shared _require helper. See
+# ~/.local/lib/sh/require.sh (symlinked from i3-screen-manager/lib/require.sh)
+# and docs/agent-guide/x11-input.md for dependency diagnostics.
+. "$HOME/.local/lib/sh/require.sh"
+_require rofi i3-net-profile
+
+profiles=$(i3-net-profile list) || {
+    notify-send -u critical "Network profile" "Could not list profiles: is the helper installed?" 2>/dev/null || true
+    exit 1
+}
+active=$(i3-net-profile status 2>/dev/null | cut -f1) || active=
+
+menu=""
+row=0
+selected=0
+while IFS=$'\t' read -r name _ description; do
+    marker="  "
+    if [[ $name == "$active" ]]; then
+        marker="* "
+        selected=$row
+    fi
+    menu+=$(printf '%s%-12s %s' "$marker" "$name" "$description")$'\n'
+    row=$((row + 1))
+done <<<"$profiles"
+
+# rofi exits nonzero when dismissed, which is not an error.
+choice=$(printf '%s' "$menu" | rofi -dmenu -i -p "Network profile" -no-custom -selected-row "$selected" \
+    -theme-str 'window {width: 760px;}') || exit 0
+name=$(awk '{ print ($1 == "*") ? $2 : $1 }' <<<"$choice")
+[[ -n $name ]] || exit 0
+
+i3-net-profile set "$name"
