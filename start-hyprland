@@ -34,9 +34,10 @@ export HYPRCURSOR_SIZE=24
 #   - Hybrid (Intel + NVIDIA): Intel composites (listed first), NVIDIA for external scanout.
 #   - Discrete-only (iGPU disabled in BIOS): NVIDIA is the SOLE GPU and drives the internal
 #     panel too (X1 Extreme Gen 5 MUX) — single GPU, no cross-GPU blits.
-# by-path symlinks are stable across card-number reshuffles; an absent card -> empty string.
-INTEL_CARD=$(readlink -f /dev/dri/by-path/pci-0000:00:02.0-card 2>/dev/null)
-NVIDIA_CARD=$(readlink -f /dev/dri/by-path/pci-0000:01:00.0-card 2>/dev/null)
+# by-path symlinks are stable across card-number reshuffles. `readlink -e` yields an
+# empty string for an absent card; `-f` would echo the missing path back as if present.
+INTEL_CARD=$(readlink -e /dev/dri/by-path/pci-0000:00:02.0-card 2>/dev/null)
+NVIDIA_CARD=$(readlink -e /dev/dri/by-path/pci-0000:01:00.0-card 2>/dev/null)
 
 if [ -n "$INTEL_CARD" ] && [ -n "$NVIDIA_CARD" ]; then
     # Hybrid: Intel primary compositor, NVIDIA included for external monitors.

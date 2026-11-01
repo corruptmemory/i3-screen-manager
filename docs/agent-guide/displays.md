@@ -9,8 +9,12 @@ dotfiles' `hypr/monitors.lua`, `hypr/machine.lua`, `hypr/autostart.lua`, and
 ## Backend and Scope
 
 `XDG_SESSION_TYPE=wayland` or a nonempty `WAYLAND_DISPLAY` selects Hyprland;
-otherwise the CLI uses X11. The laptop layout commands assume internal output
-`eDP-1` and select the first connected non-internal output. They are not a
+otherwise the CLI uses X11. The laptop's internal output is `eDP-1` under
+Wayland and under X11 in Hybrid mode (Intel modesetting). In Discrete mode the
+NVIDIA X driver names it after its DP head (`DP-4`) with `ConnectorType: Panel`,
+so the X11 path resolves it at run time (`x11_internal_output`, falling back to
+`eDP-1`); `laptop-monitor-x11.sh` and the laptop polybar launcher do the same.
+The layout commands select the first connected non-internal output. They are not a
 general multi-external-monitor layout manager. The desktop's fixed layout
 belongs to dotfiles; `scale`/`dpi` can still be used on its focused output.
 

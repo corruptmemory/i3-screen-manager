@@ -24,7 +24,15 @@
 #   docs/agent-guide/displays.md for lid handling and current constraints.
 
 PIDFILE="/tmp/i3-screen-manager-inhibit.pid"
-INTERNAL="eDP-1"
+
+# The internal panel's RandR name depends on the X driver: eDP-1 under Intel
+# modesetting (Hybrid mode), but the NVIDIA driver (Discrete mode) names it
+# after its DP head, e.g. DP-4, marked "ConnectorType: Panel". Same lookup as
+# i3-screen-manager's x11_internal_output.
+INTERNAL=$(xrandr --prop 2>/dev/null | awk '
+    /^[A-Za-z0-9-]+ (connected|disconnected)/ { out = $1; if (out ~ /^eDP/) { print out; exit } }
+    /ConnectorType: Panel/ && out != ""        { print out; exit }')
+INTERNAL="${INTERNAL:-eDP-1}"
 
 # Clamshell-mode guard for lid-open: i3-screen-manager clamshell already owns
 # the display state; re-enabling eDP-1 here would fight it.

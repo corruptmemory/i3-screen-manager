@@ -19,8 +19,15 @@ The laptop launcher uses stable DRM PCI paths for Intel `0000:00:02.0` and
 NVIDIA `0000:01:00.0`. Hybrid mode lists Intel first in `AQ_DRM_DEVICES`, then
 NVIDIA for the external ports; discrete mode selects NVIDIA alone. Only the
 discrete branch forces `GBM_BACKEND=nvidia-drm` and NVIDIA GLX. Hybrid uses
-Intel VA-API (`iHD`). Do not apply these laptop-specific paths or driver
-overrides to the AMD desktop launcher in dotfiles.
+Intel VA-API (`iHD`). Detect a card with `readlink -e`; `-f` echoes a missing
+path back as if the card existed. Do not apply these laptop-specific paths or
+driver overrides to the AMD desktop launcher in dotfiles.
+
+Under X11, `/etc/X11/xorg.conf.d/10-nvidia-prime.conf` defines two layouts.
+The default `layout` puts the screen on Intel modesetting with NVIDIA as an
+inactive PRIME source; `discrete` puts it on the NVIDIA driver. Dotfiles'
+`start-i3-laptop` and `start-icewm-laptop` pass `-layout discrete` to `startx`
+when the Intel card is absent; without it X finds no screens in Discrete mode.
 
 The laptop firmware supports Hybrid and Discrete graphics modes. Changing
 that mode requires a reboot and changes GPU availability and power use.
