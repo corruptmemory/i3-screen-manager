@@ -3,7 +3,7 @@
 Read this guide for hardware, OpenRC services, the Tailscale helper, SSH host keys,
 the GRUB menu, CMOS monitoring, the local dictionary server, disk reclaim, or VM setup.
 Sources: `start-hyprland`, `i3-tailscale-rofi`, `i3-cmos-battery`, `volumecontrol.sh`,
-`ora4-hw-pin`, `win11-vm-setup.sh`, and dotfiles' `etc/init.d/dictd` and `etc/default/grub`.
+`ora4-hw-pin`, `win11-vm-setup.sh`, dotfiles' `etc/init.d/dictd`, and `/etc/default/grub`.
 Check active machine state before applying configuration outside this repository.
 
 ## Service and GPU Boundaries
@@ -94,14 +94,16 @@ connection. `SendEnv AWS_*` and `GIT_*` are still in `Host *`.
 
 On `nomad-artix` the menu holds this OS and whatever `os-prober` finds, nothing else. With
 one kernel installed that is one entry, `Artix Linux, with Linux linux`; the longer name
-comes with `GRUB_DISABLE_SUBMENU`, which also removes `Advanced options`.
+comes with `GRUB_DISABLE_SUBMENU=y`, which also removes `Advanced options`.
 `GRUB_DISABLE_BOOTNEXT=true` stops `31_efi_bootnext` adding an entry for every firmware
-boot option. Both settings are in dotfiles' `etc/default/grub`, copied to
-`/etc/default/grub` by the `install` line in its header.
+boot option. `godlike-artix` sets only `GRUB_DISABLE_BOOTNEXT=true`.
 
-`30_uefi-firmware` has no setting, so `/etc/pacman.conf`, which is in no repository, carries
+`30_uefi-firmware` has no setting, so the laptop's `/etc/pacman.conf` carries
 `NoExtract = etc/grub.d/30_uefi-firmware`. Any `grub` upgrade or reinstall then deletes that
 script and does not restore it. To undo this, remove the line and reinstall `grub`.
+
+`/etc/default/grub` and `/etc/pacman.conf` are in no repository, so set these again after
+reinstalling the OS.
 
 Nothing reruns `grub-mkconfig` on its own, so run it after changing these settings or
 installing another OS. To check a change first, render to a scratch file with `-o`, confirm
