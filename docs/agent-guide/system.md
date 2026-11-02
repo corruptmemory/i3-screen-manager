@@ -1,7 +1,7 @@
 # System Maintenance
 
 Read this guide for hardware, OpenRC services, the Tailscale helper, SSH host keys,
-the GRUB menu, CMOS monitoring, the local dictionary server, disk reclaim, or VM setup.
+the GRUB menu, the login keyring, CMOS monitoring, the local dictionary server, disk reclaim, or VM setup.
 Sources: `start-hyprland`, `i3-tailscale-rofi`, `i3-cmos-battery`, `volumecontrol.sh`,
 `ora4-hw-pin`, `win11-vm-setup.sh`, dotfiles' `etc/init.d/dictd`, and `/etc/default/grub`.
 Check active machine state before applying configuration outside this repository.
@@ -51,6 +51,16 @@ runs from the desktop session startup under both compositors: Hyprland's
 WirePlumber drop-in is PipeWire config, so it applies under either session
 unchanged. The drop-in is desktop-local, not carried by dotfiles; the pin script
 and its startup lines are.
+
+## Login Keyring
+
+A TTY login unlocks the keyring when PAM has `auth optional pam_gnome_keyring.so` and
+`session optional pam_gnome_keyring.so auto_start` (desktop `/etc/pam.d/login`, laptop
+`system-login`, neither in a repo) and the passwords match; `passwd` does not update it. A
+launcher's `--start` must adopt PAM's daemon within 120 seconds. Launcher comments hold the
+reaper rules; dotfiles' `tests/keyring-handoff.sh` checks them. With no syslog, `gkr-pam`
+errors vanish. `pgrep -a gnome-keyring` shows `--login` for PAM's daemon. While locked, `gh`,
+private HTTPS fetches, and Chromium wait on a dialog on that screen: a hang over SSH.
 
 ## CMOS Monitoring
 

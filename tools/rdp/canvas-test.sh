@@ -42,8 +42,8 @@ trap cleanup EXIT
 
 python3 -I -m http.server "$http_port" --bind 127.0.0.1 --directory "$here" >/dev/null 2>&1 &
 web=$!
-# --password-store=basic: over plain SSH, Chromium otherwise waits forever on the desktop
-# keyring for its cookie key, and every navigation stalls before reaching the network.
+# --password-store=basic: while the login keyring is locked, Chromium otherwise waits forever
+# for its cookie key, and every navigation stalls before reaching the network.
 "$browser" --headless --user-data-dir="$profile" --remote-debugging-port="$debug_port" \
 	--no-first-run --no-sandbox --disable-gpu --password-store=basic --window-size=900,500 \
 	about:blank >/dev/null 2>&1 &

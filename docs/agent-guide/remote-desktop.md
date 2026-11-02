@@ -176,7 +176,7 @@ is unknown; `stale-probe` is written to find it, and has not yet run against a l
 | `load_map_from_xkbfile` warnings                | Harmless; they return whenever xdotool remaps a key                      |
 | Paste fails, session otherwise fine             | Check policy, then restart `rdpclip.exe` in the session (untested here)  |
 | Browser asks to open `xdg-open`                 | The portal's RemoteApp option. Cancel; never tick "Always allow"         |
-| Headless Chromium stalls on every page over SSH | It waits on the keyring. Add `--password-store=basic`                    |
+| Headless Chromium stalls on every page over SSH | It waits on a locked keyring. Add `--password-store=basic`               |
 | CDP screenshot hangs on a new tab               | The tab is in the background. Use the `front` step first                 |
 | `pkill -f PATTERN` kills your own shell         | The pattern is in your command line. Stop by PID, as `rdp-lab` does      |
 | `pgrep -x` finds nothing for a long name        | It only matches 15 characters. `freerdp-shadow-cli3` is too long         |
