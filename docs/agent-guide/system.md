@@ -1,9 +1,9 @@
 # System Maintenance
 
 Read this guide for hardware, OpenRC services, the Tailscale helper, SSH host keys,
-CMOS monitoring, the local dictionary server, disk reclaim, or VM setup. Sources:
-`start-hyprland`, `i3-tailscale-rofi`, `i3-cmos-battery`, `volumecontrol.sh`,
-`ora4-hw-pin`, `win11-vm-setup.sh`, and dotfiles' `etc/init.d/dictd`.
+the GRUB menu, CMOS monitoring, the local dictionary server, disk reclaim, or VM setup.
+Sources: `start-hyprland`, `i3-tailscale-rofi`, `i3-cmos-battery`, `volumecontrol.sh`,
+`ora4-hw-pin`, `win11-vm-setup.sh`, and dotfiles' `etc/init.d/dictd` and `etc/default/grub`.
 Check active machine state before applying configuration outside this repository.
 
 ## Service and GPU Boundaries
@@ -89,6 +89,27 @@ checking is on, run `ssh -T -o UserKnownHostsFile=FILE git@github.com` with a wr
 setting of its own gets neither, including bare `192.168.*` addresses. Named blocks that
 set `ForwardAgent yes`, such as `node-0`, keep it, and `ssh -A` forwards for one
 connection. `SendEnv AWS_*` and `GIT_*` are still in `Host *`.
+
+## GRUB Menu
+
+On `nomad-artix` the menu holds this OS and whatever `os-prober` finds, nothing else. With
+one kernel installed that is one entry, `Artix Linux, with Linux linux`; the longer name
+comes with `GRUB_DISABLE_SUBMENU`, which also removes `Advanced options`.
+`GRUB_DISABLE_BOOTNEXT=true` stops `31_efi_bootnext` adding an entry for every firmware
+boot option. Both settings are in dotfiles' `etc/default/grub`, copied to
+`/etc/default/grub` by the `install` line in its header.
+
+`30_uefi-firmware` has no setting, so `/etc/pacman.conf`, which is in no repository, carries
+`NoExtract = etc/grub.d/30_uefi-firmware`. Any `grub` upgrade or reinstall then deletes that
+script and does not restore it. To undo this, remove the line and reinstall `grub`.
+
+Nothing reruns `grub-mkconfig` on its own, so run it after changing these settings or
+installing another OS. To check a change first, render to a scratch file with `-o`, confirm
+its `search`, `linux`, and `initrd` lines match the entry that last booted, and only then
+render to `/boot/grub/grub.cfg`. To test `os-prober` with no other OS present, put a stub
+first in `PATH` that prints
+`/dev/nvme0n1p5@/EFI/Microsoft/Boot/bootmgfw.efi:Windows Boot Manager:Windows:efi`; the
+render must list it after this OS.
 
 ## VM Setup
 
