@@ -54,17 +54,18 @@ needed for the task; links are not instructions to preload the whole directory.
 For work crossing boundaries, read each affected guide. Within a guide, follow
 further references only when relevant. Read source files to confirm behavior.
 
-| Task or trigger                                                                                              | Guide                                                    | Main sources                                                                 |
-|--------------------------------------------------------------------------------------------------------------|----------------------------------------------------------|------------------------------------------------------------------------------|
-| Displays, docking, scale/DPI, lid transitions, workspace placement                                           | [Displays](docs/agent-guide/displays.md)                 | `i3-screen-manager`, lid helpers; dotfiles monitor rules and workspace pools |
-| Hyprland Lua, session startup, focus/groups, Quickshell bars/popouts/tray, screenshots, DPMS                 | [Hyprland and Quickshell](docs/agent-guide/hyprland.md)  | Session/capture helpers; dotfiles `hypr/` and `quickshell/`                  |
-| i3/IceWM, keyboard/mouse, rofi dependencies, clipboard/typing, Keybase popup                                 | [X11 and input](docs/agent-guide/x11-input.md)           | Input/rofi helpers, `lib/require.sh`; dotfiles WM configs                    |
-| Agent collection, auth/limits, caches, JSON schema, usage widget                                             | [Agent usage](docs/agent-guide/agent-usage.md)           | `agent-usage*`; dotfiles `Agents.qml` and `AgentsPanel.qml`                  |
-| OpenRC/audio ownership, GPU routing, CMOS, Tailscale/Open Brain, disk reclaim, VM host setup, dictd, GRUB    | [System maintenance](docs/agent-guide/system.md)         | `start-hyprland`, system utilities, machine-local services                   |
-| Ghostty/Brave config and identity, chat layout, GTK dialogs, desktop app integration                         | [Applications](docs/agent-guide/applications.md)         | Dotfiles launchers, terminal config, WM rules                                |
-| ArtCraft apps: `craft-apps` launchers, control ports, MCP bridges, driving the apps, GPU use, demo recording | [ArtCraft apps](docs/agent-guide/artcraft.md)            | `craft-apps`, `craft-apps.toml`, each app's docs at its installed tag        |
-| Firewall, VPNs, client network profiles and their credentials                                                | [Network profiles](docs/agent-guide/network-profiles.md) | `i3-net-profile*`; dotfiles `etc/net-profile/`                               |
-| Install/update/remove packages, choose distributions, review AUR, pacman/XLibre/hooks/mirrors, malware scans | [Package installation](docs/agent-guide/packages.md)     | `aur-malware-check`, local pacman config, current vendor instructions        |
+| Task or trigger                                                                                              | Guide                                                    | Main sources                                                          |
+|--------------------------------------------------------------------------------------------------------------|----------------------------------------------------------|-----------------------------------------------------------------------|
+| Displays, docking, scale/DPI, lid transitions, workspace placement                                           | [Displays](docs/agent-guide/displays.md)                 | `i3-screen-manager`, lid helpers; dotfiles monitors, workspace pools  |
+| Hyprland Lua, session startup, focus/groups, Quickshell bars/popouts/tray, screenshots, DPMS                 | [Hyprland and Quickshell](docs/agent-guide/hyprland.md)  | Session/capture helpers; dotfiles `hypr/` and `quickshell/`           |
+| i3/IceWM, keyboard/mouse, rofi dependencies, clipboard/typing, Keybase popup                                 | [X11 and input](docs/agent-guide/x11-input.md)           | Input/rofi helpers, `lib/require.sh`; dotfiles WM configs             |
+| Agent collection, auth/limits, caches, JSON schema, usage widget                                             | [Agent usage](docs/agent-guide/agent-usage.md)           | `agent-usage*`; dotfiles `Agents.qml` and `AgentsPanel.qml`           |
+| OpenRC/audio ownership, GPU routing, CMOS, Tailscale/Open Brain, disk reclaim, VM host setup, dictd, GRUB    | [System maintenance](docs/agent-guide/system.md)         | `start-hyprland`, system utilities, machine-local services            |
+| Ghostty/Brave config and identity, chat layout, GTK dialogs, desktop app integration                         | [Applications](docs/agent-guide/applications.md)         | Dotfiles launchers, terminal config, WM rules                         |
+| ArtCraft apps: `craft-apps` launchers, control ports, MCP bridges, driving the apps, GPU use, demo recording | [ArtCraft apps](docs/agent-guide/artcraft.md)            | `craft-apps`, `craft-apps.toml`, each app's docs at its installed tag |
+| Firewall, VPNs, client network profiles and their credentials                                                | [Network profiles](docs/agent-guide/network-profiles.md) | `i3-net-profile*`; dotfiles `etc/net-profile/`                        |
+| RDP clients, TSPlus portal, agent-driven remote sessions, RDP clipboard problems, `rdp-lab`                  | [Remote desktop](docs/agent-guide/remote-desktop.md)     | `tools/rdp/`; FreeRDP, Xvfb/Xephyr, browser debug port                |
+| Install/update/remove packages, choose distributions, review AUR, pacman/XLibre/hooks/mirrors, malware scans | [Package installation](docs/agent-guide/packages.md)     | `aur-malware-check`, local pacman config, current vendor instructions |
 
 For installation, command usage, and dependencies, see [README.md](README.md).
 Names such as `hypr/` and `quickshell/` in the table are under
@@ -99,5 +100,4 @@ justify separate loading, and make the routing trigger explicit.
 The root owns universal rules and routing. Guides own technical contracts,
 constraints, known limitations, and focused verification. The README owns
 user-facing setup and usage. Do not add nested `AGENTS.md` files merely to
-store reference detail, or eager includes that load every guide. Historical
-investigations and superseded plans remain in Git, not in an archive to preload.
+store reference detail, or eager includes that load every guide.

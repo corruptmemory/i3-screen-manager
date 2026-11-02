@@ -1,0 +1,499 @@
+#!/usr/bin/env bash
+# Test bench for driving an xfreerdp3 session from outside: a private X display,
+# xdotool for input, import for screenshots, and xclip for that display's own
+# clipboard, which stays separate from the desktop's. See
+# docs/agent-guide/remote-desktop.md for how to use it and what the results mean.
+set -euo pipefail
+
+lab_display=:77
+work=${XDG_RUNTIME_DIR:-/tmp}/rdp-lab
+size=1400x800
+parent_display=${DISPLAY:-}
+
+usage() {
+	cat <<'EOF'
+Usage: rdp-lab [--display :N] [--dir PATH] [--size WxH] COMMAND [ARGS]
+
+Display and session:
+  display-start [xephyr|xvfb]   Start the private display (xephyr needs a desktop)
+  display-stop                  Stop it
+  connect HOST USER [ARGS...]   Run xfreerdp3 there; it prompts for the password
+                                Run this in a real terminal, not from an agent
+  local-test                    Prove the bench against a loopback FreeRDP server
+
+Input and capture (X Y is a point inside an expendable text window):
+  shot NAME                     Screenshot to DIR/NAME.png
+  release-modifiers             Release Alt, Ctrl, Shift, Super, AltGr
+  click X Y | key COMBO | type TEXT
+
+Clipboard tests. These overwrite text in the window at X Y:
+  case-check X Y                Check typed case; fixes an inverted Caps Lock
+  copy-test X Y                 Both directions, non-ASCII, newline handling
+  paste-test X Y [ROUNDS]       Strict local-to-remote paste; stops on two misses
+  inside-test X Y LABEL         Copy and paste inside the session; counts announcements
+  sizes X Y                     600 KB and 1.1 MB pastes, read back
+
+Rich content, one step at a time against a word processor:
+  paste-html | paste-rtf | paste-image
+  targets                       List what the clipboard currently offers
+  pull TARGET FILE              Save one clipboard format to DIR/FILE
+EOF
+}
+
+die() {
+	printf 'rdp-lab: %s\n' "$*" >&2
+	exit 1
+}
+
+need() {
+	local c
+	for c in "$@"; do
+		command -v "$c" >/dev/null || die "missing command: $c"
+	done
+}
+
+while (($#)); do
+	case $1 in
+	--display) lab_display=$2 && shift 2 ;;
+	--dir) work=$2 && shift 2 ;;
+	--size) size=$2 && shift 2 ;;
+	-h | --help) usage && exit 0 ;;
+	--) shift && break ;;
+	-*) die "unknown option: $1" ;;
+	*) break ;;
+	esac
+done
+(($#)) || {
+	usage >&2
+	exit 2
+}
+mkdir -p "$work"
+log=$work/xfreerdp.log
+
+now() { date +%s%3N; }
+display_up() { timeout 2 xdpyinfo -display "$lab_display" >/dev/null 2>&1; }
+on_lab() { DISPLAY=$lab_display "$@"; }
+session_up() { on_lab timeout 3 xdotool search --name FreeRDP >/dev/null 2>&1; }
+clip_get() { on_lab timeout 8 xclip -o -selection clipboard 2>/dev/null || true; }
+clip_set() { printf '%s' "$1" | on_lab timeout 5 xclip -selection clipboard >/dev/null 2>&1 || true; }
+press() { on_lab xdotool key "$@"; }
+shot() {
+	on_lab import -window root "$work/$1.png"
+	printf '%s\n' "$work/$1.png"
+}
+focus_at() {
+	on_lab xdotool mousemove "$1" "$2" click 1
+	sleep 0.6
+}
+select_all() {
+	press ctrl+a
+	sleep 0.4
+}
+clear_text() {
+	select_all
+	press Delete
+	sleep 0.5
+}
+require_session() {
+	display_up || die "display $lab_display is not running"
+	session_up || die "no FreeRDP window on $lab_display"
+}
+
+cmd_display_start() {
+	local mode=${1:-} i
+	need xdpyinfo
+	display_up && die "display $lab_display is already running"
+	[[ -n $mode ]] || { [[ -n $parent_display ]] && mode=xephyr || mode=xvfb; }
+	# -noreset keeps the server, and so the clipboard, when the last client exits.
+	case $mode in
+	xephyr)
+		need Xephyr
+		[[ -n $parent_display ]] || die "xephyr needs a desktop display"
+		DISPLAY=$parent_display setsid nohup Xephyr "$lab_display" -screen "$size" \
+			-title 'RDP lab' -noreset >"$work/display.log" 2>&1 </dev/null &
+		;;
+	xvfb)
+		need Xvfb
+		setsid nohup Xvfb "$lab_display" -screen 0 "${size}x24" -nolisten tcp \
+			-noreset >"$work/display.log" 2>&1 </dev/null &
+		;;
+	*) die "unknown display mode: $mode" ;;
+	esac
+	for i in {1..25}; do
+		if display_up; then
+			if [[ $mode == xephyr ]] && command -v i3-msg >/dev/null; then
+				DISPLAY=$parent_display i3-msg '[class="Xephyr"] floating enable' >/dev/null 2>&1 || true
+			fi
+			printf '%s display %s is up; log %s\n' "$mode" "$lab_display" "$work/display.log"
+			return 0
+		fi
+		sleep 0.2
+	done
+	die "display did not start; see $work/display.log"
+}
+
+# Finds the server by reading each process's arguments. A pattern-based pkill -f
+# would also match the shell that is running this command.
+stop_display_named() {
+	local target=$1 name pid args
+	for name in Xephyr Xvfb; do
+		for pid in $(pgrep -x "$name" || true); do
+			args=$(tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null || true)
+			case " $args " in
+			*" $target "*) kill "$pid" && printf 'stopped %s %s\n' "$name" "$pid" ;;
+			esac
+		done
+	done
+}
+
+cmd_display_stop() {
+	stop_display_named "$lab_display"
+}
+
+cmd_connect() {
+	(($# >= 2)) || die "connect needs HOST and USER"
+	local host=$1 user=$2
+	shift 2
+	need xfreerdp3 tee
+	display_up || die "display $lab_display is not running; run display-start first"
+	# KRB5_CONFIG=/dev/null stops Arch's stock /etc/krb5.conf realm from producing a
+	# failed Kerberos attempt before FreeRDP falls back to NTLM.
+	KRB5_CONFIG=/dev/null DISPLAY=$lab_display xfreerdp3 "/v:$host" "/u:$user" "/size:$size" \
+		/cert:tofu +clipboard /log-filters:com.freerdp.channels.cliprdr.client:DEBUG "$@" 2>&1 |
+		tee "$log"
+}
+
+cmd_release_modifiers() {
+	on_lab xdotool keyup Alt_L keyup Alt_R keyup Super_L keyup Super_R keyup ISO_Level3_Shift \
+		keyup Meta_L keyup Control_L keyup Control_R keyup Shift_L keyup Shift_R 2>/dev/null || true
+}
+
+read_typed_sample() {
+	focus_at "$1" "$2"
+	clear_text
+	on_lab xdotool type --delay 20 'abc XYZ 987'
+	sleep 0.9
+	select_all
+	press ctrl+c
+	sleep 0.8
+	clip_get
+}
+
+cmd_case_check() {
+	local got
+	require_session
+	cmd_release_modifiers
+	got=$(read_typed_sample "$1" "$2")
+	printf 'typed abc XYZ 987, read back [%s]\n' "$got"
+	if [[ $got != 'abc XYZ 987' ]]; then
+		press Caps_Lock
+		sleep 0.4
+		got=$(read_typed_sample "$1" "$2")
+		printf 'after Caps_Lock: [%s]\n' "$got"
+	fi
+	[[ $got == 'abc XYZ 987' ]] || die 'typing or copying is still wrong; take a screenshot'
+}
+
+# Copies the remote selection and reports how long it took to reach the local clipboard.
+copy_out() {
+	local want=$1 sentinel="SENTINEL$RANDOM" t0 got
+	clip_set "$sentinel"
+	sleep 0.8 # Let the announcement settle, or it can overwrite the remote copy.
+	t0=$(now)
+	press ctrl+c
+	while (($(now) - t0 < 6000)); do
+		got=$(clip_get)
+		case $got in *"$want"*)
+			echo "$(($(now) - t0))"
+			return 0
+			;;
+		esac
+		sleep 0.03
+	done
+	echo never
+}
+
+cmd_copy_test() {
+	local x=$1 y=$2 i tok text back
+	require_session
+	focus_at "$x" "$y"
+	for i in 1 2 3; do
+		tok="rdpcopy$RANDOM"
+		clear_text
+		on_lab xdotool type --delay 15 "$tok"
+		sleep 0.8
+		select_all
+		printf 'remote to local %s: %s ms; exact=%s\n' "$i" "$(copy_out "$tok")" \
+			"$([[ "$(clip_get)" == "$tok" ]] && echo yes || echo no)"
+	done
+	for i in 1 2 3; do
+		tok="rdppaste$RANDOM"
+		clip_set "$tok"
+		sleep 0.5
+		clear_text
+		press ctrl+v
+		sleep 1.2
+		select_all
+		printf 'local to remote %s: read back in %s ms; exact=%s\n' "$i" "$(copy_out "$tok")" \
+			"$([[ "$(clip_get)" == "$tok" ]] && echo yes || echo no)"
+	done
+	text=$'FreeRDP café ñ € ✓ 日本語\nsecond line'
+	clip_set "$text"
+	sleep 0.5
+	clear_text
+	press ctrl+v
+	sleep 1.2
+	select_all
+	copy_out 'second line' >/dev/null
+	back=$(clip_get)
+	if [[ $back == "$text" ]]; then
+		echo 'non-ASCII and newline: exact (LF kept)'
+	elif [[ "$(printf '%s' "$back" | tr -d '\r')" == "$text" ]]; then
+		echo 'non-ASCII exact; newline came back as CRLF'
+	else
+		echo 'non-ASCII or newline CHANGED:'
+		printf '%s' "$back" | od -c | head -6
+	fi
+}
+
+# One strict trial: a remote copy first, fresh local text, Ctrl+V, then a read-back
+# after the sentinel has settled, so a slow announcement cannot pass for a failed paste.
+paste_trial() {
+	local mode=$1 last=$2 tok="paste$RANDOM$RANDOM" sentinel="SENTINEL$RANDOM" got
+	select_all
+	press ctrl+c
+	sleep 0.6
+	if [[ $mode == deselected ]]; then
+		press End
+		sleep 0.2
+		clear_text
+	fi
+	clip_set "$tok"
+	sleep 0.5
+	press ctrl+v
+	sleep 1.5
+	clip_set "$sentinel"
+	sleep 0.8
+	select_all
+	press ctrl+c
+	sleep 1
+	got=$(clip_get)
+	case $got in
+	"$tok") echo exact ;;
+	"$sentinel") echo 'nothing copied (focus lost or empty window)' ;;
+	"$last") echo 'STALE old remote text' ;;
+	*) echo 'other' ;;
+	esac
+}
+
+cmd_paste_test() {
+	local x=$1 y=$2 rounds=${3:-6} i mode r ok=0 total=0 misses=0 last=''
+	require_session
+	focus_at "$x" "$y"
+	for ((i = 1; i <= rounds; i++)); do
+		for mode in selected deselected; do
+			session_up || {
+				echo "$(date +%T) session ended; exact $ok of $total"
+				return 0
+			}
+			total=$((total + 1))
+			r=$(paste_trial "$mode" "$last")
+			last=$(clip_get)
+			printf '%s trial %s %s: %s\n' "$(date +%T)" "$total" "$mode" "$r"
+			if [[ $r == exact ]]; then
+				ok=$((ok + 1))
+				misses=0
+			else
+				misses=$((misses + 1))
+			fi
+			if ((misses >= 2)); then
+				echo 'two misses in a row; look at this screenshot before blaming the clipboard:'
+				shot paste-stopped
+				echo "exact $ok of $total"
+				return 0
+			fi
+		done
+	done
+	echo "exact $ok of $total"
+}
+
+cmd_inside_test() {
+	local x=$1 y=$2 label=$3 before after i tok ok=0
+	require_session
+	focus_at "$x" "$y"
+	sleep 2 # The log comes through a pipe, so it lags; give it time to catch up.
+	before=$(grep -c 'ClientFormatList: numFormats' "$log" 2>/dev/null || true)
+	for i in 1 2 3 4 5; do
+		tok="inside$RANDOM"
+		clear_text
+		on_lab xdotool type --delay 15 "$tok"
+		sleep 0.8
+		select_all
+		press ctrl+c
+		sleep 1
+		press End
+		sleep 0.2
+		press ctrl+v
+		sleep 1
+		select_all
+		[[ "$(copy_out "$tok$tok")" != never ]] && ok=$((ok + 1))
+	done
+	sleep 2
+	after=$(grep -c 'ClientFormatList: numFormats' "$log" 2>/dev/null || true)
+	printf '%s: paste inside session worked %s/5; client announcements added: %s\n' \
+		"$label" "$ok" "$((${after:-0} - ${before:-0}))"
+}
+
+cmd_sizes() {
+	local x=$1 y=$2 n blob back
+	require_session
+	focus_at "$x" "$y"
+	for n in 600000 1100000; do
+		blob=$(python3 -I -c "import sys; n=int(sys.argv[1]); line='x'*79+'\n'; sys.stdout.write((line*(n//80+1))[:n])" "$n")
+		clip_set "$blob"
+		sleep 0.5
+		clear_text
+		press ctrl+v
+		sleep 6
+		select_all
+		press ctrl+c
+		sleep 4
+		back=$(clip_get | tr -d '\r')
+		# Command substitution drops a trailing newline, so a match reads n or n-1.
+		printf 'paste %s bytes: read back %s bytes\n' "$n" "$(printf '%s' "$back" | wc -c)"
+	done
+	clear_text
+}
+
+cmd_paste_html() {
+	printf '%s' '<html><body><p><b>Bold from Linux</b>, <i>italic</i>, <span style="color:#c00000">red</span>, and a <a href="https://example.com/">link</a>.</p><table border="1"><tr><td>cell A</td><td>cell B</td></tr></table></body></html>' |
+		on_lab timeout 5 xclip -selection clipboard -t text/html >/dev/null 2>&1 || true
+	sleep 0.6
+	press ctrl+v
+	sleep 2
+	echo 'pasted text/html'
+}
+
+cmd_paste_rtf() {
+	printf '%s' '{\rtf1\ansi {\b Bold RTF from Linux} and {\i italic RTF}.\par}' |
+		on_lab timeout 5 xclip -selection clipboard -t text/rtf >/dev/null 2>&1 || true
+	sleep 0.6
+	press ctrl+v
+	sleep 2
+	echo 'pasted text/rtf'
+}
+
+cmd_paste_image() {
+	need magick
+	magick -size 320x120 xc:'#ff8800' -fill black -pointsize 30 -gravity center \
+		-annotate 0 'IMAGE FROM LINUX' "$work/test-image.png"
+	on_lab timeout 5 xclip -selection clipboard -t image/png -i "$work/test-image.png" >/dev/null 2>&1 || true
+	sleep 0.6
+	press ctrl+v
+	sleep 2.5
+	printf 'pasted %s\n' "$work/test-image.png"
+}
+
+cmd_targets() {
+	on_lab timeout 8 xclip -o -selection clipboard -t TARGETS 2>&1 | paste -sd' ' || true
+}
+
+cmd_pull() {
+	if on_lab timeout 15 xclip -o -selection clipboard -t "$1" >"$work/$2" 2>/dev/null; then
+		printf '%s: %s bytes, %s\n' "$1" "$(wc -c <"$work/$2")" "$(file -b "$work/$2")"
+	else
+		printf '%s: not available\n' "$1"
+	fi
+}
+
+# Proves the display, FreeRDP, and capture against a server on loopback. That server
+# has no clipboard channel, so this cannot exercise the clipboard tests.
+lt_shadow=0
+lt_shadow_x=0
+lt_started_lab=0
+lt_had_config=1
+lt_config_dir=$HOME/.config/freerdp/shadow
+
+# Globals, because this runs from an EXIT trap after cmd_local_test has returned.
+local_test_cleanup() {
+	if ((lt_shadow)); then kill "$lt_shadow" 2>/dev/null || true; fi
+	if ((lt_shadow_x)); then kill "$lt_shadow_x" 2>/dev/null || true; fi
+	if ((lt_started_lab)); then cmd_display_stop >/dev/null || true; fi
+	if ! ((lt_had_config)); then rm -rf -- "$lt_config_dir"; fi
+}
+
+cmd_local_test() {
+	local shadow_display=":$((${lab_display#:} + 1))" port=33890 i rc=0 window=no client
+	need Xvfb freerdp-shadow-cli3 xfreerdp3 xdotool import xdpyinfo
+	[[ -e $lt_config_dir ]] || lt_had_config=0
+	trap local_test_cleanup EXIT
+	if ! display_up; then
+		cmd_display_start xvfb >/dev/null
+		lt_started_lab=1
+	fi
+	Xvfb "$shadow_display" -screen 0 1280x720x24 -nolisten tcp >"$work/shadow-x.log" 2>&1 </dev/null &
+	lt_shadow_x=$!
+	for i in {1..25}; do
+		timeout 2 xdpyinfo -display "$shadow_display" >/dev/null 2>&1 && break
+		sleep 0.2
+	done
+	DISPLAY=$shadow_display freerdp-shadow-cli3 /bind-address:127.0.0.1 "/port:$port" -auth \
+		>"$work/shadow.log" 2>&1 </dev/null &
+	lt_shadow=$!
+	for i in {1..25}; do
+		timeout 1 bash -c "</dev/tcp/127.0.0.1/$port" 2>/dev/null && break
+		sleep 0.2
+	done
+	# The loopback server runs with authentication off, so these names are placeholders.
+	KRB5_CONFIG=/dev/null DISPLAY=$lab_display timeout 10 xfreerdp3 "/v:127.0.0.1:$port" /u:local /p:local \
+		/cert:ignore /sec:tls /size:1280x720 +clipboard >"$work/local-client.log" 2>&1 </dev/null &
+	client=$!
+	for i in {1..40}; do
+		if session_up; then
+			window=yes
+			break
+		fi
+		sleep 0.2
+	done
+	if [[ $window == yes ]]; then shot local-test >/dev/null; fi
+	wait "$client" || rc=$?
+	printf 'FreeRDP window appeared: %s\nclient exit: %s (124 means it stayed connected until the timeout)\n' "$window" "$rc"
+	if [[ $window == yes && $rc == 124 && -s $work/local-test.png ]]; then
+		echo 'local-test PASS'
+	else
+		echo 'local-test FAIL'
+		grep -E 'ERROR' "$work/local-client.log" | head -5 || true
+		exit 1
+	fi
+}
+
+command=$1
+shift
+case $command in
+display-start) cmd_display_start "$@" ;;
+display-stop) cmd_display_stop ;;
+connect) cmd_connect "$@" ;;
+local-test) cmd_local_test ;;
+shot) shot "$1" ;;
+release-modifiers) cmd_release_modifiers ;;
+click)
+	on_lab xdotool mousemove "$1" "$2" click 1
+	sleep 0.5
+	;;
+key)
+	press "$1"
+	sleep 0.5
+	;;
+type) on_lab xdotool type --delay 20 "$1" ;;
+case-check) cmd_case_check "$1" "$2" ;;
+copy-test) cmd_copy_test "$1" "$2" ;;
+paste-test) cmd_paste_test "$@" ;;
+inside-test) cmd_inside_test "$1" "$2" "$3" ;;
+sizes) cmd_sizes "$1" "$2" ;;
+paste-html) cmd_paste_html ;;
+paste-rtf) cmd_paste_rtf ;;
+paste-image) cmd_paste_image ;;
+targets) cmd_targets ;;
+pull) cmd_pull "$1" "$2" ;;
+*) usage >&2 && exit 2 ;;
+esac

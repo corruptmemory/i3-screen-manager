@@ -1,0 +1,27 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>canvas input probe</title>
+<style>html,body{margin:0;background:#222}canvas{display:block}</style>
+<canvas id="c" width="800" height="400" tabindex="0"></canvas>
+<script>
+// Stand-in for an HTML5 RDP client: every pixel on one canvas, nothing else in the DOM,
+// input taken only from listeners on that canvas. Drawing reacts to input, the way a
+// remote frame would, so a screenshot can show that the events arrived.
+const c = document.getElementById("c"), g = c.getContext("2d");
+window.seen = [];
+function paint(x, y, text) {
+  g.fillStyle = "#123"; g.fillRect(0, 0, 800, 400);
+  g.fillStyle = "#fc0"; g.fillRect(x - 15, y - 15, 30, 30);
+  g.fillStyle = "#fff"; g.font = "24px monospace"; g.fillText(text, 20, 40);
+}
+let typed = ""; paint(-99, -99, "ready");
+c.addEventListener("mousedown", e => {
+  c.focus();
+  seen.push({type: e.type, x: e.offsetX, y: e.offsetY, trusted: e.isTrusted});
+  paint(e.offsetX, e.offsetY, "click " + e.offsetX + "," + e.offsetY + " " + typed);
+});
+c.addEventListener("keydown", e => {
+  seen.push({type: e.type, key: e.key, code: e.code, trusted: e.isTrusted});
+  if (e.key.length === 1) { typed += e.key; paint(-99, -99, "typed " + typed); }
+});
+</script>

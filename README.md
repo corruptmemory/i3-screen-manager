@@ -46,11 +46,15 @@ Install additional dependencies for the features being used:
 | CMOS monitoring                | it87-family Vbat sensor                                                                                                |
 | AUR audit                      | `pacman`, `curl` or a local denylist                                                                                   |
 | Mirror ranking                 | Python 3.10+, `vercmp` (pacman), `bsdtar` (libarchive), network access                                                 |
+| RDP test bench (`tools/rdp/`)  | `freerdp`, Xvfb or Xephyr, `xdotool`, ImageMagick, `xclip`, `xdpyinfo`, Node 21+                                       |
 | ArtCraft control               | Python 3.11+, the ArtCraft app packages, `claude` for `register`, `notify-send`                                        |
 
 Quickshell and Polybar are output consumers, not requirements for the display
 CLI. See [package installation guidance](docs/agent-guide/packages.md)
 when choosing how to install a dependency.
+
+For RDP clients, the TSPlus portal, and letting an agent drive a remote session, see
+the [remote desktop guide](docs/agent-guide/remote-desktop.md).
 
 ## Installation
 
