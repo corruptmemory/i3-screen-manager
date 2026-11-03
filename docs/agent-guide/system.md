@@ -32,11 +32,9 @@ when the Intel card is absent; without it X finds no screens in Discrete mode.
 The laptop firmware supports Hybrid and Discrete graphics modes. Changing
 that mode requires a reboot and changes GPU availability and power use.
 For poor external rendering, inspect actual GPU routing, DRM modeset state,
-and frame behavior before adjusting compositor settings. A historical symptom
-does not establish the current driver stack's performance.
+and frame behavior before adjusting compositor settings.
 
-`volumecontrol.sh` forces the Intel Vulkan ICD for pavucontrol. Treat this as
-a hardware-specific wrapper rather than a universal audio requirement.
+`volumecontrol.sh` forces the Intel Vulkan ICD for pavucontrol; it is hardware-specific.
 
 The desktop's Kanto ORA4 (USB) reports a misleading hardware-volume dB scale,
 so under the default ACP path PulseAudio parks a false "base" near 54% and the
@@ -48,19 +46,25 @@ ACP. Software volume orphans the hardware PCM, which then powers up at 0 (silent
 after a reboot, so `ora4-hw-pin` pins that control open by name each login. It
 runs from the desktop session startup under both compositors: Hyprland's
 `autostart.lua` audio block and i3's `.xinitrc-i3` after the PipeWire trio. The
-WirePlumber drop-in is PipeWire config, so it applies under either session
-unchanged. The drop-in is desktop-local, not carried by dotfiles; the pin script
-and its startup lines are.
+drop-in applies under either session and is desktop-local, not carried by
+dotfiles; the pin script and its startup lines are.
 
 ## Login Keyring
 
-A TTY login unlocks the keyring when PAM has `auth optional pam_gnome_keyring.so` and
-`session optional pam_gnome_keyring.so auto_start` (desktop `/etc/pam.d/login`, laptop
-`system-login`, neither in a repo) and the passwords match; `passwd` does not update it. A
-launcher's `--start` must adopt PAM's daemon within 120 seconds. Launcher comments hold the
-reaper rules; dotfiles' `tests/keyring-handoff.sh` checks them. With no syslog, `gkr-pam`
-errors vanish. `pgrep -a gnome-keyring` shows `--login` for PAM's daemon. While locked, `gh`,
-private HTTPS fetches, and Chromium wait on a dialog on that screen: a hang over SSH.
+A TTY login unlocks the `login` keyring, the default on both machines, when `/etc/pam.d/login`
+(in no repo) has `auth optional pam_gnome_keyring.so` and `session optional pam_gnome_keyring.so
+auto_start` and the passwords match; `passwd` does not update it. Keep those lines out of
+`system-login`: `openrc-user` reaches it with no password and starts the daemon, which then
+denies the real password until `--start` initializes it. `gkr-pam` logs that as an invalid
+password, and with no syslog its errors vanish.
+
+A launcher's `--start` must adopt PAM's daemon within 120 seconds. Launcher comments hold the
+reaper rules; dotfiles' `tests/keyring-handoff.sh` checks them and the PAM placement. Check a
+machine with each collection's `Locked` property, as that test does. `--login` in `pgrep -a
+gnome-keyring` means PAM started the daemon, not that it got a password, and a keyring with a
+blank password is a plain-text file (first line `[keyring]`) that never prompts. While locked,
+`gh` (the laptop's uses `hosts.yml`), private HTTPS fetches, and Chromium wait on a dialog on
+that screen: a hang over SSH.
 
 ## CMOS Monitoring
 
@@ -144,7 +148,7 @@ Windows driver; SATA avoids that installation-time dependency. Install Garmin
 Express in Windows and attach the device via USB Host Device or the console's
 USB-redirection control. USB-device passthrough is distinct from PCI/VFIO
 passthrough. Check `virsh list --all`, `net-list --all`, and `pool-list --all`
-for actual host/guest state instead of relying on an old completion checklist.
+for actual host/guest state.
 
 ## Local Dictionary Server
 
@@ -257,19 +261,16 @@ block was edited.
 ## Storage and Disk Reclaim
 
 The desktop root filesystem is a separate, modestly sized btrfs; `/home` and
-`/data` are separate, larger disks, so user builds and downloads under `/home`
-do not pressure the root. When the root nears capacity, inspect live state
-before deleting anything: `df -hT`, `du -xh --max-depth=1 /` (the `-x` keeps
-`du` on the root filesystem rather than descending into other mounts), and on
-btrfs `btrfs filesystem usage /` with `btrfs subvolume list /` to distinguish a
+`/data` are separate, larger disks. When the root nears capacity, inspect live state
+before deleting anything: `df -hT`, `du -xh --max-depth=1 /` (`-x` stays on the
+root filesystem), and on btrfs `btrfs filesystem usage /` with `btrfs subvolume list /` to distinguish a
 genuine data fill from unreclaimed allocation or snapshots. Resolve the actual
 mount layout with `findmnt`; do not assume `/var` is its own partition.
 
 The first and safest reclaim is the pacman package cache under
 `/var/cache/pacman/pkg`: `paccache -rk1` keeps one version of each package and
 `paccache -ruk0` drops the cache for uninstalled packages. These remove only
-re-downloadable files and never touch installed packages; preview with the `-d`
-dry-run flag before removing.
+re-downloadable files; preview with the `-d` dry-run flag before removing.
 
 Two larger consumers commonly sit on the root. The libvirt `default` storage
 pool is `/var/lib/libvirt/images`; a guest qcow2 there is sparse (its apparent
@@ -287,9 +288,8 @@ containerd; stop it explicitly to restore the prior state).
 
 ## System Verification
 
-Use read-only configuration, package, service, device, and connection queries
-first. Verify both the intended state and user-visible behavior after a system
-change. Check absent-sensor output, Tailscale failure/auth paths, and the
+Start with read-only queries. After a system change, verify both the intended
+state and user-visible behavior. Check absent-sensor output, Tailscale failure/auth paths, and the
 actual VM storage and service state when their respective tools change.
 
 [Shared instructions and task index](../../CLAUDE.md#task-guides).
