@@ -26,13 +26,11 @@ is_wayland() {
 # --- Mode introspection (returns "laptop" or "external") ---
 
 current_mode_wayland() {
-    local raw opts isset
+    # The live value decides on every machine. The desktop's config sets no kb_options,
+    # so "not overridden" does not mean the laptop remap is on.
+    local raw
     raw=$(hyprctl getoption input:kb_options)
-    opts=$(echo "$raw" | grep "^str:" | awk '{print $2}')
-    isset=$(echo "$raw" | grep "^set:" | awk '{print $2}')
-    # set: false = no keyword override, config value (ctrl:nocaps = laptop) live.
-    # set: true  = keyword override active; inspect.
-    if [[ "$isset" == "false" ]] || echo "$opts" | grep -q "ctrl:nocaps"; then
+    if [[ "$raw" == *ctrl:nocaps* ]]; then
         echo "laptop"
     else
         echo "external"
@@ -57,8 +55,19 @@ current_mode() {
 
 # --- Mode setters ---
 
-set_laptop_wayland()    { hyprctl keyword input:kb_options "$LAPTOP_OPTS" >/dev/null; }
-set_external_wayland()  { hyprctl keyword input:kb_options "" >/dev/null; }
+# `hyprctl keyword` is gone under Hyprland's Lua config; eval applies it live instead.
+# `hyprctl eval` prints "ok" on success and the error otherwise, for the notification.
+set_kb_options_wayland() {
+    local out
+    out=$(hyprctl eval "hl.config({ input = { kb_options = \"$1\" } })" 2>&1) || true
+    [[ "$out" == ok ]] && return 0
+    echo "i3-keyboard-rofi: $out" >&2
+    command -v notify-send >/dev/null &&
+        notify-send -u critical "Keyboard" "Could not set keyboard options: $out"
+    return 1
+}
+set_laptop_wayland()    { set_kb_options_wayland "$LAPTOP_OPTS"; }
+set_external_wayland()  { set_kb_options_wayland ""; }
 
 # `setxkbmap -option` (no value) clears all previously-set options; then a
 # second invocation applies the new option set in one shot.
