@@ -34,8 +34,9 @@ both machines share, so any network numbered that way gets the exception; choose
 where `sudo` prompts. `i3-net-profile-rofi` is the menu, and choosing the
 active profile re-applies it. The Polybar `net-profile` module shows a shield and the
 profile, and a click opens the menu. Red means UFW is off or credentials were left in
-RAM. Yellow names another problem, or shows `?` when the helper is missing. The
-Quickshell bar has no widget, so under Hyprland run the menu directly.
+RAM. Yellow names another problem, or shows `?` when the helper is missing. Dotfiles'
+Quickshell `NetProfile` widget shows the same states from `status`, with white on red
+for the two red ones, and refreshes as soon as the menu closes.
 
 ## Credentials
 

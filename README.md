@@ -185,8 +185,8 @@ extended, all on external in clamshell, and all internal when undocked.
 Hyprland hooks and persistent workspace rules in dotfiles complete this behavior.
 See [display constraints and verification](docs/agent-guide/displays.md).
 
-The keyboard and lid helpers still contain legacy Hyprland keyword calls;
-their Lua-mode support is incomplete. Use `hyprctl-live` for queries from
+The lid helpers (`laptop-monitor.sh`, `hyprland-clamshell-restore`) still call
+`hyprctl keyword`, which Hyprland's Lua config refuses. Use `hyprctl-live` for queries from
 shells that outlived a compositor restart. See the [Hyprland guide](docs/agent-guide/hyprland.md)
 and [input guide](docs/agent-guide/x11-input.md).
 
@@ -204,7 +204,7 @@ The configured Hyprland bindings include:
 | `Super+Shift+N`        | Tailscale menu on the laptop                        |
 | `Print`                | Flameshot                                           |
 | `Super+Print`          | Region capture and annotation, with tensaku enabled |
-| `Super+Shift+W`        | Quickshell restart                                  |
+| `Super+Shift+P`        | Quickshell restart                                  |
 
 The authoritative bindings and machine gates are in
 `dotfiles/.config/hypr/bindings.lua`. X11 bindings belong to their WM configs.

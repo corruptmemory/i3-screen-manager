@@ -48,6 +48,11 @@ a trial focus dispatch: empty-direction focus can select an off-axis window.
 `binds.window_direction_monitor_fallback=false` confines directional focus to
 the monitor. Cross-group vertical focus is on `Super+Ctrl+arrows`.
 
+A chord i3 also binds does the same job here, and `tests/test_bindings.lua` holds
+the list. The exceptions have no direct equivalent: `Super+F` maximizes and
+`Super+Shift+F` fullscreens, and the `Super+-` scratchpad is a special workspace
+that shows all its windows at once, tiled.
+
 Use Lua callbacks for short compositor-event logic that reads live compositor
 state. Keep blocking waits, external tool orchestration, and cross-session
 logic in scripts. Chat layout waits must not block a Lua event callback.
@@ -64,7 +69,8 @@ Keep `//@ pragma UseQApplication` in the shell root for tray platform menus.
 Tray left-click uses `activate`, middle-click `secondaryActivate`, and
 right-click `display(window, x, y)`; menu-only items also open on left-click.
 Use `qs list` to inspect instances and `qs kill` followed by
-`qs -p ~/.config/quickshell` for a deliberate restart. Broad `pkill -f`
+`qs -p ~/.config/quickshell` (`Super+Shift+P`) to restart; QML edits need this,
+because the running bar did not pick them up by itself. Broad `pkill -f`
 patterns can match the invoking shell or fail to match Quickshell's re-exec.
 
 Window titles are filtered per monitor. `Hyprland.refreshToplevels()` runs
@@ -72,6 +78,13 @@ every three seconds so windows predating bar startup and moved workspaces
 have fresh associations. Workspace urgency uses `HyprlandWorkspace.urgent`;
 focused appearance takes priority. Inspect both landscape and portrait bars
 when changing widget widths or pools.
+
+`Pulseaudio.qml` holds an `AudioControl` each for speaker and mic, matching
+Polybar: scroll changes volume on whole wheel notches, left-click mutes, right-click
+opens pavucontrol, and middle-click on the mic switches input. It polls `wpctl` every
+two seconds and rereads right after an action. `Submap.qml` shows the active submap on
+every bar from the `submap` raw event, because every other bind is dead inside one.
+`NetProfile.qml` is covered in [Network profiles](network-profiles.md).
 
 Weather reads machine-local `~/.config/quickshell/weather-location.json`
 (`name`, `lat`, `lon`) at startup, falling back to its configured coordinates.

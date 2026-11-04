@@ -28,9 +28,11 @@ a single-screen nested X server cannot verify physical multi-monitor layout.
 
 `i3-keyboard-rofi` toggles `ctrl:nocaps,shift:both_capslock_cancel` versus no
 keyboard options. X11 clears options through `setxkbmap -option` before
-applying the chosen set. Its Wayland branch still uses legacy `hyprctl
-getoption`/`keyword` and needs Lua-mode work; do not describe that branch as
-fully compatible with the current config.
+applying the chosen set. Its Wayland branch reads the live value with `hyprctl
+getoption` and applies a choice with `hyprctl eval 'hl.config(...)'`, because
+`hyprctl keyword` is gone under the Lua config. A failure raises a critical
+notification. A config reload restores the configured options, so the choice lasts
+only until then.
 
 Mouse DPI uses solaar at the HID level on either backend. `i3-mouse-setup`
 defaults to 1200 and restores the saved value; the menu offers 800-2000.
@@ -46,17 +48,24 @@ reports failures on stderr and through `notify-send` when available. Put
 dependency checks before pipelines whose failure could make a menu disappear.
 
 The dotfiles emoji picker uses wl-copy on Wayland and xclip on X11; rofi's
-selection and the clipboard tool both need to be present. `Super+period` is
-the Hyprland emoji binding; its float toggle occupies `Super+Ctrl+Space`.
-Check keysyms case-insensitively when looking for duplicate Hyprland binds.
+selection and the clipboard tool both need to be present. `Super+Ctrl+Space` is
+the emoji binding in i3 and Hyprland. Check keysyms case-insensitively when
+looking for duplicate Hyprland binds.
 
 Bitwarden lookup is provided by external `rbw`/`rofi-rbw`. Hyprland launches
 `rofi-rbw --typer ydotool`; `ydotoold` must be running with `/dev/uinput`
 access and a matching runtime socket. Check the actual user ACL before adding
-device rules. X11 uses xdotool with a plain rofi-rbw binding. Keep typing tests
-to non-secret sample text. An unavailable clipboard owner can block X11 paste;
-inspect the configured clipboard manager and the owning app before blaming
-the consumer.
+device rules. X11 uses xdotool with a plain rofi-rbw binding. `Super+Alt+V` types
+the clipboard, with `wl-paste` and `ydotool` under Hyprland and the desktop's
+machine-local `xdtpaste.sh` under i3. Keep typing tests to non-secret sample text.
+
+An unavailable clipboard owner can block X11 paste; inspect the configured clipboard
+manager and the owning app before blaming the consumer. i3 runs `copyq`. Hyprland
+autostart runs `wl-clip-persist --clipboard regular` from the Artix repos, because
+Wayland drops a selection when its source app exits. To check it, copy with `wl-copy
+--foreground`, kill that, and run `wl-paste`; without the daemon it reports nothing
+copied. Emacs is a GTK build, so under Hyprland it reaches the clipboard through
+XWayland.
 
 ## Keybase Popup and Application Identity
 
