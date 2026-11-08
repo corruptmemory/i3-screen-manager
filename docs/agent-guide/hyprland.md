@@ -62,8 +62,9 @@ logic in scripts. Chat layout waits must not block a Lua event callback.
 `shell.qml` creates one top bar per screen. Portrait screens use compact
 content; the system widget cluster belongs on landscape bars, and a `Loader`
 builds it only there, because hidden widgets would still run their polls. State
-that several bars show, with one IPC target, lives in a root `pragma Singleton`
-file such as `NetProfileState.qml` or `DndState.qml`. `Theme.qml`
+that several bars show lives in a root `pragma Singleton` file, so it is read,
+and acted on, once: `NetProfileState.qml` and `DndState.qml`, each also one IPC
+target, and `Connectivity.qml`, which sends one notification. `Theme.qml`
 owns typography and colors. Keep the existing square, opaque, restrained
 styling and immediate interactions. `Popout.qml` supplies anchoring, screen
 clamping, and click-outside dismissal through `HyprlandFocusGrab`.
@@ -96,7 +97,8 @@ bell-off glyph only while mako's `do-not-disturb` mode is on. A click or
 and on `qs ipc call dnd refresh`. Mako still shows critical notifications in that
 mode. `Submap.qml` shows the active submap on
 every bar from the `submap` raw event, because every other bind is dead inside one.
-`NetProfile.qml` is covered in [Network profiles](network-profiles.md).
+`NetProfile.qml`, and `Network.qml` with its `Connectivity.qml` singleton, are covered
+in [Network profiles](network-profiles.md#captive-portals).
 
 Weather reads machine-local `~/.config/quickshell/weather-location.json`
 (`name`, `lat`, `lon`) at startup, falling back to its configured coordinates.

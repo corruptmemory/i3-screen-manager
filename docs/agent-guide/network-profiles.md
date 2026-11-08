@@ -1,8 +1,10 @@
 # Network Profiles
 
-Read this guide for the firewall, VPNs, client network profiles, or their
-credentials. Sources: `i3-net-profile`, `i3-net-profile-rofi`, and dotfiles'
-`etc/net-profile/`, `etc/init.d/zerotier-one`, `etc/sudoers.d/90-net-profile`.
+Read this guide for the firewall, VPNs, client network profiles, their credentials,
+or captive-portal sign-in. Sources: `i3-net-profile`, `i3-net-profile-rofi`,
+`captive-portal`, and dotfiles' `etc/net-profile/`, `etc/init.d/zerotier-one`,
+`etc/sudoers.d/90-net-profile`, `etc/NetworkManager/conf.d/`,
+`.config/quickshell/Connectivity.qml`, `.config/quickshell/Widgets/Network.qml`.
 
 ## Behavior
 
@@ -138,5 +140,78 @@ After a reboot, `i3-net-profile status` must report the chosen profile as `ok`, 
 `vpn-down` for a VPN profile until it is chosen again. `sudo ufw status` must show its rules,
 `rc-status` must show `ufw` and `clamd` started, and port 22 must follow the profile when
 probed from the other machine. No VPN daemon and no `/run/net-profile` may remain.
+
+## Captive Portals
+
+Only the laptop runs NetworkManager; the desktop runs netifrc, so this section applies to
+`nomad-artix` alone.
+
+NetworkManager detects a portal by fetching its check URL: a reply other than the expected
+one means Portal. Dotfiles' `etc/NetworkManager/conf.d/90-connectivity.conf` points the check
+at Omarchy's `http://ping.omacom.io/nm-check.txt`, which answers 204 with
+`X-NetworkManager-Status: online`, in place of Arch's `ping.archlinux.org` from
+`/usr/lib/NetworkManager/conf.d/20-connectivity.conf`. The URL must stay plain HTTP on a host
+that is not HSTS-preloaded, or a browser upgrades it to HTTPS and the portal cannot intercept
+it; archlinux.org is preloaded. On a working network the endpoint redirects a browser to
+omarchy.org. `90-wifi-powersave.conf` turns Wi-Fi power save off when a Wi-Fi connection
+activates. Whether NetworkManager applies it under this laptop's `wifi.backend=iwd` is
+unconfirmed; iwlwifi already leaves power save off.
+
+Dotfiles' `.config/quickshell/Connectivity.qml` reads NetworkManager's state through
+Quickshell's `Networking`. It is a singleton, so every bar shares one re-check and one
+notification. Without NetworkManager its backend is `None`, and the `Network` widget shows only
+the link, as on the desktop. On the laptop `Widgets/Network.qml` turns white on red with
+`sign in` for Portal, where a click runs `captive-portal`, and yellow for Limited. While either
+holds, the singleton asks NetworkManager to re-check every 10 seconds instead of its own 300.
+Entering Portal sends one notification whose default action, a click in mako, runs
+`captive-portal`; it expires after mako's 5 seconds like any other. Nothing opens without a
+click, and only the fixed check URL is opened, never a `Location` the portal supplies.
+
+`captive-portal [URL]` opens the check URL, which the portal intercepts to show its sign-in
+page; the URL argument, `http` or `https` only, is for testing. A flock at
+`$XDG_RUNTIME_DIR/captive-portal.lock` keeps one run waiting, and a second run focuses that
+run's window by the PID in `captive-portal.pid`, then exits. The script starts Brave Origin as
+its own process with the profile `~/.local/state/captive-portal/brave`, so Jim's extensions,
+Secure DNS, and cookies never meet a portal page, and the portal's cookies persist for the next
+sign-in. Like Jim's other Brave it has WebMCP and a CDP port, `127.0.0.1:9223` because the main
+Brave holds 9222, open only while the window is. Behind a real portal no agent can be reached,
+so each run also leaves `last-run.log` beside the profile, recording the connectivity results as
+they change, each page the window visits (read from that CDP port), and how the run ended, and
+`brave.log` with the browser's output; the next run replaces both. A new Origin profile ignores
+`--app` and shows Origin's free-tier splash, so before each launch the script sets
+`brave.origin.free_tier_accepted` to `true` in the profile's `Local State`, the choice Jim's
+main profile records. It sets only that key and copies nothing from the main profile: the portal
+profile never signs in or uses one of the Origin purchase's device activations.
+
+Brave names an `--app` window after its URL; for the check URL the class is
+`brave-ping.omacom.io__nm-check.txt-Default`, which dotfiles' `captive-portal` window rule floats
+centered at 900x760. The script waits for `nmcli networking connectivity check`, read in the C
+locale, to print `full`: every 2 seconds for 5 minutes, then every 15. polkit allows that
+re-check only from an active local session; elsewhere, as over SSH, the script reads
+NetworkManager's last result instead. Once online it closes the window
+through Hyprland's `pid:` selector, falls back to SIGTERM and then SIGKILL, and notifies
+`Online`. Closing the window first ends the wait silently; a browser that exits before Hyprland
+lists its window raises a critical notification. Outside Hyprland the close is a SIGTERM.
+Omarchy's pause of a Tailscale exit node is not ported, because tailscaled doesn't run on the
+laptop. The script and both config files are adapted from Omarchy 4.5 and carry its MIT
+license in full.
+
+To set up the laptop, from dotfiles' `etc/` directory:
+
+```sh
+sudo install -m644 -o root -g root NetworkManager/conf.d/90-*.conf /etc/NetworkManager/conf.d/
+sudo nmcli general reload conf
+busctl get-property org.freedesktop.NetworkManager /org/freedesktop/NetworkManager \
+    org.freedesktop.NetworkManager ConnectivityCheckUri    # the omacom URL
+ln -sfn ~/projects/i3-screen-manager/captive-portal ~/.local/bin/captive-portal
+```
+
+To rehearse a portal, set `uri=http://neverssl.com/` and `response=NetworkManager is online`
+in the installed `90-connectivity.conf` and reload: a plain-HTTP page whose body doesn't match
+reads as Portal. `nmcli networking connectivity check` must print `portal`, the bar must turn
+red and send one notification, and its window must float at 900x760. Reinstall the staged file
+and reload: the check must print `full` again, and a waiting `captive-portal` must close its
+window and notify. A real portal, including whether Brave's automatic HTTPS upgrade still falls
+back to the plain-HTTP URL there, can only be checked in the field.
 
 [Shared instructions and task index](../../CLAUDE.md#task-guides).
