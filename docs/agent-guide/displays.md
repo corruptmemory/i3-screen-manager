@@ -35,7 +35,9 @@ Wayland uses `hl.monitor({...})` through the script's `hl_apply` helper and
 `hyprctl-live dispatch`. The helper suppresses dispatcher errors because the
 monitor-setting call can apply its side effect before the wrapper complains;
 its exit status alone does not prove success. Workspace moves use
-`hl.dsp.workspace.move({ workspace = ..., monitor = ... })`.
+`hl.dsp.workspace.move({ workspace = ..., monitor = ... })`. After a layout
+change it restarts a running `swaybg` with the same arguments through
+`hl.dsp.exec_cmd`, so Hyprland owns it whichever shell ran the command.
 
 Default scales are 1.25 internal and 1.0 external. The picker offers 0.75, 1.00,
 1.25, 1.50, 1.75, and 2.00. The default target is the focused Wayland output,
@@ -63,6 +65,10 @@ modes rather than a negotiated common resolution.
 - Clamshell uses an `elogind-inhibit` background process with PID recorded in
   `/tmp/i3-screen-manager-inhibit.pid`. It inhibits lid-triggered suspend on
   both backends. Extend, mirror, and disconnect stop that inhibitor.
+- Clamshell takes that lock before changing the layout, and counts it only once
+  `elogind-inhibit --list` shows it. polkit grants it only to the seat's active
+  session, so from an SSH or Rex shell clamshell changes nothing and exits 1
+  with a critical notification. A layout change that aborts releases the lock.
 
 ## Workspace Contract
 

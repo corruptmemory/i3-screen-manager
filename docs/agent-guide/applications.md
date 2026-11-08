@@ -108,7 +108,10 @@ same keyring daemon carries on into the next login. At boot the tty login's PAM 
 starts the keyring daemon and unlocks it. On the laptop, the session's `pam_openrc` starts
 the PipeWire user services at boot, before anyone logs in, and audio works as before.
 The server has no `DISPLAY`, so give commands that need the screen
-`DISPLAY=:0 XAUTHORITY=$HOME/.Xauthority`.
+`DISPLAY=:0 XAUTHORITY=$HOME/.Xauthority`. Its session is not the seat's active one, so
+polkit refuses it the seat's locks, such as the lid-switch lock, and a process a Rex command
+leaves in the background ends with that command. Start either kind under Hyprland with
+`hyprctl-live dispatch 'hl.dsp.exec_cmd("...")'`.
 
 `rex-link LABEL SSH_DESTINATION` forwards another machine's server socket over SSH,
 registers LABEL as a host, and checks that `rex -S LABEL` answers; `--stop LABEL` and
