@@ -83,14 +83,23 @@ reaches `pam_elogind` through `system-remote-login`) and starts `rex server run
 --exit-empty` as `jim` inside it. elogind counts that session, so a tty logout keeps
 `/run/user/1000` and the server's socket, and plain `rex` reaches the server at the usual
 path. A session started this way ran through a full logout and login with no gap. The
-server stops about 10 seconds after its last session ends.
+server stops about 10 seconds after its last session ends, so the script's `start_post`
+keeps it always on: unless one exists, it opens an idle `home` session (a fish shell)
+through the login server. Restarting the service leaves the server and `home` running.
+Starting at boot is untested until the next reboot.
 
-A server started any other way, by a plain `rex` command or `rex server start`, has no
-login session of its own. A logout deletes its socket and leaves it running, unreachable,
-with its saved sessions locked against the next server. Start work that must outlive a
-logout through the login server: `sudo rex -S unix:///run/rex/login-server.sock new LABEL
--- COMMAND`. Known gap: dotfiles' i3 and Hyprland autostarts still run `rex server start`,
-which makes such an unprotected server when none is running.
+Plain `rex`, the agent skill, and `rex-link` reach that server at the usual path, and the
+session autostarts start no Rex server. A server started any other way, such as by a plain
+`rex` command after `home` was closed, has no login session of its own: a logout deletes
+its socket and leaves it running, unreachable, with its saved sessions locked against the
+next server. Restart the service to bring `home` back.
+
+Always on has costs. The `rex` login session holds `/run/user/1000`, so a logout no longer
+clears it: the keyring stays unlocked, keys loaded in the SSH agent stay loaded, and the
+same keyring daemon carries on into the next login. On the laptop, the session's
+`pam_openrc` would start the PipeWire user services at boot, before anyone logs in
+(untested). The server has no `DISPLAY`, so give commands that need the screen
+`DISPLAY=:0 XAUTHORITY=$HOME/.Xauthority`.
 
 `rex-link LABEL SSH_DESTINATION` forwards another machine's server socket over SSH,
 registers LABEL as a host, and checks that `rex -S LABEL` answers; `--stop LABEL` and
@@ -106,9 +115,10 @@ the untracked `~/.claude/settings.json` and in `~/.codex/hooks.json`. Outside Re
 prints nothing and starts no server. Codex runs its hook only after `/hooks` approves it.
 
 The laptop has all of this. The desktop has an older tarball Rex in `/usr/local/bin` and
-none of the setup: install the key, repo, package, login server, and accounts file from
-dotfiles `etc/` as their headers say, delete `/usr/local/bin/rex` (it shadows
-`/usr/bin/rex`), run `rex terminfo setup` and `rex skill setup`, and pull dotfiles. Then,
+none of the setup: pull dotfiles, install the key, repo, package, login server, and
+accounts file from dotfiles `etc/` as their headers say, delete `/usr/local/bin/rex` (it
+shadows `/usr/bin/rex`), start the service, and run `rex terminfo setup` and
+`rex skill setup`. Then,
 from the laptop, run `rex-link desktop jim@192.168.1.19` and `rex -S desktop ls`.
 
 `rex-link self jim@localhost` tests the forward without a second machine: create a
