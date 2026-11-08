@@ -16,6 +16,12 @@ application ID with `--class` for Wayland rules and the configured
 `--x11-instance-name` for X11 rules. Inspect user `.desktop` overrides when
 single-instance or D-Bus activation changes window placement.
 
+Fish's config sets no `TERM`, so each terminal's own `TERM` reaches its shell. Ghostty's
+`ssh-env` shell-integration feature makes `ssh` from a Ghostty shell send `xterm-256color`,
+because most remote hosts, node-0 among them, lack `xterm-ghostty`. `ssh-terminfo`, which
+would install the entry on each remote host, stays off. kitty has no such wrapper set up,
+so its `ssh` sends `xterm-kitty`.
+
 Brave Origin's profile directories are machine-local. `machine.lua` supplies
 the alternate-profile directory to Hyprland launchers; do not assume identical
 `Profile N` slots across hosts. Browser/PWA flags are determined by the first
@@ -114,8 +120,9 @@ a shell as the account. Admit callers only through SSH or Tailscale identity.
 guard at the top of the machine-local `~/.ssh/config`. Outside a Rex terminal the guard
 changes nothing; `ssh -G` resolved the usual hosts identically before and after.
 `ssh` runs the guard's `Match exec` through `$SHELL -c`, so a shell startup file that sets
-`TERM` defeats it, and a server whose `SHELL` is that shell gives its terminals
-`xterm-256color`. `rex terminfo status` run with the server's `SHELL` shows the decision.
+`TERM` defeats it (one reason fish's config sets none), and a server whose `SHELL` is that
+shell gives its terminals `xterm-256color`. `rex terminfo status` run with the server's
+`SHELL` shows the decision.
 `rex skill setup` adds the `rex` skill, tracked in `~/.claude`, and a SessionStart hook in
 the untracked `~/.claude/settings.json` and in `~/.codex/hooks.json`. Outside Rex the hook
 prints nothing and starts no server. Codex runs its hook only after `/hooks` approves it.
@@ -124,8 +131,9 @@ The laptop has all of this. The desktop has an older tarball Rex in `/usr/local/
 none of the setup: pull dotfiles, install the key, repo, package, login server, and
 accounts file from dotfiles `etc/` as their headers say, delete `/usr/local/bin/rex` (it
 shadows `/usr/bin/rex`), start the service, and run `rex terminfo setup` and
-`rex skill setup`. Then,
-from the laptop, run `rex-link desktop jim@192.168.1.19` and `rex -S desktop ls`.
+`rex skill setup`. If `readlink -f ~/.config/fish/config.fish` there is not the dotfiles
+copy, delete its `set -xg TERM` line by hand. Then, from the laptop, run
+`rex-link desktop jim@192.168.1.19` and `rex -S desktop ls`.
 
 `rex-link self jim@localhost` tests the forward without a second machine: create a
 session through `-S self`, check that `rex run --wait` returns the command's status, then
