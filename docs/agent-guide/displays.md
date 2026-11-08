@@ -160,7 +160,8 @@ insufficient.
 
 With the relevant session and an external monitor available, check all four
 extend directions, mirror, clamshell, the closed-lid disconnect refusal,
-open-lid restoration, focused and explicit-output scaling, and status output.
+where the panel returns after a lid close and open, focused and
+explicit-output scaling, and status output.
 Check transitions from clamshell as well as from a normal extended layout.
 Inspect monitor state and visible output after every operation. On Hyprland,
 also check config reload, including while clamshelled, physical
