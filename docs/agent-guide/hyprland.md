@@ -60,7 +60,10 @@ logic in scripts. Chat layout waits must not block a Lua event callback.
 ## Bar Contracts
 
 `shell.qml` creates one top bar per screen. Portrait screens use compact
-content; the system widget cluster belongs on landscape bars. `Theme.qml`
+content; the system widget cluster belongs on landscape bars, and a `Loader`
+builds it only there, because hidden widgets would still run their polls. State
+that several bars show, with one IPC target, lives in a root `pragma Singleton`
+file such as `NetProfileState.qml` or `DndState.qml`. `Theme.qml`
 owns typography and colors. Keep the existing square, opaque, restrained
 styling and immediate interactions. `Popout.qml` supplies anchoring, screen
 clamping, and click-outside dismissal through `HyprlandFocusGrab`.
@@ -73,16 +76,25 @@ Use `qs list` to inspect instances and `qs kill` followed by
 because the running bar did not pick them up by itself. Broad `pkill -f`
 patterns can match the invoking shell or fail to match Quickshell's re-exec.
 
-Window titles are filtered per monitor. `Hyprland.refreshToplevels()` runs
-every three seconds so windows predating bar startup and moved workspaces
-have fresh associations. Workspace urgency uses `HyprlandWorkspace.urgent`;
+Window titles are filtered per monitor. At startup, and after each Hyprland raw
+event that opens, closes or moves windows, or changes workspaces, monitors or
+fullscreen, `shell.qml` refreshes monitors, workspaces and toplevels, coalescing a
+burst over 50 ms. Windows that predate the bar and moved workspaces therefore get
+fresh associations. Workspace urgency uses `HyprlandWorkspace.urgent`;
 focused appearance takes priority. Inspect both landscape and portrait bars
 when changing widget widths or pools.
 
 `Pulseaudio.qml` holds an `AudioControl` each for speaker and mic, matching
 Polybar: scroll changes volume on whole wheel notches, left-click mutes, right-click
-opens pavucontrol, and middle-click on the mic switches input. It polls `wpctl` every
-two seconds and rereads right after an action. `Submap.qml` shows the active submap on
+opens pavucontrol, and middle-click on the mic switches input. Actions run `wpctl`.
+Volume and mute come from Quickshell's PipeWire service as they change, matching
+`wpctl get-volume`'s scale. A virtual default device has no typed audio there, so
+while one is a default the widget polls `wpctl` every two seconds instead. The mic
+turns `Theme.accent` while an unmuted capture stream exists. `Dnd.qml` shows a
+bell-off glyph only while mako's `do-not-disturb` mode is on. A click or
+`Super+Ctrl+Alt+Comma` toggles it, and `DndState` rereads `makoctl mode` at start
+and on `qs ipc call dnd refresh`. Mako still shows critical notifications in that
+mode. `Submap.qml` shows the active submap on
 every bar from the `submap` raw event, because every other bind is dead inside one.
 `NetProfile.qml` is covered in [Network profiles](network-profiles.md).
 
