@@ -36,6 +36,18 @@ address, keyring and SSH-agent environment, GPU settings, and then execute
 compositor. Desktop autostart launches audio; laptop OpenRC user services own
 audio and must not be duplicated by compositor autostart.
 
+Programs that D-Bus starts, including whatever `xdg-desktop-portal` opens for a
+browser link, get D-Bus's activation environment, not their caller's. So
+`autostart.lua` passes `DISPLAY` with `WAYLAND_DISPLAY` to it on both machines;
+without `DISPLAY`, an XWayland app started that way runs headless
+([ScreenConnect](applications.md#screenconnect) was the case that showed it). A
+program started this way carries `GIO_LAUNCHED_DESKTOP_FILE` and
+`PARENT_WINDOW_ID`. The laptop's autostart launches the portal after two seconds,
+but a D-Bus request usually starts it first, so the D-Bus environment is the one
+that counts. To fix a running session, run
+`dbus-update-activation-environment DISPLAY=:0`, then end
+`/usr/lib/xdg-desktop-portal`; D-Bus starts it again on the next request.
+
 Use Lua-mode `hl.dsp.*` dispatchers, `hl.monitor`, and `hl.config` in this
 configuration. Legacy `hyprctl keyword` and bareword dispatcher strings do not
 provide the same interface. Prefer current code and installed API definitions
