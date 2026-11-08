@@ -159,8 +159,10 @@ unconfirmed; iwlwifi already leaves power save off.
 
 Dotfiles' `.config/quickshell/Connectivity.qml` reads NetworkManager's state through
 Quickshell's `Networking`. It is a singleton, so every bar shares one re-check and one
-notification. Without NetworkManager its backend is `None`, and the `Network` widget shows only
-the link, as on the desktop. On the laptop `Widgets/Network.qml` turns white on red with
+notification. It looks for `/run/NetworkManager` once at bar start and touches `Networking`
+only when that exists, because the first use without NetworkManager logs an ERROR ("Could not
+find an available backend"). Without it, as on the desktop, the `Network` widget shows only the
+link. On the laptop `Widgets/Network.qml` turns white on red with
 `sign in` for Portal, where a click runs `captive-portal`, and yellow for Limited. While either
 holds, the singleton asks NetworkManager to re-check every 10 seconds instead of its own 300.
 Entering Portal sends one notification whose default action, a click in mako, runs
