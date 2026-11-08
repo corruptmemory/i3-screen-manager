@@ -79,12 +79,21 @@ Quickshell's `shell.qml` pools. Persistent workspace rules instantiate 1-10;
 The command succeeds silently without an external and rejects X11 sessions.
 It moves workspaces; it is not an output-enabling command.
 
+## Lid Helpers
+
+Dotfiles' `bindings.lua` runs `laptop-monitor.sh close` and `open` from the lid
+switch. While any monitor other than `eDP-1` is active, close disables `eDP-1`
+and cuts it with `wlr-randr`, and open re-enables it at `auto` position and scale
+1.25. With no external active they do nothing, and open does nothing while the
+clamshell inhibitor runs. `autostart.lua`'s `config.reloaded` hook runs
+`hyprland-clamshell-restore`, which disables `eDP-1` again after a reload while
+that inhibitor runs. Both set the panel with `hyprctl-live eval
+'hl.monitor({...})'` and raise a critical notification when it fails.
+
 ## Known Limitations
 
-`laptop-monitor.sh` and `hyprland-clamshell-restore` still contain legacy
-`hyprctl keyword` calls and use bare `hyprctl`. Their output-off paths also
-call `wlr-randr`, but lid-open restoration is not fully ported to Lua mode.
-The reload helper is wired through `config.reloaded`; the X11 lid script has
+Lid open always re-applies `eDP-1` at `auto` while an external is active, even if
+the panel is already on, so it can move the panel. The X11 lid script has
 no automatic acpid wiring supplied by this repo.
 
 Extend reads internal geometry before re-enabling the internal monitor;

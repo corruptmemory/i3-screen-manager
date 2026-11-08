@@ -1,23 +1,30 @@
 #!/usr/bin/env bash
 #
-# hyprland-clamshell-restore — re-apply clamshell display state after config reload
+# hyprland-clamshell-restore: turn the laptop panel back off after a config reload while
+# clamshell mode (i3-screen-manager clamshell) is on. A reload reapplies dotfiles'
+# monitors.lua, which turns eDP-1 on. dotfiles' .config/hypr/autostart.lua runs this from
+# its config.reloaded hook; without the clamshell inhibitor it does nothing.
 #
-# Hyprland re-enables all monitors when it reloads its config (any `hyprctl reload`
-# or config file save). If clamshell mode was active, eDP-1 comes back uninvited.
-# This script is called via `exec` (not exec-once) in hyprland.conf so it runs on
-# every reload and puts the lid screen back off if clamshell is still in effect.
-#
-# Wire up in hyprland.conf:
-#   exec = ~/.local/bin/hyprland-clamshell-restore
+# Hyprland's Lua config refuses `hyprctl keyword`, so the panel is set with
+# `hyprctl eval 'hl.monitor({...})'`, whose errors are reported. hyprctl-live finds the
+# running Hyprland from any shell. See docs/agent-guide/displays.md.
+set -uo pipefail
 
-PIDFILE="/tmp/i3-screen-manager-inhibit.pid"
+INTERNAL=eDP-1
+PIDFILE=/tmp/i3-screen-manager-inhibit.pid
 
-# Exit immediately if clamshell inhibitor isn't running
-[[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null || exit 0
+[[ -f $PIDFILE ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null || exit 0
 
-# Give Hyprland a moment to finish applying its config before we override it
+# Let the reload finish applying the config before overriding it.
 sleep 1
 
-hyprctl keyword monitor "eDP-1,disable"
+out=$(hyprctl-live eval "hl.monitor({ output = \"$INTERNAL\", disabled = true })" 2>&1) || true
+if [[ $out != ok ]]; then
+    echo "hyprland-clamshell-restore: $out" >&2
+    command -v notify-send >/dev/null &&
+        notify-send -u critical "Clamshell" "Could not turn $INTERNAL off after a config reload: $out"
+    exit 1
+fi
 sleep 0.2
-wlr-randr --output eDP-1 --off 2>/dev/null || true
+# The compositor's disable can leave the panel lit; cut the output too.
+wlr-randr --output "$INTERNAL" --off 2>/dev/null || true

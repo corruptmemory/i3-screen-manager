@@ -188,10 +188,9 @@ extended, all on external in clamshell, and all internal when undocked.
 Hyprland hooks and persistent workspace rules in dotfiles complete this behavior.
 See [display constraints and verification](docs/agent-guide/displays.md).
 
-The lid helpers (`laptop-monitor.sh`, `hyprland-clamshell-restore`) still call
-`hyprctl keyword`, which Hyprland's Lua config refuses. Use `hyprctl-live` for queries from
-shells that outlived a compositor restart. See the [Hyprland guide](docs/agent-guide/hyprland.md)
-and [input guide](docs/agent-guide/x11-input.md).
+Use `hyprctl-live` for queries from shells that outlived a compositor restart.
+See the [Hyprland guide](docs/agent-guide/hyprland.md) and
+[input guide](docs/agent-guide/x11-input.md).
 
 ## Common Bindings
 

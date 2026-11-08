@@ -31,8 +31,8 @@ over examples for another Hyprland version.
 `hyprctl-live` resolves a signature via `hyprctl instances -j` on each call;
 it picks the first discovered instance. This avoids stale
 `HYPRLAND_INSTANCE_SIGNATURE` values in long-lived shells. The display CLI
-wraps all its Hyprland calls through it. DPMS, screenshot, keyboard, and lid
-helpers still use bare `hyprctl` and expect a current session environment.
+wraps all its Hyprland calls through it, as do the lid helpers. DPMS, screenshot,
+and keyboard helpers still use bare `hyprctl` and expect a current session environment.
 
 ## Focus and Groups
 
