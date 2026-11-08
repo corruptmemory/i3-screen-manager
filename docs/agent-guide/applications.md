@@ -86,7 +86,9 @@ path. A session started this way ran through a full logout and login with no gap
 server stops about 10 seconds after its last session ends, so the script's `start_post`
 keeps it always on: unless one exists, it opens an idle `home` session (a fish shell)
 through the login server. Restarting the service leaves the server and `home` running.
-Starting at boot is untested until the next reboot.
+At boot the service starts before any login. The server restores `home` from its saved
+state with a fresh shell, so `start_post` finds it and opens nothing. The log's "PAM
+credentials not established" warning is expected: the policy's auth section is `pam_deny`.
 
 Plain `rex`, the agent skill, and `rex-link` reach that server at the usual path, and the
 session autostarts start no Rex server. A server started any other way, such as by a plain
@@ -96,9 +98,10 @@ next server. Restart the service to bring `home` back.
 
 Always on has costs. The `rex` login session holds `/run/user/1000`, so a logout no longer
 clears it: the keyring stays unlocked, keys loaded in the SSH agent stay loaded, and the
-same keyring daemon carries on into the next login. On the laptop, the session's
-`pam_openrc` would start the PipeWire user services at boot, before anyone logs in
-(untested). The server has no `DISPLAY`, so give commands that need the screen
+same keyring daemon carries on into the next login. At boot the tty login's PAM still
+starts the keyring daemon and unlocks it. On the laptop, the session's `pam_openrc` starts
+the PipeWire user services at boot, before anyone logs in, and audio works as before.
+The server has no `DISPLAY`, so give commands that need the screen
 `DISPLAY=:0 XAUTHORITY=$HOME/.Xauthority`.
 
 `rex-link LABEL SSH_DESTINATION` forwards another machine's server socket over SSH,
@@ -110,6 +113,9 @@ a shell as the account. Admit callers only through SSH or Tailscale identity.
 `rex terminfo setup` installs `xterm-rex` in `~/.terminfo` and puts an `Include` of Rex's
 guard at the top of the machine-local `~/.ssh/config`. Outside a Rex terminal the guard
 changes nothing; `ssh -G` resolved the usual hosts identically before and after.
+`ssh` runs the guard's `Match exec` through `$SHELL -c`, so a shell startup file that sets
+`TERM` defeats it, and a server whose `SHELL` is that shell gives its terminals
+`xterm-256color`. `rex terminfo status` run with the server's `SHELL` shows the decision.
 `rex skill setup` adds the `rex` skill, tracked in `~/.claude`, and a SessionStart hook in
 the untracked `~/.claude/settings.json` and in `~/.codex/hooks.json`. Outside Rex the hook
 prints nothing and starts no server. Codex runs its hook only after `/hooks` approves it.
