@@ -58,6 +58,11 @@ modes rather than a negotiated common resolution.
 - Enable the monitor that will receive workspaces before disabling the one
   that holds them: Hyprland moves a disabled monitor's workspaces onto a
   monitor still on. Clamshell enables the external before disabling `eDP-1`.
+- Place outputs by the sizes the command sets, each output's preferred mode at
+  its default scale, not by their current sizes. From clamshell the panel is
+  disabled and missing from `hyprctl monitors`, and Hyprland replaces a
+  malformed position such as `x0` with `auto`, an error `hl_apply` hides.
+  Extend stops before changing the layout if it finds no preferred mode.
 - Free the internal output's destination position before restoring it. The
   disconnect sequence moves the external to `10000x0`, enables internal at
   `0x0`, then disables the external.
@@ -117,11 +122,18 @@ is 10, the panel's slot 10; the desktop's is 20, the portrait's slot 10.
 ## Lid Helpers
 
 Dotfiles' `bindings.lua` runs `laptop-monitor.sh close` and `open` from the lid
-switch. While any monitor other than `eDP-1` is active, close disables `eDP-1`
-and cuts it with `wlr-randr`, and open re-enables it at `auto` position and scale
-1.25. With no external active they do nothing, and open does nothing while the
-clamshell inhibitor runs. Both set the panel with `hyprctl-live eval
-'hl.monitor({...})'` and raise a critical notification when it fails.
+switch. While any monitor other than `eDP-1` is active, close records the
+panel's position with the other monitors' names, positions, sizes and scales
+in `$XDG_RUNTIME_DIR/laptop-monitor-panel`, disables `eDP-1`, and cuts it with
+`wlr-randr`. Open re-enables it at scale 1.25: at the recorded position if the
+other monitors still match the record, otherwise at `auto`, because a monitor
+that moved could overlap the old spot. With no other monitor active, close does
+nothing. Open does nothing while the panel is on, or while the clamshell
+inhibitor runs and another monitor is active. Hyprland's headless `FALLBACK`
+output, added when the last monitor goes, doesn't count, so opening the lid
+after the external is gone brings the panel back. Both set the panel with
+`hyprctl-live eval 'hl.monitor({...})'` and raise a critical notification when
+it fails.
 
 A config reload leaves the panel as it was. Hyprland 0.57.1's reload clears
 every monitor rule, and `wlr-randr`'s off lasts only while its client is
@@ -137,13 +149,12 @@ values.
 
 ## Known Limitations
 
-Lid open always re-applies `eDP-1` at `auto` while an external is active, even if
-the panel is already on, so it can move the panel. The X11 lid script has
-no automatic acpid wiring supplied by this repo.
+Lid open puts the panel at `auto`, to the right of the other monitors, when
+they changed while the lid was shut. The X11 lid script has no automatic acpid
+wiring supplied by this repo.
 
-Extend reads internal geometry before re-enabling the internal monitor;
-transitioning directly from clamshell needs special attention. The script
-suppresses several compositor errors, so printed success is insufficient.
+The script suppresses several compositor errors, so printed success is
+insufficient.
 
 ## Display Verification
 

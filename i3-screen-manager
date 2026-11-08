@@ -146,16 +146,6 @@ find_external_wayland() {
     wlr-randr 2>/dev/null | grep -oP '^[A-Za-z0-9-]+' | grep -v "^${INTERNAL}$" | head -1 || true
 }
 
-monitor_logical_width_wayland() {
-    hyprctl monitors -j | jq --arg n "$1" \
-        '.[] | select(.name==$n) | (.width / .scale) | floor'
-}
-
-monitor_logical_height_wayland() {
-    hyprctl monitors -j | jq --arg n "$1" \
-        '.[] | select(.name==$n) | (.height / .scale) | floor'
-}
-
 # Mode string: "2560x1440@59.95" (no Hz suffix).
 preferred_mode_wayland() {
     local name="$1" mode
@@ -176,8 +166,12 @@ preferred_mode_wayland() {
     echo "$mode"
 }
 
-preferred_width_wayland()  { preferred_mode_wayland "$1" | grep -oP '^\d+'; }
-preferred_height_wayland() { preferred_mode_wayland "$1" | grep -oP 'x\K\d+'; }
+# "WIDTH HEIGHT" in layout pixels for OUTPUT's preferred mode at SCALE, or nothing
+# if the mode is unknown. Works for a disabled output too.
+preferred_logical_size_wayland() {
+    preferred_mode_wayland "$1" | awk -F'[x@]' -v s="$2" \
+        '$1 > 0 && $2 > 0 { printf "%d %d\n", $1 / s, $2 / s }'
+}
 
 refresh_desktop_wayland() {
     # After monitor layout changes, swaybg and waybar don't auto-cover
@@ -288,11 +282,19 @@ cmd_extend() {
 
 cmd_extend_wayland() {
     local direction="$1" ext="$2"
-    local int_lw int_lh ext_pw ext_ph
-    int_lw=$(monitor_logical_width_wayland "$INTERNAL")
-    int_lh=$(monitor_logical_height_wayland "$INTERNAL")
-    ext_pw=$(preferred_width_wayland "$ext")
-    ext_ph=$(preferred_height_wayland "$ext")
+    local int_lw="" int_lh="" ext_lw="" ext_lh=""
+    # Place by the sizes this command sets: each output's preferred mode at its
+    # scale here. The panel's current size won't do. From clamshell the panel is
+    # disabled, so `hyprctl monitors` omits it, and after `scale` it has another scale.
+    read -r int_lw int_lh < <(preferred_logical_size_wayland "$INTERNAL" "$INTERNAL_SCALE") || true
+    read -r ext_lw ext_lh < <(preferred_logical_size_wayland "$ext" "$EXTERNAL_SCALE") || true
+    if [[ -z $int_lh || -z $ext_lh ]]; then
+        # An empty size makes a position like "x0", which Hyprland replaces with auto.
+        local msg="Extend not applied: no preferred mode found for $INTERNAL or $ext."
+        echo "$msg" >&2
+        command -v notify-send >/dev/null && notify-send -u critical "Extend" "$msg"
+        exit 1
+    fi
 
     # Ensure internal is active at its canonical position. `disabled = false`
     # is required to re-enable a monitor that was disabled by a prior clamshell.
@@ -300,8 +302,8 @@ cmd_extend_wayland() {
 
     case "$direction" in
         right) hl_apply "output = \"$ext\", mode = \"preferred\", position = \"${int_lw}x0\", scale = $EXTERNAL_SCALE, disabled = false" ;;
-        left)  hl_apply "output = \"$ext\", mode = \"preferred\", position = \"-${ext_pw}x0\", scale = $EXTERNAL_SCALE, disabled = false" ;;
-        above) hl_apply "output = \"$ext\", mode = \"preferred\", position = \"0x-${ext_ph}\", scale = $EXTERNAL_SCALE, disabled = false" ;;
+        left)  hl_apply "output = \"$ext\", mode = \"preferred\", position = \"-${ext_lw}x0\", scale = $EXTERNAL_SCALE, disabled = false" ;;
+        above) hl_apply "output = \"$ext\", mode = \"preferred\", position = \"0x-${ext_lh}\", scale = $EXTERNAL_SCALE, disabled = false" ;;
         below) hl_apply "output = \"$ext\", mode = \"preferred\", position = \"0x${int_lh}\", scale = $EXTERNAL_SCALE, disabled = false" ;;
     esac
 
