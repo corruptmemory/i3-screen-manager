@@ -6,9 +6,9 @@
 #   rex-link --status                list open forwards
 #
 # Afterwards `rex -S LABEL ...` reaches that server. The forward opens no port and needs only
-# SSH. It never starts the remote server: one started over SSH has no display or session bus,
-# and the remote session's own autostart would then leave it running. See
-# docs/agent-guide/applications.md.
+# SSH. It never starts the remote server: one started over SSH has no login session of its
+# own, so a logout there orphans it. The remote rex-login-server service keeps the real one
+# running. See docs/agent-guide/applications.md.
 set -euo pipefail
 
 dir=${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is not set}/rex-link
@@ -65,8 +65,14 @@ if alive "$label"; then
 	echo "rex-link: $label is already open"
 else
 	# Ask the remote server where it listens. `rex server status` never starts a server.
-	status_json=$(ssh -o BatchMode=yes "$dest" rex server status --json 2>&1) ||
-		die "no Rex server answered on $dest. Start one from its graphical session (the i3 and Hyprland autostarts do), not over SSH. ssh said: $status_json"
+	# Keep ssh's stderr out of the JSON: a host with no saved key gets a warning there, as
+	# every LAN address does under the private-address block of ~/.ssh/config.
+	err=$dir/$label.err
+	if ! status_json=$(ssh -n -o BatchMode=yes "$dest" rex server status --json 2>"$err"); then
+		msg=$(cat -- "$err"); rm -f -- "$err"
+		die "no Rex server answered on $dest. Check its rex-login-server service, and don't start one over SSH. ssh said: $msg"
+	fi
+	rm -f -- "$err"
 	endpoint=$(jq -r '.endpoint // empty' <<<"$status_json")
 	[[ $endpoint == unix://* ]] || die "unexpected endpoint from $dest: ${endpoint:-none}"
 	remote_sock=${endpoint#unix://}
