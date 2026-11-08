@@ -106,6 +106,20 @@ It polls Open-Meteo every 20 minutes for Fahrenheit current conditions and a
 four-day forecast. The file is not supplied by the tracked config. Automatic
 travel-location discovery is not implemented. Widgets without suitable
 hardware, such as laptop CMOS monitoring, hide when their input is absent.
+`WeatherGlyph.js` maps WMO codes to glyphs for Weather and the world clock.
+
+Left-click on the clock opens the calendar; right-click opens the world clock, one
+row per city with its weather, local time, hours from here and date. The cities are
+the tracked `world-clock.json`, shared by both machines, in Omarchy Elsewhen's
+`cities` shape: `{ "name", "zone" }` plus `lat` and `lon`, which its weather needs.
+Edits show without a restart; an unreadable file shows its error in the popout.
+`WorldClock.qml` holds the data once for every bar. While a world clock is open it
+runs a `date` probe for the zones' offsets on opening and every five minutes, and
+one Open-Meteo request for every city's weather, kept 20 minutes; nothing runs
+while closed. The probe and row formatting are Elsewhen's `Model.js`, vendored
+under `vendor/elsewhen/` from Omarchy 43c08a499 with its MIT license. Its one
+local edit reads the local zone from `/etc/localtime` instead of systemd's
+`timedatectl`; to re-sync, copy upstream's file and reapply that edit.
 
 ## Capture and Sleep
 
