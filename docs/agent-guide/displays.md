@@ -2,7 +2,7 @@
 
 Read this guide for layout, docking, scaling, lid handling, monitor discovery,
 or workspace-placement changes. Sources: `i3-screen-manager`, `i3-screen-rofi`,
-`laptop-monitor.sh`, `laptop-monitor-x11.sh`, `hyprland-clamshell-restore`, and
+`laptop-monitor.sh`, `laptop-monitor-x11.sh`, and
 dotfiles' `hypr/monitors.lua`, `hypr/machine.lua`, `hypr/workspaces.lua`,
 `hypr/vendor/omarchy/`, `hypr/autostart.lua`, and `quickshell/shell.qml` under
 `.config/`.
@@ -120,26 +120,26 @@ Dotfiles' `bindings.lua` runs `laptop-monitor.sh close` and `open` from the lid
 switch. While any monitor other than `eDP-1` is active, close disables `eDP-1`
 and cuts it with `wlr-randr`, and open re-enables it at `auto` position and scale
 1.25. With no external active they do nothing, and open does nothing while the
-clamshell inhibitor runs. `autostart.lua`'s `config.reloaded` hook runs
-`hyprland-clamshell-restore`, which disables `eDP-1` again after a reload while
-that inhibitor runs. Both set the panel with `hyprctl-live eval
+clamshell inhibitor runs. Both set the panel with `hyprctl-live eval
 'hl.monitor({...})'` and raise a critical notification when it fails.
+
+A config reload leaves the panel as it was. Hyprland 0.57.1's reload clears
+every monitor rule, and `wlr-randr`'s off lasts only while its client is
+connected. So a re-added panel rule without `disabled` would turn a panel that
+clamshell or a closed lid switched off back on. Hyprland would hand it its
+workspaces, and the module would merge them back onto the external under new
+numbers once something turned it off again. Instead, when Hyprland already
+runs an external and not the panel at config load, `monitors.lua` adds the
+panel with `disabled = true`. At startup nothing runs yet, so the panel always
+comes up. A runtime `hl.monitor` eval differs from a reload: it starts from the
+output's current rule, so fields it omits, `disabled` included, keep their
+values.
 
 ## Known Limitations
 
 Lid open always re-applies `eDP-1` at `auto` while an external is active, even if
 the panel is already on, so it can move the panel. The X11 lid script has
 no automatic acpid wiring supplied by this repo.
-
-A config reload while clamshelled turns `eDP-1` back on for about a second.
-Hyprland 0.57.1's reload clears every monitor rule, `monitors.lua` re-adds the
-panel without `disabled`, and `wlr-randr`'s off lasts only while its client is
-connected. The panel's workspaces go home to it, then merge back onto the
-external once `hyprland-clamshell-restore` disables it. A runtime `hl.monitor`
-eval is different: it starts from the output's current rule, so fields it
-omits, `disabled` included, keep their values. Having `monitors.lua` pass
-`disabled = true` while the clamshell inhibitor runs would avoid the bounce
-and the restore hook; untested.
 
 Extend reads internal geometry before re-enabling the internal monitor;
 transitioning directly from clamshell needs special attention. The script

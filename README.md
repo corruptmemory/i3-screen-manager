@@ -16,7 +16,7 @@ symlinked into `~/.local/bin`. Installing them does not install a desktop config
 | Display CLI and menu       | `i3-screen-manager`, `i3-screen-rofi`                                                                                                |
 | Keyboard and mouse         | `i3-keyboard-rofi`, `i3-mouse-setup`, `i3-mouse-rofi`                                                                                |
 | Hyprland session and sleep | `start-hyprland`, `hyprctl-live`, `hypr-dpms-all`                                                                                    |
-| Lid handling               | `laptop-monitor.sh`, `laptop-monitor-x11.sh`, `hyprland-clamshell-restore`                                                           |
+| Lid handling               | `laptop-monitor.sh`, `laptop-monitor-x11.sh`                                                                                         |
 | Screenshots                | `screenshot` (grim/slurp/tensaku), `screenshot.sh` (hyprshot/satty), `flameshot.sh`                                                  |
 | Desktop helpers            | `i3-cmos-battery`, `keybase-popup-anchor-x11`, `volumecontrol.sh`                                                                    |
 | Network                    | `i3-tailscale-rofi`, `i3-net-profile`, `i3-net-profile-rofi`, `captive-portal` (portal sign-in)                                      |
