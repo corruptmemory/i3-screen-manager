@@ -15,6 +15,19 @@ Keep config-load code cheap and free of startup side effects: configuration
 evaluation can happen more than once on a reload. Launch daemons from
 `hl.on('hyprland.start', ...)`, and keep reload-specific work in its own hook.
 
+Hyprland reloads when a loaded config file changes, so a `git pull` in dotfiles
+can reload in the middle of the checkout. If a pull adds a module that an
+existing file requires, the reload can stop at the missing file. Only the
+built-in fallback binds are then live, and one is `Super+M`, which exits the
+session. The new file was never loaded, so nothing watches it and no second
+reload comes. Both machines therefore have a hook in dotfiles' `.git/hooks`,
+installed by hand and not tracked: `post-merge`, with `post-rewrite` symlinked
+to it. After a pull that changed `.config/hypr`, while Hyprland runs, it
+reloads the config and reports `configerrors`, raising a critical notification
+on errors. A fast-forward pull runs `post-merge` in either pull mode; a rebase
+that replays local commits runs `post-rewrite` when it ends. Without the hook,
+reload by hand with `hyprctl-live dispatch 'hl.dsp.reload_config()'`.
+
 The root `start-hyprland` script is the laptop-oriented launcher. Dotfiles also
 contains a desktop launcher with the same basename. Resolve the installed
 command before editing it. Launchers set session identity, the user D-Bus
