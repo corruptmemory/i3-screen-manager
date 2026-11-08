@@ -1,0 +1,210 @@
+#!/usr/bin/env bash
+# captive-portal: sign in to a captive portal in a small window that closes once online.
+#
+#   captive-portal [URL]   open URL, by default http://ping.omacom.io/nm-check.txt
+#
+# The default is NetworkManager's plain-HTTP connectivity check, which a portal
+# intercepts to show its sign-in page; the URL argument is for testing. A second
+# run while one is waiting only focuses the open window. Hyprland's window rule
+# floats it. See docs/agent-guide/network-profiles.md ("Captive Portals").
+#
+# Adapted from Omarchy's omarchy-network-captive-portal, under its license:
+#
+# Copyright (c) David Heinemeier Hansson
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+# LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+set -euo pipefail
+
+. "$HOME/.local/lib/sh/require.sh"
+_require brave-origin nmcli jq flock pgrep curl notify-send hyprctl-live
+
+url=${1:-http://ping.omacom.io/nm-check.txt}
+if [[ ! $url =~ ^https?:// ]]; then
+    echo "usage: captive-portal [http(s)://URL]" >&2
+    exit 2
+fi
+
+# Brave runs in its own persistent profile: Jim's extensions, Secure DNS, and
+# cookies stay away from portal pages, and the portal's cookies survive for the
+# next sign-in. Our own process, so its PID names the window. Like Jim's other
+# Brave it has WebMCP and a CDP port, so an agent can inspect a sign-in that
+# fails; 9223 because the main Brave holds 9222. Chromium binds the port to
+# loopback, and it exists only while the window is open.
+state_dir=$HOME/.local/state/captive-portal
+profile=$state_dir/brave
+debug_port=9223
+run=${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is not set}
+lock=$run/captive-portal.lock
+pidfile=$run/captive-portal.pid
+
+# Behind a real portal no agent can be reached, so each run leaves its record
+# for afterwards: last-run.log (connectivity changes, the pages the window
+# visited, how the run ended) and brave.log (the browser's own output). Both are
+# replaced by the next run.
+runlog=$state_dir/last-run.log
+log() { printf '%s +%ss %s\n' "$(date +%T)" "$SECONDS" "$*" >>"$runlog" 2>/dev/null || true; }
+
+notify() { notify-send -a captive-portal "$@" || true; }
+
+fail() {
+    log "failed: $1"
+    notify -u critical "Captive portal" "$1"
+    echo "captive-portal: $1" >&2
+    exit 1
+}
+
+exec 9>"$lock"
+if ! flock -n 9; then
+    # An earlier run is waiting for the sign-in; bring its window back up.
+    pid=$(cat "$pidfile" 2>/dev/null) || exit 0
+    if [[ $pid =~ ^[0-9]+$ ]]; then
+        hyprctl-live dispatch "hl.dsp.focus({ window = \"pid:$pid\" })" >/dev/null 2>&1 || true
+    fi
+    exit 0
+fi
+
+# A new Brave Origin profile ignores --app and shows Origin's free-tier splash
+# until that is accepted, as it already is in Jim's main profile.
+accept_free_tier() {
+    local state="$profile/Local State"
+    install -d -m700 "$profile"
+    if [[ ! -e $state ]]; then
+        (umask 077; printf '%s\n' '{"brave":{"origin":{"free_tier_accepted":true}}}' >"$state")
+    elif ! jq -e '.brave.origin.free_tier_accepted == true' "$state" >/dev/null 2>&1; then
+        if (umask 077; jq '.brave.origin.free_tier_accepted = true' "$state" >"$state.new"); then
+            mv -f "$state.new" "$state"
+        else
+            rm -f "$state.new"
+            notify "Captive portal" "Could not update $state; Brave may show its Origin splash instead of the portal."
+        fi
+    fi
+}
+
+hypr=0
+hyprctl-live version >/dev/null 2>&1 && hypr=1
+
+install -d -m700 "$state_dir"
+(umask 077; : >"$runlog")
+log "start: $url"
+log "devices: $(nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device 2>/dev/null | paste -sd ' ')"
+accept_free_tier
+(umask 077; : >"$state_dir/brave.log")
+brave-origin --user-data-dir="$profile" --no-first-run --no-default-browser-check \
+    --remote-debugging-port="$debug_port" --enable-features=WebMCP \
+    --app="$url" >"$state_dir/brave.log" 2>&1 9>&- &
+launcher=$!
+
+# brave-origin is a wrapper that runs the browser as its child.
+browser=
+for (( i = 0; i < 50; i++ )); do
+    browser=$(pgrep -n -P "$launcher" -x brave) && break
+    kill -0 "$launcher" 2>/dev/null || break
+    sleep 0.1
+done
+[[ -n $browser ]] || fail "Brave did not start."
+printf '%s\n' "$browser" >"$pidfile"
+trap 'rm -f "$pidfile"' EXIT
+log "brave: pid $browser, CDP 127.0.0.1:$debug_port"
+
+alive() { kill -0 "$browser" 2>/dev/null; }
+
+# Whether Hyprland has listed the window yet. A browser that exits without one
+# failed to start; one that exits after showing it was closed by the user.
+seen=0
+note_window() {
+    (( hypr && !seen )) || return 0
+    if hyprctl-live clients -j 2>/dev/null \
+        | jq -e --argjson pid "$browser" 'any(.[]; .pid == $pid)' >/dev/null 2>&1; then
+        seen=1
+        log "window mapped"
+    fi
+}
+
+# The pages the window has open, from Brave's own CDP list: the portal's
+# redirects and sign-in URLs, logged as they change.
+pages=""
+note_pages() {
+    local now
+    now=$(curl -s --max-time 1 "http://127.0.0.1:$debug_port/json/list" 2>/dev/null \
+        | jq -r '[.[] | select(.type == "page") | .url] | sort | join(" ")' 2>/dev/null) || return 0
+    if [[ -n $now && $now != "$pages" ]]; then
+        log "pages: $now"
+        pages=$now
+    fi
+}
+
+# nmcli translates its answer, so read it in the C locale. polkit allows the
+# re-check only from an active local session; elsewhere, as over SSH, read
+# NetworkManager's last result rather than wait on a check it refuses.
+checked=""
+online() {
+    local state source=check
+    state=$(LC_ALL=C timeout 5 nmcli networking connectivity check 2>/dev/null) || {
+        source=cached
+        state=$(LC_ALL=C nmcli networking connectivity 2>/dev/null) || true
+    }
+    if [[ "$state ($source)" != "$checked" ]]; then
+        checked="$state ($source)"
+        log "connectivity: $checked"
+    fi
+    [[ $state == full ]]
+}
+
+# Nothing on the machine changes when the sign-in completes, so ask
+# NetworkManager to re-check: often while a sign-in is likely, then gently.
+fast_until=$(( SECONDS + 300 ))
+next_check=$SECONDS
+while :; do
+    if ! alive; then
+        if (( seen || !hypr )); then
+            log "window closed by the user"
+            exit 0
+        fi
+        fail "Brave exited without opening the sign-in window."
+    fi
+    note_window
+    note_pages
+    if (( SECONDS >= next_check )); then
+        online && break
+        next_check=$(( SECONDS + (SECONDS < fast_until ? 2 : 15) ))
+    fi
+    sleep 1
+done
+
+# Close gracefully through Hyprland. Retrying covers a window that maps after
+# the check passed and a portal that opened more than one window.
+if (( hypr )); then
+    for (( i = 0; i < 20; i++ )); do
+        alive || break
+        hyprctl-live dispatch "hl.dsp.window.close({ window = \"pid:$browser\" })" >/dev/null 2>&1 || true
+        sleep 0.5
+    done
+fi
+if alive; then
+    log "close ignored; SIGTERM"
+    kill "$browser" 2>/dev/null || true
+    for (( i = 0; i < 10; i++ )); do alive || break; sleep 0.5; done
+    if alive; then
+        log "SIGTERM ignored; SIGKILL"
+        kill -KILL "$browser" 2>/dev/null || true
+    fi
+fi
+log "online; window closed"
+notify "Online" "Captive portal sign-in complete."
