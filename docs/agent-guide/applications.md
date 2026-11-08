@@ -65,17 +65,32 @@ package-removal commands from an assumed dependency graph.
 Rex, a beta from Superlogical, is a terminal multiplexer. Its server holds sessions,
 windows, and terminal blocks, and the `rex` CLI drives them on this machine or, with
 `-S`, on another. Linux has only the server and CLI; the app that shows sessions is
-macOS-only, so here agents use `rex run`, `send`, `capture`, and `wait`. Rex is the bare
-binary from `install.sh --tarball` in `/usr/local/bin`, outside pacman: the scan hook
-never sees it, rerunning the script is the only update, and a running server keeps its
-version until it stops.
+macOS-only, so here agents use `rex run`, `send`, `capture`, and `wait`.
 
-Dotfiles' i3 configs and `autostart.lua` run `rex server start` in each session, so the
-commands a server runs get the session's `DISPLAY`, `XAUTHORITY`, and D-Bus address. It
-does nothing when a server is already running, so a server first started over SSH, which
-has none of those, stays. The server listens only on `$XDG_RUNTIME_DIR/rex/server.sock`
-and restores its saved sessions when restarted (`rex server stop --discard` clears them).
-A logout wipes that directory; what the server does then is untested.
+Rex comes from Superlogical's pacman repository, set up by hand: its `install.sh` takes
+the pacman route only when os-release says `arch`, and Artix says `ID=artix` with no
+`ID_LIKE`. Dotfiles stages `etc/pacman.d/rex.conf` and the signing key `rex.asc`
+(fingerprint `E28636AC71905C6DDE40C1EDFAA6B80F641307A7`, added and locally signed with
+`pacman-key`). The repo is last in `pacman.conf`. Only its snapshot channel has packages,
+so any `pacman -Syu` may update Rex, through the scan hook. The package's systemd units do
+nothing here; Artix's sysusers hook creates its `rex` account.
+
+Dotfiles' `etc/init.d/rex-login-server`, adapted from the vendor's Alpine script, runs
+`rex login-server` as root in the default runlevel. Its socket,
+`/run/rex/login-server.sock`, is root-only, and `etc/rex/accounts.jsonc` lets root
+(`peer:0`) open `jim`. A connection through it opens a PAM login session (the Arch policy
+reaches `pam_elogind` through `system-remote-login`) and starts `rex server run
+--exit-empty` as `jim` inside it. elogind counts that session, so a tty logout keeps
+`/run/user/1000` and the server's socket, and plain `rex` reaches the server at the usual
+path. A session started this way ran through a full logout and login with no gap. The
+server stops about 10 seconds after its last session ends.
+
+A server started any other way, by a plain `rex` command or `rex server start`, has no
+login session of its own. A logout deletes its socket and leaves it running, unreachable,
+with its saved sessions locked against the next server. Start work that must outlive a
+logout through the login server: `sudo rex -S unix:///run/rex/login-server.sock new LABEL
+-- COMMAND`. Known gap: dotfiles' i3 and Hyprland autostarts still run `rex server start`,
+which makes such an unprotected server when none is running.
 
 `rex-link LABEL SSH_DESTINATION` forwards another machine's server socket over SSH,
 registers LABEL as a host, and checks that `rex -S LABEL` answers; `--stop LABEL` and
@@ -90,9 +105,10 @@ changes nothing; `ssh -G` resolved the usual hosts identically before and after.
 the untracked `~/.claude/settings.json` and in `~/.codex/hooks.json`. Outside Rex the hook
 prints nothing and starts no server. Codex runs its hook only after `/hooks` approves it.
 
-The laptop has all of this. The desktop has an older Rex and none of the setup: rerun the
-install script, run `rex terminfo setup` and `rex skill setup`, pull dotfiles, and start
-the server from its session (`i3-msg exec 'rex server start'` until the next login). Then,
+The laptop has all of this. The desktop has an older tarball Rex in `/usr/local/bin` and
+none of the setup: install the key, repo, package, login server, and accounts file from
+dotfiles `etc/` as their headers say, delete `/usr/local/bin/rex` (it shadows
+`/usr/bin/rex`), run `rex terminfo setup` and `rex skill setup`, and pull dotfiles. Then,
 from the laptop, run `rex-link desktop jim@192.168.1.19` and `rex -S desktop ls`.
 
 `rex-link self jim@localhost` tests the forward without a second machine: create a
