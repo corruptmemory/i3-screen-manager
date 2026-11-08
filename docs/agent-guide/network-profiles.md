@@ -146,6 +146,15 @@ probed from the other machine. No VPN daemon and no `/run/net-profile` may remai
 Only the laptop runs NetworkManager; the desktop runs netifrc, so this section applies to
 `nomad-artix` alone.
 
+Its Wi-Fi backend is wpa_supplicant, NetworkManager's default, set by dotfiles'
+`90-wifi-backend.conf`; NetworkManager.conf(5) calls iwd experimental, and Omarchy left it too.
+D-Bus starts wpa_supplicant on demand, so it needs no OpenRC service; iwd stays installed but in
+no runlevel. Saved networks are keyfiles in `/etc/NetworkManager/system-connections`, and the
+home one is bound to `wlan0`. That is the kernel's own name: Artix's udev ships no `.link`
+file, so nothing renames interfaces, and at boot the kernel creates `wlan0` for NetworkManager
+to connect. iwd instead replaces the kernel's interface with its own and deletes it when it
+stops, so leaving iwd without a reboot needs the interface recreated, as in the setup below.
+
 NetworkManager detects a portal by fetching its check URL: a reply other than the expected
 one means Portal. Dotfiles' `etc/NetworkManager/conf.d/90-connectivity.conf` points the check
 at Omarchy's `http://ping.omacom.io/nm-check.txt`, which answers 204 with
@@ -153,9 +162,8 @@ at Omarchy's `http://ping.omacom.io/nm-check.txt`, which answers 204 with
 `/usr/lib/NetworkManager/conf.d/20-connectivity.conf`. The URL must stay plain HTTP on a host
 that is not HSTS-preloaded, or a browser upgrades it to HTTPS and the portal cannot intercept
 it; archlinux.org is preloaded. On a working network the endpoint redirects a browser to
-omarchy.org. `90-wifi-powersave.conf` turns Wi-Fi power save off when a Wi-Fi connection
-activates. Whether NetworkManager applies it under this laptop's `wifi.backend=iwd` is
-unconfirmed; iwlwifi already leaves power save off.
+omarchy.org. `90-wifi-powersave.conf` turns Wi-Fi power save off whenever a Wi-Fi connection
+activates, even after something has turned it on.
 
 Dotfiles' `.config/quickshell/Connectivity.qml` reads NetworkManager's state through
 Quickshell's `Networking`. It is a singleton, so every bar shares one re-check and one
@@ -202,11 +210,21 @@ To set up the laptop, from dotfiles' `etc/` directory:
 
 ```sh
 sudo install -m644 -o root -g root NetworkManager/conf.d/90-*.conf /etc/NetworkManager/conf.d/
-sudo nmcli general reload conf
+sudo sed -i '/^wifi\.backend=/d' /etc/NetworkManager/NetworkManager.conf   # conf.d sets it
+sudo rc-service iwd stop && sudo rc-update del iwd default
+sudo iw phy phy0 interface add wlan0 type managed   # unless `iw dev` already lists wlan0
+sudo rc-service NetworkManager restart
 busctl get-property org.freedesktop.NetworkManager /org/freedesktop/NetworkManager \
     org.freedesktop.NetworkManager ConnectivityCheckUri    # the omacom URL
 ln -sfn ~/projects/i3-screen-manager/captive-portal ~/.local/bin/captive-portal
 ```
+
+Change the backend with a wired link up, since Wi-Fi drops until NetworkManager reconnects.
+`NetworkManager --print-config` must then show `wifi.backend=wpa_supplicant`, and
+`nmcli device` must show `wlan0` connected, with wpa_supplicant's `p2p-dev-wlan0` in place of
+iwd's p2p device. After a reboot, `iw dev` must list the kernel's `wlan0`, `pgrep -x iwd` must
+find nothing, and NetworkManager must have connected Wi-Fi with no cable. A change to
+`90-connectivity.conf` alone needs only `sudo nmcli general reload conf`.
 
 To rehearse a portal, set `uri=http://neverssl.com/` and `response=NetworkManager is online`
 in the installed `90-connectivity.conf` and reload: a plain-HTTP page whose body doesn't match
