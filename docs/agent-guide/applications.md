@@ -53,7 +53,10 @@ Signal's class is `signal` under both
 X11 and native Wayland; both builders are verified live with it. Group order and group locking are part of the
 algorithm; app startup and largest-window selection handle transient helpers.
 Rerunning rebuilds the grouping of existing windows. It can visibly move
-windows and must remain a shell workflow because it waits for mapping.
+windows and must remain a shell workflow because it waits for mapping. It
+never focuses the workspace already focused, because the desktop's
+`workspace_back_and_forth` would bounce away mid-build, and it ends on the
+window that had focus when it started.
 
 The desktop has the chat builder integration. Shared Hyprland rules place
 chat apps on the same chat workspace on both machines, but do not infer an automatic laptop
