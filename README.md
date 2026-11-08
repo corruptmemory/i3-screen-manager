@@ -74,7 +74,9 @@ done
 
 Keep `~/.local/bin` on the desktop session's PATH. Link optional tools by the
 same method; install all three siblings for the agent-usage orchestrator, and
-the Polybar pair on an i3 session:
+the Polybar pair on an i3 session. The collectors load
+`lib/agent-usage/collectors.py` through their resolved path, so link them rather
+than copying them:
 
 ```bash
 for script in agent-usage agent-usage-claude agent-usage-codex \

@@ -2,14 +2,16 @@
 
 Read this guide for the Python collectors, their caches, JSON output, or the
 agent widgets. Sources: `agent-usage`, `agent-usage-claude`, `agent-usage-codex`,
-`agent-usage-polybar`, `agent-usage-rofi`, dotfiles' `Widgets/Agents.qml` and
+`lib/agent-usage/collectors.py`, `agent-usage-polybar`, `agent-usage-rofi`,
+dotfiles' `Widgets/Agents.qml` and
 `AgentsPanel.qml` under `.config/quickshell/`, and the `agent-usage` polybar
 module in dotfiles' `.config/polybar/config-i3.ini` and `config-i3-laptop.ini`.
 
 ## Collection and Storage
 
-The collectors are vendored from `basecamp/omarchy` (MIT); retain attribution.
-They use Python's standard library and print one JSON record each. The Bash
+The collectors are vendored from `basecamp/omarchy` (MIT); retain attribution
+and `lib/agent-usage/LICENSE`. They use Python's standard library and print one
+JSON record each. The Bash
 orchestrator resolves sibling collectors with `readlink -f`, runs them in
 parallel, checks successful stdout with jq, and prints an array in
 Claude/Codex order. A failed collector is omitted; both failing produces `[]`.
@@ -24,24 +26,52 @@ files are outputs. Do not expose credentials in JSON, logs, or tests.
 
 Claude reads `CLAUDE_CONFIG_DIR` (default `~/.claude`), project transcripts,
 aggregate/history fallbacks, and supported pi/omp/opencode usage. Limits come
-from its OAuth usage endpoint using the existing login. The collector does
-not refresh that login. It can reuse cached limits on failure, excluding
-windows whose reset time has passed; transport failures can set `retryAdvised`.
+from its OAuth usage endpoint using the existing login; the weekly row is the
+`seven_day` bucket, and the plan comes from `~/.claude.json`. The collector does
+not refresh that login. Transport failures can set `retryAdvised`.
 
 Codex scans `CODEX_HOME` (default `~/.codex`) session and archived-session
-JSONL plus supported pi/omp/opencode sources. Limits are read via a temporary
-`codex app-server` subprocess using `initialize`, `account/read`, and
-`account/rateLimits/read`. The collector reads primary and secondary limit
-windows; do not assume it implements every shape a newer server might expose.
-The subprocess is terminated after the query. Scanner support is limited to
-the formats the code parses; a new CLI storage format needs verification.
+files, `.jsonl` and compressed `.jsonl.zst`, plus supported pi/omp/opencode
+sources. Limits are read via a temporary `codex app-server` subprocess:
+`initialize`, then `account/rateLimits/read`, with `account/read` only as a
+fallback for the plan name. It reads every bucket in `rateLimitsByLimitId`, and
+reports free reset credits as `resetCredits`. The subprocess is terminated after
+the query. Scanner support is limited to the formats the code parses; a new CLI
+storage format needs verification.
+
+Both collectors keep the last good limits per signed-in identity. When a probe
+fails, the record carries those limits with `limitsStale` true and
+`limitsFetchedAt` naming when they were measured. Codex reports a window that
+has already reset at zero.
 
 Normal local-scan reuse is 20 seconds; `--limits-only` permits reuse for 900
-seconds. `--force` bypasses that reuse. Claude also throttles successful limit
-probes over a 15-second interval unless forced; Codex probes limits each run.
+seconds. Both collectors reuse a limits answer younger than 15 seconds.
+`--force` bypasses all reuse.
 Preserve date-sensitive caches, file locking, and token accounting when
 changing these paths. In native Codex usage, cached input is already included
 in input totals and reasoning is included in output; do not count either twice.
+
+## Upstream Sync
+
+`agent-usage-claude`, `agent-usage-codex`, and `lib/agent-usage/collectors.py`
+are upstream's `bin/omarchy-agent-usage-claude`, `bin/omarchy-agent-usage-codex`,
+and `shell/plugins/agents/collectors.py`; each file's header names the upstream
+commit. These are the only local edits:
+
+1. Both entry scripts load `collectors.py` from `lib/agent-usage/` beside their
+   resolved path instead of `$OMARCHY_PATH`.
+2. `cache_root()` drops upstream's `omarchy/` path segment.
+3. `program()` names diagnostics after the `agent-usage-` commands.
+4. The attribution header in each file.
+
+Left as upstream and inert here: the account registry and local Codex provider
+files under `~/.local/state/omarchy/agents/`, read only when present; the
+`OMARCHY_AGENT_USAGE_REFRESH_AT` hint; and the app-server client name.
+
+To re-sync, copy the three files from the new upstream commit, reapply the
+edits, and compare each collector's record against the current one with
+isolated `XDG_CACHE_HOME` and `XDG_STATE_HOME` before deploying. Clear
+`~/.cache/agent-usage/` when the cache format may have changed.
 
 ## JSON Contract
 
@@ -58,6 +88,9 @@ in input totals and reasoning is included in output; do not count either twice.
 | `recentDays` | Array of `{date, messageCount}`; `messageCount` contains token totals |
 | `totalPrompts`, `totalSessions`, `activeDays` | Aggregate counters |
 | `retryAdvised` | Optional retry hint; not acted on by the current widget |
+| `hasPromptStats` | Boolean; always true from these two collectors |
+| `limitsStale`, `limitsFetchedAt` | Limits kept from an earlier probe; when measured, in epoch milliseconds (0 if never) |
+| `resetCredits` | Codex only, optional: `{available, nextExpiresAt}` |
 
 `limits[].percent` is a fraction, not an integer percentage. Consumers multiply
 by 100 for labels and clamp meter fill. `resetsAt` is a timestamp or an empty
@@ -91,11 +124,10 @@ the module) with a live `agent-usage` fallback. The module is on the desktop's
 landscape bar only and on the laptop's single bar. Presentation lives in these
 scripts, not in `agent-usage`.
 
-Readiness differs between collectors: Claude requires prompts or limits;
-Codex currently sets `ready=true` even when its limit probe fails. An
-unauthenticated Codex record may therefore keep the bar item visible.
-The current QML has no manual refresh control and no fast retry for
-`retryAdvised`; do not document either as available. Antigravity has no
+Claude is ready with prompts, model usage, or limits; Codex with sessions,
+limits, or registered accounts. The current QML has no manual refresh control,
+no fast retry for `retryAdvised`, and no marking of `limitsStale`; do not
+document any of them as available. Antigravity has no
 collector in this repo. Account limits describe account usage; local token
 statistics only cover the sources available on this machine.
 
