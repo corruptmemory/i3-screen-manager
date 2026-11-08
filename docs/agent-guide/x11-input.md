@@ -34,13 +34,18 @@ getoption` and applies a choice with `hyprctl eval 'hl.config(...)'`, because
 notification. A config reload restores the configured options, so the choice lasts
 only until then.
 
-Mouse DPI uses solaar at the HID level on either backend. `i3-mouse-setup`
-defaults to 1200 and restores the saved value; the menu offers 800-2000.
-Mouse identity and DPI are stored under `~/.config/i3-mouse-manager/`.
-The login helper quietly skips unavailable hardware; the menu reports a
-missing solaar installation or an undetected mouse. Inspect whether `usbhid`
-is built into the running kernel before using modprobe configuration for poll
-rate; built-in driver parameters belong in the kernel command line.
+Mouse DPI uses solaar at the HID level on either backend. The i3 and Hyprland
+autostarts and the IceWM xinitrc files run `i3-mouse-setup` at login. It finds
+the paired mouse, caches its name, and applies the saved DPI, 1200 if none is
+saved. It exits silently without solaar or a solaar mouse. A mouse that refuses
+the setting, as one asleep at login does, gets retries for two minutes and then
+a notification. Mouse identity and DPI are stored under
+`~/.config/i3-mouse-manager/`. The menu offers 800-2000 and reports a missing
+solaar installation or an undetected mouse. When the cached name no longer
+answers, as after the mouse is replaced, it looks the mouse up again. Inspect
+whether `usbhid` is built into the running kernel before using modprobe
+configuration for poll rate; built-in driver parameters belong in the kernel
+command line.
 
 All four `i3-*-rofi` menus source `~/.local/lib/sh/require.sh`. Keep its symlink
 to this repo's `lib/require.sh` installed. `_require` checks commands and

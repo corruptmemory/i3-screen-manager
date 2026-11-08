@@ -74,8 +74,19 @@ choice=$(echo -e "$dpi_options" \
         -theme-str 'window {width: 300px;}' \
         -mesg "$mouse") || exit 0
 
+apply_dpi() { solaar config "$1" dpi "$2" &>/dev/null; }
+
 if [[ -n "$choice" && "$choice" =~ ^[0-9]+$ ]]; then
-    solaar config "$mouse" dpi "$choice" &>/dev/null
+    # The saved name goes stale when the mouse is replaced, so look it up again
+    # before giving up.
+    if ! apply_dpi "$mouse" "$choice"; then
+        found=$(discover_mouse)
+        if [[ -z "$found" || "$found" == "$mouse" ]] || ! apply_dpi "$found" "$choice"; then
+            rofi -e "Could not set ${found:-$mouse} to $choice DPI. Is the mouse awake?"
+            exit 1
+        fi
+        mouse=$found
+    fi
     save_config "$mouse" "$choice"
     notify-send -t 2000 "Mouse DPI" "$mouse → $choice DPI" 2>/dev/null || true
 fi

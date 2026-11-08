@@ -2,8 +2,10 @@
 #
 # i3-mouse-setup — apply saved mouse settings via solaar on login
 #
-# Called from ~/.xinitrc before i3 starts. Exits silently if no
-# solaar-compatible device is found or solaar isn't installed.
+# Run at login by the i3 and Hyprland autostarts and the IceWM xinitrc files in
+# dotfiles. Exits silently if solaar isn't installed or no solaar mouse is
+# paired. A paired mouse that refuses the setting, such as one asleep at login,
+# gets retries for two minutes and then a notification.
 #
 
 set -euo pipefail
@@ -57,5 +59,16 @@ echo "$mouse" > "$MOUSE_FILE"
 # solaar needs the daemon/listener running; give it a moment after boot
 sleep 1
 
-solaar config "$mouse" dpi "$dpi" &>/dev/null && \
-    echo "i3-mouse-setup: $mouse DPI set to $dpi" || true
+# A Bolt or Unifying mouse that is asleep stays listed but refuses settings
+# until it wakes, which it does when moved.
+end=$((SECONDS + 120))
+until solaar config "$mouse" dpi "$dpi" &>/dev/null; do
+    if (( SECONDS >= end )); then
+        echo "i3-mouse-setup: could not set $mouse to $dpi DPI" >&2
+        command -v notify-send >/dev/null &&
+            notify-send "Mouse DPI" "Could not set $mouse to $dpi DPI. Set it from the mouse menu."
+        exit 1
+    fi
+    sleep 5
+done
+echo "i3-mouse-setup: $mouse DPI set to $dpi"
