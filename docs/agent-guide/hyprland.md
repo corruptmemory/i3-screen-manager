@@ -111,6 +111,18 @@ would bounce back. A monitor the state file does not list yet, in a session's
 first moments or just plugged in, uses the block of the workspace it shows, as
 Omarchy's bar does.
 
+The buttons take which workspaces exist, their monitor and window count, and
+what each monitor shows from the `WorkspaceState.qml` singleton. It runs
+`hyprctl -j workspaces` and `-j monitors` at start and after each relevant
+Hyprland event, and runs again once if events arrive during a read. Quickshell
+0.3.2's own workspace list cannot be used for this. When the module renumbers
+a workspace, Quickshell keeps it under its old id: it ignores
+`changeworkspaceid`, and `Hyprland.refreshWorkspaces()` never adds or removes
+entries. Only Quickshell's internal refresh on `configreloaded` does. The stale
+entry showed as a phantom visiting workspace, and clicking it created an empty
+one. Urgency still comes from Quickshell, and `WindowTitle.qml` is unaffected,
+because Quickshell keeps the shown workspace current.
+
 `Pulseaudio.qml` holds an `AudioControl` each for speaker and mic, matching
 Polybar: scroll changes volume on whole wheel notches, left-click mutes, right-click
 opens pavucontrol, and middle-click on the mic switches input. Actions run `wpctl`.
