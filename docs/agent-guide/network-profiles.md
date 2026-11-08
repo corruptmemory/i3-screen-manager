@@ -36,7 +36,9 @@ active profile re-applies it. The Polybar `net-profile` module shows a shield an
 profile, and a click opens the menu. Red means UFW is off or credentials were left in
 RAM. Yellow names another problem, or shows `?` when the helper is missing. Dotfiles'
 Quickshell `NetProfile` widget shows the same states from `status`, with white on red
-for the two red ones, and refreshes as soon as the menu closes.
+for the two red ones. Its `NetProfileState` reads `status` at startup, every five
+minutes, and on `qs ipc call netprofile refresh`, which `i3-net-profile set` sends
+after a switch and the widget sends when the menu closes.
 
 ## Credentials
 

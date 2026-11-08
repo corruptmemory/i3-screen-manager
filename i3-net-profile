@@ -41,6 +41,13 @@ polybar_line() {
     esac
 }
 
+# The Quickshell bar reads the profile only now and then, so tell it about a switch.
+# Quiet when no bar is running, as under i3.
+refresh_bar() {
+    command -v qs >/dev/null && qs ipc call netprofile refresh >/dev/null 2>&1
+    return 0
+}
+
 set_profile() {
     local out item rbw rc=0
     if ! item=$(helper secret "$1" 2>&1); then
@@ -56,6 +63,8 @@ set_profile() {
         rbw=$(command -v rbw || echo "$HOME/.cargo/bin/rbw")
         out=$("$rbw" get --raw "$item" 2>/dev/null | helper set "$1" 2>&1) || rc=$?
     fi
+    # A failed switch can still have changed something, so refresh either way.
+    refresh_bar
     if ((rc == 0)); then
         echo "$out"
         command -v notify-send >/dev/null && notify-send "Network profile" "Now: $1"
