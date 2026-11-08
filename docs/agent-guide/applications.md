@@ -46,8 +46,8 @@ missing apps, selects their primary windows, parks targets on a special
 workspace, and serially forms Messages/WhatsApp and
 Discord/Keybase/Slack/Signal groups on the chat workspace. That is dotfiles'
 `machine.lua` `chat_workspace`, read through `lua5.4`, or `--workspace N`: 10
-on the laptop, 20 (the portrait's slot 10) on the desktop, whose workspaces
-are per monitor ([Displays](displays.md#workspace-contract)). The i3 skeleton
+(the panel's slot 10) on the laptop, 20 (the portrait's slot 10) on the
+desktop ([Displays](displays.md#workspace-contract)). The i3 skeleton
 stays on workspace 10, and its bottom group is Discord/Slack/Keybase/Signal.
 Signal's class is `signal` under both
 X11 and native Wayland; both builders are verified live with it. Group order and group locking are part of the

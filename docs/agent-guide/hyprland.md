@@ -96,18 +96,20 @@ fullscreen, `shell.qml` refreshes monitors, workspaces and toplevels, coalescing
 burst over 50 ms. Windows that predate the bar and moved workspaces therefore get
 fresh associations. Workspace urgency uses `HyprlandWorkspace.urgent`;
 focused appearance takes priority. Inspect both landscape and portrait bars
-when changing widget widths or pools.
+when changing widget widths.
 
-Where workspaces are per monitor ([Displays](displays.md#workspace-contract)),
-each bar's `Workspaces.qml` shows its monitor's slots 1-10, then any workspace
-from another block on that monitor, after a gap. The `MonitorBlocks.qml`
+Workspaces are per monitor ([Displays](displays.md#workspace-contract)): each
+bar's `Workspaces.qml` shows its monitor's slots 1-10, then any workspace from
+another block on that monitor, after a gap. The `MonitorBlocks.qml`
 singleton reads which block each connector owns from Hyprland's state file.
 `FileView` misses a file created after it loaded, so the singleton also rereads
 the file 300 ms after a config reload or a monitor change. The slot a monitor
 shows is filled with the accent while that monitor has focus, and outlined
 otherwise. A click on a slot runs `workspaces.focus(slot, "OUTPUT")`; on the
 slot already shown it only focuses the monitor, since a workspace focus there
-would bounce back. A monitor without a block falls back to `shell.qml`'s pools.
+would bounce back. A monitor the state file does not list yet, in a session's
+first moments or just plugged in, uses the block of the workspace it shows, as
+Omarchy's bar does.
 
 `Pulseaudio.qml` holds an `AudioControl` each for speaker and mic, matching
 Polybar: scroll changes volume on whole wheel notches, left-click mutes, right-click

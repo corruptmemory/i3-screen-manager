@@ -29,16 +29,16 @@ instead of transferring them between backends by assumption.
 ## Layout and Scaling
 
 The commands are `extend-left/right/above/below`, `clamshell`, `mirror`,
-`disconnect`, `scale [VALUE] [OUTPUT]`, `dpi [VALUE] [OUTPUT]`, `status`, and
-Wayland-only `apply-ws-split`. `dpi` is an alias for `scale`.
+`disconnect`, `scale [VALUE] [OUTPUT]`, `dpi [VALUE] [OUTPUT]`, and `status`.
+`dpi` is an alias for `scale`.
 
 Wayland uses `hl.monitor({...})` through the script's `hl_apply` helper and
 `hyprctl-live dispatch`. The helper suppresses dispatcher errors because the
 monitor-setting call can apply its side effect before the wrapper complains;
-its exit status alone does not prove success. Workspace moves use
-`hl.dsp.workspace.move({ workspace = ..., monitor = ... })`. After a layout
-change it restarts a running `swaybg` with the same arguments through
-`hl.dsp.exec_cmd`, so Hyprland owns it whichever shell ran the command.
+its exit status alone does not prove success. The script moves no workspaces
+([Workspace Contract](#workspace-contract)). After a layout change it restarts
+a running `swaybg` with the same arguments through `hl.dsp.exec_cmd`, so
+Hyprland owns it whichever shell ran the command.
 
 Default scales are 1.25 internal and 1.0 external. The picker offers 0.75, 1.00,
 1.25, 1.50, 1.75, and 2.00. The default target is the focused Wayland output,
@@ -55,10 +55,12 @@ modes rather than a negotiated common resolution.
 ## Transition Constraints
 
 - Explicitly pass `disabled = false` when re-enabling a Hyprland monitor.
-- Enable a workspace's target monitor before moving workspaces onto it.
+- Enable the monitor that will receive workspaces before disabling the one
+  that holds them: Hyprland moves a disabled monitor's workspaces onto a
+  monitor still on. Clamshell enables the external before disabling `eDP-1`.
 - Free the internal output's destination position before restoring it. The
   disconnect sequence moves the external to `10000x0`, enables internal at
-  `0x0`, moves workspaces back, then disables the external.
+  `0x0`, then disables the external.
 - Pair the Hyprland disable with `wlr-randr --output OUTPUT --off` as the
   existing scripts do; compositor state and physical output state can differ.
 - Preserve the lid guard. `disconnect` refuses if the lid is closed or cannot
@@ -73,27 +75,28 @@ modes rather than a negotiated common resolution.
 
 ## Workspace Contract
 
-Dotfiles' `machine.lua` `workspaces` selector picks one of two Hyprland models;
-X11 layout commands implement neither.
-
-**Per monitor** (`"per-monitor"`, the desktop): every monitor has its own
-workspaces 1-10. Hyprland numbers workspaces globally, so each physical monitor,
-identified by make, model and serial, owns a block of ten ids: block b is ids
-10b+1 to 10b+10. `Super+N` shows slot N on the focused monitor,
-`Super+Shift+N` moves the window there and follows it, and `Super+comma` or
-`Super+period` focus the previous or next monitor (with Shift, the window goes
-there). The desktop's `workspace_back_and_forth` still applies: `Super+N` for
-the slot already shown returns to the previous workspace, wherever that is.
+On Hyprland, on both machines, every monitor has its own workspaces 1-10; X11
+layout commands do not implement this. Hyprland numbers workspaces globally, so
+each physical monitor, identified by make, model and serial, owns a block of
+ten ids: block b is ids 10b+1 to 10b+10. `Super+N` shows slot N on the focused
+monitor, `Super+Shift+N` moves the window there and follows it, and
+`Super+comma` or `Super+period` focus the previous or next monitor (with Shift,
+the window goes there). `Super+N` for the slot already shown returns to that
+monitor's previous workspace where `workspace_back_and_forth` is on (the
+desktop), and only focuses that monitor where it is off (the laptop).
 
 `workspaces.lua` loads Omarchy's `monitor-workspaces.lua`, vendored under
 `hypr/vendor/omarchy/` from 43c08a499 with its MIT license. Its header lists
 the local edits to reapply when re-syncing, and `tests/test_monitor_workspaces.lua`
 runs upstream's scenarios against a fake Hyprland. A connector given a `block`
-in `machine.lua` keeps that block: the desktop pins DP-2 to 1-10 and the
-portrait HDMI-A-1 to 11-20, and `monitors.lua` creates each id on its monitor.
-Any other monitor takes the lowest free block when first seen; a laptop panel
-always takes 1-10. Blocks persist in `$XDG_STATE_HOME/hypr/monitor-workspaces`
-(default `~/.local/state`), which the bar reads.
+in `machine.lua` keeps that block, and `monitors.lua` creates each of its ids
+on it: the desktop pins DP-2 to 1-10 and the portrait HDMI-A-1 to 11-20, and
+the laptop pins `eDP-1` to 1-10 (`monitors.internal.block`). Any other monitor,
+such as a laptop external, takes the lowest free block when first seen. The
+panel's pin matters when the module first runs clamshelled: the disabled panel
+is not in `hl.get_monitors()`, and unpinned, the external would take 1-10.
+Blocks persist in `$XDG_STATE_HOME/hypr/monitor-workspaces` (default
+`~/.local/state`), which the bar reads.
 
 On `hyprland.start`, `config.reloaded`, and monitor addition or removal, the
 module puts each workspace back on its monitor and each monitor on one of its
@@ -101,21 +104,15 @@ own. A removed monitor's workspaces join the remaining monitor's block after
 its own, and `monitor-workspaces-merged` sends them home when it returns. A
 script shows a slot with `hyprctl dispatch 'workspaces.focus(N, "OUTPUT")'`.
 
-**Split** (`"split"`, the laptop): the configured pools are 1-6 internal and
-7-10 external in extend mode, all 1-10 on external in clamshell, and all 1-10
-internal when undocked. Clamshell moves all existing workspaces to the
-external; disconnect moves workspaces from that external back to the internal.
-A machine switched to per monitor must drop these moves along with
-`apply-ws-split`, because the module and they would both move workspaces.
-Switched back to split, `workspaces.lua` deletes the state files from its start
-and reload hooks, so the bar returns to its pools.
-
-Keep three consumers aligned: `EXTERNAL_WORKSPACES` in the display script,
-workspace data/rules in dotfiles' `machine.lua` and `monitors.lua`, and
-Quickshell's `shell.qml` pools. Persistent workspace rules instantiate 1-10;
-`autostart.lua` invokes `apply-ws-split` on `monitor.added` and after startup.
-The command succeeds silently without an external and rejects X11 sessions.
-It moves workspaces; it is not an output-enabling command.
+Disabling a monitor is a removal to Hyprland 0.57.1: `hl.monitor` with
+`disabled = true` reaches `CMonitor::onDisconnect`, which emits
+`monitor.removed`, drops the monitor from `hl.get_monitors()`, and moves its
+workspaces onto a monitor still on. So `i3-screen-manager` moves no workspaces.
+Disabling `eDP-1`, by clamshell or by closing the lid with an external on, puts
+the panel's workspaces after the external's own; `disconnect` and lid open
+re-enable the panel and its workspaces return. Extend gives a new external the lowest free block, and it
+starts on its own first workspace. The laptop's comms wall, `chat_workspace`,
+is 10, the panel's slot 10; the desktop's is 20, the portrait's slot 10.
 
 ## Lid Helpers
 
@@ -134,6 +131,16 @@ Lid open always re-applies `eDP-1` at `auto` while an external is active, even i
 the panel is already on, so it can move the panel. The X11 lid script has
 no automatic acpid wiring supplied by this repo.
 
+A config reload while clamshelled turns `eDP-1` back on for about a second.
+Hyprland 0.57.1's reload clears every monitor rule, `monitors.lua` re-adds the
+panel without `disabled`, and `wlr-randr`'s off lasts only while its client is
+connected. The panel's workspaces go home to it, then merge back onto the
+external once `hyprland-clamshell-restore` disables it. A runtime `hl.monitor`
+eval is different: it starts from the output's current rule, so fields it
+omits, `disabled` included, keep their values. Having `monitors.lua` pass
+`disabled = true` while the clamshell inhibitor runs would avoid the bounce
+and the restore hook; untested.
+
 Extend reads internal geometry before re-enabling the internal monitor;
 transitioning directly from clamshell needs special attention. The script
 suppresses several compositor errors, so printed success is insufficient.
@@ -145,10 +152,12 @@ extend directions, mirror, clamshell, the closed-lid disconnect refusal,
 open-lid restoration, focused and explicit-output scaling, and status output.
 Check transitions from clamshell as well as from a normal extended layout.
 Inspect monitor state and visible output after every operation. On Hyprland,
-also check workspace pools, config reload, physical unplug/replug, and hot-plug
-at startup. With per-monitor workspaces, run dotfiles' `tests/run.sh`, then check
-`Super+N` on each monitor, the monitor chords, bar clicks on the unfocused
-monitor, the state file, and where a removed monitor's workspaces go and return. On X11, check PRIME discovery and newly launched apps after DPI
-changes. Do not claim these hardware checks passed based on syntax checks.
+also check config reload, including while clamshelled, physical
+unplug/replug, and hot-plug at startup. Run dotfiles' `tests/run.sh`, then
+check `Super+N` on each monitor, the monitor chords, bar clicks on the
+unfocused monitor, the state file, and where a disabled or removed monitor's
+workspaces go and return. On X11, check PRIME discovery and newly launched apps
+after DPI changes. Do not claim these hardware checks passed based on syntax
+checks.
 
 [Shared instructions and task index](../../CLAUDE.md#task-guides).
