@@ -3,8 +3,9 @@
 Read this guide for layout, docking, scaling, lid handling, monitor discovery,
 or workspace-placement changes. Sources: `i3-screen-manager`, `i3-screen-rofi`,
 `laptop-monitor.sh`, `laptop-monitor-x11.sh`, `hyprland-clamshell-restore`, and
-dotfiles' `hypr/monitors.lua`, `hypr/machine.lua`, `hypr/autostart.lua`, and
-`quickshell/shell.qml` under `.config/`.
+dotfiles' `hypr/monitors.lua`, `hypr/machine.lua`, `hypr/workspaces.lua`,
+`hypr/vendor/omarchy/`, `hypr/autostart.lua`, and `quickshell/shell.qml` under
+`.config/`.
 
 ## Backend and Scope
 
@@ -72,11 +73,42 @@ modes rather than a negotiated common resolution.
 
 ## Workspace Contract
 
-The laptop's configured pools are 1-6 internal and 7-10 external in extend
-mode, all 1-10 on external in clamshell, and all 1-10 internal when undocked.
-Clamshell moves all existing workspaces to the external; disconnect moves
-workspaces from that external back to the internal. X11 layout commands do not
-implement this Hyprland workspace split.
+Dotfiles' `machine.lua` `workspaces` selector picks one of two Hyprland models;
+X11 layout commands implement neither.
+
+**Per monitor** (`"per-monitor"`, the desktop): every monitor has its own
+workspaces 1-10. Hyprland numbers workspaces globally, so each physical monitor,
+identified by make, model and serial, owns a block of ten ids: block b is ids
+10b+1 to 10b+10. `Super+N` shows slot N on the focused monitor,
+`Super+Shift+N` moves the window there and follows it, and `Super+comma` or
+`Super+period` focus the previous or next monitor (with Shift, the window goes
+there). The desktop's `workspace_back_and_forth` still applies: `Super+N` for
+the slot already shown returns to the previous workspace, wherever that is.
+
+`workspaces.lua` loads Omarchy's `monitor-workspaces.lua`, vendored under
+`hypr/vendor/omarchy/` from 43c08a499 with its MIT license. Its header lists
+the local edits to reapply when re-syncing, and `tests/test_monitor_workspaces.lua`
+runs upstream's scenarios against a fake Hyprland. A connector given a `block`
+in `machine.lua` keeps that block: the desktop pins DP-2 to 1-10 and the
+portrait HDMI-A-1 to 11-20, and `monitors.lua` creates each id on its monitor.
+Any other monitor takes the lowest free block when first seen; a laptop panel
+always takes 1-10. Blocks persist in `$XDG_STATE_HOME/hypr/monitor-workspaces`
+(default `~/.local/state`), which the bar reads.
+
+On `hyprland.start`, `config.reloaded`, and monitor addition or removal, the
+module puts each workspace back on its monitor and each monitor on one of its
+own. A removed monitor's workspaces join the remaining monitor's block after
+its own, and `monitor-workspaces-merged` sends them home when it returns. A
+script shows a slot with `hyprctl dispatch 'workspaces.focus(N, "OUTPUT")'`.
+
+**Split** (`"split"`, the laptop): the configured pools are 1-6 internal and
+7-10 external in extend mode, all 1-10 on external in clamshell, and all 1-10
+internal when undocked. Clamshell moves all existing workspaces to the
+external; disconnect moves workspaces from that external back to the internal.
+A machine switched to per monitor must drop these moves along with
+`apply-ws-split`, because the module and they would both move workspaces.
+Switched back to split, `workspaces.lua` deletes the state files from its start
+and reload hooks, so the bar returns to its pools.
 
 Keep three consumers aligned: `EXTERNAL_WORKSPACES` in the display script,
 workspace data/rules in dotfiles' `machine.lua` and `monitors.lua`, and
@@ -105,9 +137,6 @@ no automatic acpid wiring supplied by this repo.
 Extend reads internal geometry before re-enabling the internal monitor;
 transitioning directly from clamshell needs special attention. The script
 suppresses several compositor errors, so printed success is insufficient.
-Quickshell checks named desktop pools before its dynamic laptop fallback;
-verify pool behavior when a laptop external happens to use `DP-2` or
-`HDMI-A-1`.
 
 ## Display Verification
 
@@ -117,7 +146,9 @@ open-lid restoration, focused and explicit-output scaling, and status output.
 Check transitions from clamshell as well as from a normal extended layout.
 Inspect monitor state and visible output after every operation. On Hyprland,
 also check workspace pools, config reload, physical unplug/replug, and hot-plug
-at startup. On X11, check PRIME discovery and newly launched apps after DPI
+at startup. With per-monitor workspaces, run dotfiles' `tests/run.sh`, then check
+`Super+N` on each monitor, the monitor chords, bar clicks on the unfocused
+monitor, the state file, and where a removed monitor's workspaces go and return. On X11, check PRIME discovery and newly launched apps after DPI
 changes. Do not claim these hardware checks passed based on syntax checks.
 
 [Shared instructions and task index](../../CLAUDE.md#task-guides).

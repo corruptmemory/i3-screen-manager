@@ -8,8 +8,8 @@ sources are `dotfiles/.config/hypr/` and `dotfiles/.config/quickshell/`.
 ## Session and Configuration
 
 The live Hyprland config directory points into dotfiles. `hyprland.lua` loads
-`machine`, `vars`, `envs`, `monitors`, `looknfeel`, `rules`, `autostart`, and
-`bindings`. `machine.lua` selects static capabilities by hostname; branch on
+`machine`, `vars`, `envs`, `monitors`, `workspaces`, `looknfeel`, `rules`,
+`autostart`, and `bindings`. `machine.lua` selects static capabilities by hostname; branch on
 traits for hardware behavior. `HYPR_MACHINE_OVERRIDE` supports the test harness.
 Keep config-load code cheap and free of startup side effects: configuration
 evaluation can happen more than once on a reload. Launch daemons from
@@ -84,6 +84,17 @@ burst over 50 ms. Windows that predate the bar and moved workspaces therefore ge
 fresh associations. Workspace urgency uses `HyprlandWorkspace.urgent`;
 focused appearance takes priority. Inspect both landscape and portrait bars
 when changing widget widths or pools.
+
+Where workspaces are per monitor ([Displays](displays.md#workspace-contract)),
+each bar's `Workspaces.qml` shows its monitor's slots 1-10, then any workspace
+from another block on that monitor, after a gap. The `MonitorBlocks.qml`
+singleton reads which block each connector owns from Hyprland's state file.
+`FileView` misses a file created after it loaded, so the singleton also rereads
+the file 300 ms after a config reload or a monitor change. The slot a monitor
+shows is filled with the accent while that monitor has focus, and outlined
+otherwise. A click on a slot runs `workspaces.focus(slot, "OUTPUT")`; on the
+slot already shown it only focuses the monitor, since a workspace focus there
+would bounce back. A monitor without a block falls back to `shell.qml`'s pools.
 
 `Pulseaudio.qml` holds an `AudioControl` each for speaker and mic, matching
 Polybar: scroll changes volume on whole wheel notches, left-click mutes, right-click

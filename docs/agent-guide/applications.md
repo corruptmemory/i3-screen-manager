@@ -44,15 +44,19 @@ uses `append_layout` and swallow criteria; its rebuild helper can close and
 relaunch the chat windows. The Hyprland builder `hypr-chat-layout` launches
 missing apps, selects their primary windows, parks targets on a special
 workspace, and serially forms Messages/WhatsApp and
-Discord/Keybase/Slack/Signal groups on workspace 10. The i3 skeleton's bottom
-group is Discord/Slack/Keybase/Signal. Signal's class is `signal` under both
+Discord/Keybase/Slack/Signal groups on the chat workspace. That is dotfiles'
+`machine.lua` `chat_workspace`, read through `lua5.4`, or `--workspace N`: 10
+on the laptop, 20 (the portrait's slot 10) on the desktop, whose workspaces
+are per monitor ([Displays](displays.md#workspace-contract)). The i3 skeleton
+stays on workspace 10, and its bottom group is Discord/Slack/Keybase/Signal.
+Signal's class is `signal` under both
 X11 and native Wayland; both builders are verified live with it. Group order and group locking are part of the
 algorithm; app startup and largest-window selection handle transient helpers.
 Rerunning rebuilds the grouping of existing windows. It can visibly move
 windows and must remain a shell workflow because it waits for mapping.
 
 The desktop has the chat builder integration. Shared Hyprland rules place
-chat apps on workspace 10 on the laptop, but do not infer an automatic laptop
+chat apps on the same chat workspace on both machines, but do not infer an automatic laptop
 chat-wall build. Consult the actual autostart entries; a provided helper is
 not necessarily enabled at login. Verify repeat invocation, missing apps,
 main-window selection, tab order, and focus restoration after builder changes.
