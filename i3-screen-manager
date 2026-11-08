@@ -98,13 +98,28 @@ inhibitor_is_active() {
     [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
 }
 
+# start_inhibitor takes the lid-switch lock and fails when it is not held. polkit grants
+# the lock only to the seat's active session, so from an SSH or Rex shell elogind-inhibit
+# prints "Failed to inhibit: Access denied" and exits. The lock counts only once elogind
+# lists it under this process.
 start_inhibitor() {
     stop_inhibitor
     elogind-inhibit --what=handle-lid-switch \
         --who="i3-screen-manager" \
         --why="Clamshell mode — lid close safe" \
         --mode=block sleep infinity &
-    echo $! > "$PIDFILE"
+    local pid=$! i
+    for i in $(seq 1 20); do
+        if elogind-inhibit --list --no-legend --no-pager 2>/dev/null |
+            grep -qE "^i3-screen-manager +[0-9]+ +[^ ]+ +$pid "; then
+            echo "$pid" > "$PIDFILE"
+            return 0
+        fi
+        kill -0 "$pid" 2>/dev/null || return 1
+        sleep 0.1
+    done
+    kill "$pid" 2>/dev/null || true
+    return 1
 }
 
 stop_inhibitor() {
@@ -184,16 +199,19 @@ preferred_height_wayland() { preferred_mode_wayland "$1" | grep -oP 'x\K\d+'; }
 refresh_desktop_wayland() {
     # After monitor layout changes, swaybg and waybar don't auto-cover
     # repositioned outputs. Restart swaybg with its current args, then reload
-    # waybar config.
-    local pid
+    # waybar config. The new swaybg starts through Hyprland's exec so the
+    # compositor owns it: a child of this script dies with the terminal that ran
+    # it (an SSH or Rex shell), and only a running swaybg is ever restarted.
+    local pid cmd out
     pid=$(pgrep -o swaybg 2>/dev/null || true)
     if [[ -n "$pid" ]]; then
         local -a args
         mapfile -d '' args < /proc/"$pid"/cmdline
+        cmd=$(printf '%q ' "${args[@]}")
         pkill swaybg 2>/dev/null || true
         sleep 0.2
-        "${args[@]}" &
-        disown
+        out=$(hyprctl dispatch "hl.dsp.exec_cmd([==[${cmd% }]==])" 2>&1) || true
+        [[ "$out" == ok ]] || echo "i3-screen-manager: could not restart swaybg: $out" >&2
     fi
     pkill -SIGUSR2 waybar 2>/dev/null || true
 }
@@ -379,11 +397,24 @@ cmd_clamshell() {
         exit 1
     fi
 
+    # Take the lid-switch lock before touching the layout, so a refusal changes
+    # nothing. The display menu drops stderr, hence the notification.
+    if ! start_inhibitor; then
+        local msg="Clamshell mode not entered: elogind refused the lid-switch lock, so closing the lid could suspend the laptop. Run it from the desktop session, not an SSH or Rex shell."
+        echo "$msg" >&2
+        command -v notify-send >/dev/null && notify-send -u critical "Clamshell" "$msg"
+        exit 1
+    fi
+    # If the layout change aborts, release the lock: while it is held, lid-open
+    # events and config reloads keep the internal display off.
+    trap stop_inhibitor EXIT
+
     if is_wayland; then
         cmd_clamshell_wayland "$ext"
     else
         cmd_clamshell_x11 "$ext"
     fi
+    trap - EXIT
 }
 
 cmd_clamshell_wayland() {
@@ -407,7 +438,6 @@ cmd_clamshell_wayland() {
     sleep 0.3
     refresh_desktop_wayland
 
-    start_inhibitor
     echo "Clamshell (Wayland): $ext only — lid-close safe"
 }
 
@@ -421,7 +451,6 @@ cmd_clamshell_x11() {
     sleep 0.3
     refresh_desktop_x11
 
-    start_inhibitor
     echo "Clamshell (X11): $ext only — lid-close safe"
 }
 
