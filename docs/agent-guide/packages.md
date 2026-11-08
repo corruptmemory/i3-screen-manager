@@ -126,8 +126,8 @@ Reviewed and rejected: AUR `screenconnect-bin`. It contains no software and need
 installer from a ScreenConnect instance, hardcodes one instance's ID, and ships a systemd
 unit that runs the client as root at boot. Take the client from the instance instead. Read
 and scan the installer before running it, and confirm it is a technician client, not an
-unattended agent that lets the instance's operators in. Neither machine has it yet; both
-have the Java runtime the recipe depends on.
+unattended agent that lets the instance's operators in. Both machines run a technician
+client installed that way ([Applications](applications.md#screenconnect)).
 
 ## Malware Scanning
 

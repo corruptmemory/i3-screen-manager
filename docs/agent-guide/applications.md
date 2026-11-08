@@ -1,7 +1,8 @@
 # Applications
 
 Read this guide for Ghostty/Brave identity and config deployment, chat layout,
-GTK dialogs, the Rex terminal server, or application-specific desktop integration.
+GTK dialogs, the Rex terminal server, the ScreenConnect client, or application-specific
+desktop integration.
 Sources are chiefly dotfiles' launchers, `.desktop` overrides, WM rules, terminal
 configs, and `rex-link`. The ArtCraft apps and `craft-apps` have their own
 [guide](artcraft.md).
@@ -171,6 +172,25 @@ prints usage. Omacalc opens with `Super+Shift+Q` or the calculator key, and
 floats under both Hyprland and i3. Both apps read colors from Omarchy's
 `~/.local/state/omarchy/current/theme/colors.toml` when it exists and otherwise
 use their own defaults; nothing writes that file here.
+
+## ScreenConnect
+
+Both machines have a ScreenConnect technician client, installed per user from the
+instance's own installer ([Package installation](packages.md#aur-audit-contract)). It
+lives in `~/.local/share/applications/connectwisecontrol-<instance>/`, beside a
+`.desktop` file that handles the `sc-<instance>` URL scheme. Its launch parameters say
+`y=Host`, the technician side, and nothing starts it at boot. The client needs the
+system Java runtime.
+
+A Join link reaches the client through `xdg-desktop-portal`, which starts the handler
+with the D-Bus session's activation environment, not the browser's. The client is Java
+drawing through XWayland, so that environment needs `DISPLAY`. Dotfiles' `autostart.lua`
+passes `DISPLAY` with `WAYLAND_DISPLAY` to `dbus-update-activation-environment` when
+Hyprland starts, which reaches only programs D-Bus starts after that; restart a portal
+that is already running without it. The launcher runs Java in the background and appends
+all its output to `~/.local/share/applications/connectwisecontrol-<instance>-logs`, so
+a failed start shows nothing in the browser. Read that log first, and check a Join after
+a fresh Hyprland login when the session's startup environment changes.
 
 ## Application Verification
 
