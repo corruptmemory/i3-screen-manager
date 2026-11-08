@@ -172,7 +172,6 @@ layout is owned by dotfiles, while focused-output scaling is available there.
 | `scale [VALUE] [OUTPUT]`        | Wayland output scaling or session-wide X11 font DPI                |
 | `dpi [VALUE] [OUTPUT]`          | Alias for `scale`                                                  |
 | `status`                        | Detected outputs, monitor geometry, Wayland scale, inhibitor state |
-| `apply-ws-split`                | Wayland only: move workspaces 7-10 to the detected external        |
 
 ```bash
 i3-screen-manager status
@@ -186,10 +185,11 @@ Wayland scale targets the focused output by default, with `eDP-1` as fallback;
 it also reapplies preferred mode and automatic position. X11 sets `Xft.dpi`
 through xrdb and needs newly launched apps. Neither persists monitor defaults.
 
-The configured laptop workspace split is 1-6 internal / 7-10 external when
-extended, all on external in clamshell, and all internal when undocked.
-Hyprland hooks and persistent workspace rules in dotfiles complete this behavior.
-See [display constraints and verification](docs/agent-guide/displays.md).
+On Hyprland every monitor has its own workspaces 1-10: the laptop panel's are
+ids 1-10, and an external's are the next free ten. The script moves no
+workspaces. Hyprland and dotfiles' per-monitor module move a disabled
+monitor's workspaces onto the one still on, after its own, and send them back
+when it returns. See [display constraints and verification](docs/agent-guide/displays.md).
 
 Use `hyprctl-live` for queries from shells that outlived a compositor restart.
 See the [Hyprland guide](docs/agent-guide/hyprland.md) and
