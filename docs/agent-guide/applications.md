@@ -143,6 +143,28 @@ laptop, and the reverse from the desktop.
 session through `-S self`, check that `rex run --wait` returns the command's status, then
 `--stop self` and `rex hosts remove self`.
 
+## Hype and Omacalc
+
+Omarchy's MIT-licensed Qt Quick apps, Hype (Markdown presentations) and Omacalc
+(calculator), are built from source as the user. They are not pacman packages:
+the AUR has an unrelated `hype`, which `yay -Syu` would offer as an upgrade to a
+locally built one. Their Qt dependencies, including `qt6-multimedia` and
+`qt6-imageformats`, come from the official repositories.
+
+Each is cloned to `~/projects/<app>` from `github.com/omacom/hype` or
+`github.com/omacom-io/omacalc` and checked out at a release tag. Its own
+`bin/build` runs `qmake6` and `make` into `build/`. `~/.local/bin/<app>` links to
+`build/<app>`, and the repository's `pkgbuild/<app>.desktop` and `<app>.svg` are
+copied to `~/.local/share/applications` and `~/.local/share/icons/hicolor/scalable/apps`.
+To update, check out the newer tag and run `bin/build` again; copy the two files
+again if they changed.
+
+Hype opens from the app launcher, whose entry runs `hype open`; a bare `hype`
+prints usage. Omacalc opens with `Super+Shift+Q` or the calculator key, and
+floats under both Hyprland and i3. Both apps read colors from Omarchy's
+`~/.local/state/omarchy/current/theme/colors.toml` when it exists and otherwise
+use their own defaults; nothing writes that file here.
+
 ## Application Verification
 
 Check the resolved config, effective settings, actual window identity, and
