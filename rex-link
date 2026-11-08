@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# rex-link: reach another machine's Rex server through an SSH forward of its socket.
+#
+#   rex-link LABEL SSH_DESTINATION   forward and register the host, e.g. rex-link desktop jim@192.168.1.19
+#   rex-link --stop LABEL            close the forward
+#   rex-link --status                list open forwards
+#
+# Afterwards `rex -S LABEL ...` reaches that server. The forward opens no port and needs only
+# SSH. It never starts the remote server: one started over SSH has no display or session bus,
+# and the remote session's own autostart would then leave it running. See
+# docs/agent-guide/applications.md.
+set -euo pipefail
+
+dir=${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is not set}/rex-link
+
+die() { printf 'rex-link: %s\n' "$*" >&2; exit 1; }
+for c in ssh rex jq; do command -v "$c" >/dev/null || die "missing command: $c"; done
+
+usage() {
+	sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//' >&2
+	exit 2
+}
+
+alive() { # LABEL
+	[ -S "$dir/$1.ctl" ] && ssh -S "$dir/$1.ctl" -O check "$(cat "$dir/$1.dest")" 2>/dev/null
+}
+
+stop() { # LABEL
+	local label=$1
+	if alive "$label"; then
+		ssh -S "$dir/$label.ctl" -O exit "$(cat "$dir/$label.dest")" 2>/dev/null || true
+	fi
+	rm -f -- "$dir/$label.sock" "$dir/$label.ctl" "$dir/$label.dest"
+	echo "rex-link: $label closed"
+}
+
+status() {
+	local f label any=no
+	for f in "$dir"/*.dest; do
+		[ -e "$f" ] || continue
+		label=$(basename -- "$f" .dest)
+		any=yes
+		if alive "$label"; then
+			printf '%-12s open    %s\n' "$label" "$(cat "$f")"
+		else
+			printf '%-12s closed  %s\n' "$label" "$(cat "$f")"
+		fi
+	done
+	[ "$any" = yes ] || echo "rex-link: no forwards"
+}
+
+case "${1:-}" in
+--stop) [ $# -eq 2 ] || usage; stop "$2"; exit 0 ;;
+--status) status; exit 0 ;;
+-h | --help | "") usage ;;
+esac
+[ $# -eq 2 ] || usage
+label=$1 dest=$2
+[[ $label =~ ^[A-Za-z0-9._-]+$ ]] || die "LABEL may hold only letters, digits, dot, dash and underscore"
+
+mkdir -p -m 700 "$dir"
+local_sock=$dir/$label.sock
+
+if alive "$label"; then
+	echo "rex-link: $label is already open"
+else
+	# Ask the remote server where it listens. `rex server status` never starts a server.
+	status_json=$(ssh -o BatchMode=yes "$dest" rex server status --json 2>&1) ||
+		die "no Rex server answered on $dest. Start one from its graphical session (the i3 and Hyprland autostarts do), not over SSH. ssh said: $status_json"
+	endpoint=$(jq -r '.endpoint // empty' <<<"$status_json")
+	[[ $endpoint == unix://* ]] || die "unexpected endpoint from $dest: ${endpoint:-none}"
+	remote_sock=${endpoint#unix://}
+
+	rm -f -- "$local_sock" "$dir/$label.ctl"
+	ssh -f -N -M -S "$dir/$label.ctl" \
+		-o BatchMode=yes -o ExitOnForwardFailure=yes -o StreamLocalBindUnlink=yes \
+		-o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+		-L "$local_sock:$remote_sock" "$dest" ||
+		die "the SSH forward to $dest failed"
+	printf '%s\n' "$dest" >"$dir/$label.dest"
+	echo "rex-link: $label open: $local_sock -> $dest:$remote_sock"
+fi
+
+# Register the host once. An existing host of that name is left alone.
+if ! rex hosts list --json 2>/dev/null | jq -e --arg l "$label" \
+	'[.hosts[]?.host.label // empty | ascii_downcase] | index($l | ascii_downcase)' >/dev/null; then
+	rex hosts add "$label" "unix://$local_sock" >/dev/null
+	echo "rex-link: added host $label"
+fi
+
+remote=$(rex -S "$label" server status --json 2>/dev/null | jq -r '"\(.rex_version) with \(.session_count) session(s)"') ||
+	die "the forward is open but rex -S $label does not answer"
+echo "rex-link: rex -S $label reaches Rex $remote"

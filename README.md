@@ -20,6 +20,7 @@ symlinked into `~/.local/bin`. Installing them does not install a desktop config
 | Screenshots                | `screenshot` (grim/slurp/tensaku), `screenshot.sh` (hyprshot/satty), `flameshot.sh`                                                  |
 | Desktop helpers            | `i3-cmos-battery`, `keybase-popup-anchor-x11`, `volumecontrol.sh`                                                                    |
 | Network                    | `i3-tailscale-rofi`, `i3-net-profile`, `i3-net-profile-rofi`                                                                         |
+| Rex terminal server        | `rex-link` (SSH forward to another machine's Rex server)                                                                             |
 | Usage records              | `agent-usage`, `agent-usage-claude`, `agent-usage-codex`; `agent-usage-polybar`, `agent-usage-rofi` (i3/Polybar bar item and popout) |
 | System utilities           | `aur-malware-check`, `tool-audit`, `artix-rank-mirrors`, `win11-vm-setup.sh`                                                         |
 | ArtCraft agent control     | `craft-apps` (with `craft-apps.toml`)                                                                                                |
@@ -47,6 +48,7 @@ Install additional dependencies for the features being used:
 | AUR audit                      | `pacman`, `curl` or a local denylist                                                                                   |
 | Mirror ranking                 | Python 3.10+, `vercmp` (pacman), `bsdtar` (libarchive), network access                                                 |
 | RDP test bench (`tools/rdp/`)  | `freerdp`, Xvfb or Xephyr, `xdotool`, ImageMagick, `xclip`, `xdpyinfo`, Node 21+                                       |
+| Rex link                       | `rex`, OpenSSH, `jq`                                                                                                   |
 | ArtCraft control               | Python 3.11+, the ArtCraft app packages, `claude` for `register`, `notify-send`                                        |
 
 Quickshell and Polybar are output consumers, not requirements for the display
@@ -81,10 +83,11 @@ for script in agent-usage agent-usage-claude agent-usage-codex \
 done
 ```
 
-Link `i3-net-profile`, `i3-net-profile-rofi`, and `tool-audit` the same way. Their setup, including the
+Link `i3-net-profile`, `i3-net-profile-rofi`, `tool-audit`, and `rex-link` the same way. Their setup, including the
 root-owned files dotfiles stages for them, is in the
 [network profiles](docs/agent-guide/network-profiles.md) and
-[package](docs/agent-guide/packages.md) guides.
+[package](docs/agent-guide/packages.md) guides; Rex's is in the
+[applications guide](docs/agent-guide/applications.md#rex).
 
 The dotfiles repo supplies keybindings, autostart hooks, and bar widgets.
 `start-hyprland` is a TTY session launcher, not an in-session autostart command;
