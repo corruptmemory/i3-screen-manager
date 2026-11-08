@@ -199,17 +199,20 @@ See the [Hyprland guide](docs/agent-guide/hyprland.md) and
 
 The configured Hyprland bindings include:
 
-| Binding                | Action                                              |
-|------------------------|-----------------------------------------------------|
-| `Super+Backspace`      | Display menu                                        |
-| `Super+Ctrl+Backspace` | Keyboard menu                                       |
-| `Super+Alt+Backspace`  | Scale picker (`dpi` alias on desktop)               |
-| `Super+Alt+M`          | Mouse DPI, where installed                          |
-| `Super+Shift+B`        | Bitwarden via `rofi-rbw --typer ydotool`            |
-| `Super+Shift+N`        | Tailscale menu on the laptop                        |
-| `Print`                | Flameshot                                           |
-| `Super+Print`          | Region capture and annotation, with tensaku enabled |
-| `Super+Shift+P`        | Quickshell restart                                  |
+| Binding                | Action                                                               |
+|------------------------|----------------------------------------------------------------------|
+| `Super+Backspace`      | Display menu                                                         |
+| `Super+Ctrl+Backspace` | Keyboard menu                                                        |
+| `Super+Alt+Backspace`  | Scale picker (`dpi` alias on desktop)                                |
+| `Super+Alt+M`          | Mouse DPI, where installed                                           |
+| `Super+Shift+B`        | Bitwarden via `rofi-rbw --typer ydotool`                             |
+| `Super+1` to `Super+0` | Slot 1-10 on the focused monitor; with Shift, move the window there  |
+| `Super+,` / `Super+.`  | Focus the previous / next monitor; with Shift, move the window there |
+| `Ctrl+Alt+Left/Right`  | Cycle the focused monitor's workspaces                               |
+| `Super+Shift+N`        | Tailscale menu on the laptop                                         |
+| `Print`                | Flameshot                                                            |
+| `Super+Print`          | Region capture and annotation, with tensaku enabled                  |
+| `Super+Shift+P`        | Quickshell restart                                                   |
 
 The authoritative bindings and machine gates are in
 `dotfiles/.config/hypr/bindings.lua`. X11 bindings belong to their WM configs.

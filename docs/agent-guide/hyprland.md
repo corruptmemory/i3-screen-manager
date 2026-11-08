@@ -64,7 +64,10 @@ the monitor. Cross-group vertical focus is on `Super+Ctrl+arrows`.
 A chord i3 also binds does the same job here, and `tests/test_bindings.lua` holds
 the list. The exceptions have no direct equivalent: `Super+F` maximizes and
 `Super+Shift+F` fullscreens, and the `Super+-` scratchpad is a special workspace
-that shows all its windows at once, tiled.
+that shows all its windows at once, tiled. Workspaces are per monitor here and
+global in i3, so `Super+N` and `Super+Shift+N` act on slot N of the focused
+monitor, and `Ctrl+Alt+Left/Right` cycles only that monitor's workspaces
+([Displays](displays.md#workspace-contract)).
 
 Use Lua callbacks for short compositor-event logic that reads live compositor
 state. Keep blocking waits, external tool orchestration, and cross-session
@@ -189,7 +192,9 @@ For config changes, run dotfiles' Lua tests, inspect `hyprctl-live configerrors`
 then exercise the affected behavior in the actual compositor. Check both
 machine branches, reload versus startup, focus at group edges, and every
 monitor when relevant. Bar checks include duplicate instances, tray menus,
-portrait overlap, popout dismissal, urgency, and missing-data states. Capture
+portrait overlap, popout dismissal, urgency, missing-data states, and the
+workspace buttons after a monitor leaves and returns, when the module
+renumbers workspaces: no phantom buttons. Capture
 checks include cancellation, clipboard output, and annotation availability.
 
 [Shared instructions and task index](../../CLAUDE.md#task-guides).
