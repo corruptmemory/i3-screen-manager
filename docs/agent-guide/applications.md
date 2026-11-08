@@ -127,13 +127,14 @@ shell gives its terminals `xterm-256color`. `rex terminfo status` run with the s
 the untracked `~/.claude/settings.json` and in `~/.codex/hooks.json`. Outside Rex the hook
 prints nothing and starts no server. Codex runs its hook only after `/hooks` approves it.
 
-The laptop has all of this. The desktop has an older tarball Rex in `/usr/local/bin` and
-none of the setup: pull dotfiles, install the key, repo, package, login server, and
-accounts file from dotfiles `etc/` as their headers say, delete `/usr/local/bin/rex` (it
-shadows `/usr/bin/rex`), start the service, and run `rex terminfo setup` and
-`rex skill setup`. If `readlink -f ~/.config/fish/config.fish` there is not the dotfiles
-copy, delete its `set -xg TERM` line by hand. Then, from the laptop, run
-`rex-link desktop jim@192.168.1.19` and `rex -S desktop ls`.
+Both machines have all of this. To set up another: pull dotfiles, check that `rex.asc`
+matches the key the vendor serves at `https://pkgs.superlogical.com/rex/keys/rex.asc`, and
+install the key, repo, package, login server, and accounts file from dotfiles `etc/` as
+their headers say. Delete any tarball Rex in `/usr/local/bin`, which shadows `/usr/bin/rex`,
+then start the service and run `rex terminfo setup` and `rex skill setup`. The desktop's
+`config.fish` is a local file, not the dotfiles copy, so dotfiles changes to it reach the
+desktop only by hand. Link the machines with `rex-link desktop jim@192.168.1.19` from the
+laptop, and the reverse from the desktop.
 
 `rex-link self jim@localhost` tests the forward without a second machine: create a
 session through `-S self`, check that `rex run --wait` returns the command's status, then
