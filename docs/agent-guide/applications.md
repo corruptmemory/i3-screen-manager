@@ -26,14 +26,18 @@ so its `ssh` sends `xterm-kitty`.
 Brave Origin's profile directories are machine-local. `machine.lua` supplies
 the alternate-profile directory to Hyprland launchers; do not assume identical
 `Profile N` slots across hosts. Every profile runs in one browser process, and
-its flags come from whichever launch started it, so each Brave key, `Super+B`
-and `Super+y` under Hyprland and i3 alike, passes `--remote-debugging-port=9222`
-and WebMCP. A link opened while Brave is closed, as an agent's `xdg-open` does,
-starts it from the package's `.desktop` file without them, and so can a PWA
-launched first. The chat wall's PWAs keep that process running after its last
-browser window closes, so applying the flags takes a full quit (`Ctrl+Shift+Q`).
-Inspect the running command (`ps -C brave`) and local launcher before changing
-flags.
+its flags come from whichever launch started it. Dotfiles'
+`.config/brave-origin-flags.conf`, linked at `~/.config/brave-origin-flags.conf`
+on both machines, gives every launch `--remote-debugging-port=9222` and
+`--enable-features=WebMCP`: `/usr/bin/brave-origin` reads it and passes its
+lines ahead of the launcher's own arguments. That covers a link opened while
+Brave is closed, as an agent's `xdg-open` does, which starts it from the
+package's `.desktop` file. Each Brave key (`Super+B`, `Super+y`, Hyprland and
+i3) passes both flags as well. Chromium keeps only the last `--enable-features`,
+so a launcher with its own list must include WebMCP. The chat wall's PWAs keep
+the process running after its last browser window closes, so applying new flags
+takes a full quit (`Ctrl+Shift+Q`). Inspect the running command (`ps -C brave`)
+and local launcher before changing flags.
 
 Native-messaging host manifests and MIME associations are local integration
 points. Recheck their paths when changing browser packages or profiles. For
