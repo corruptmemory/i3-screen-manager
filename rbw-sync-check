@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# rbw-sync-check: make a failed Bitwarden (rbw) sync visible.
+#
+#   rbw-sync-check                  one check; exit 1 when it should notify
+#   rbw-sync-check --watch [--delay S] [--interval S] [--renotify S] [--stale S]
+#
+# rofi-rbw's "Sync logins" (Alt+s) runs `rbw sync` and discards its exit status
+# and message, and rbw-agent's periodic sync reports nothing either. A login the
+# server stopped accepting therefore left rbw on a months-old copy of the vault
+# with no sign of it. This runs `rbw sync` itself and raises a critical
+# notification when it fails: at once for any error but a network one, and for a
+# network error (offline, hotel Wi-Fi) only once the copy is older than --stale
+# (default 3 days). A sync needs only rbw's saved login, never an unlocked vault;
+# with no login at all (after `rbw purge`) rbw would ask for the master password,
+# so then it does nothing.
+#
+# --watch checks after --delay seconds (default 120), then every --interval
+# (default 3600), and while it keeps failing notifies again at most every
+# --renotify (default 21600). One watcher runs per user; a second start exits.
+# The session autostarts start it. See docs/agent-guide/x11-input.md.
+set -uo pipefail
+
+delay=120 interval=3600 renotify=21600 stale=259200 watch=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --watch)    watch=1 ;;
+        --delay)    delay=${2:-}; shift ;;
+        --interval) interval=${2:-}; shift ;;
+        --renotify) renotify=${2:-}; shift ;;
+        --stale)    stale=${2:-}; shift ;;
+        -h|--help)  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) echo "rbw-sync-check: unknown argument: $1 (try --help)" >&2; exit 2 ;;
+    esac
+    shift
+done
+for v in "$delay" "$interval" "$renotify" "$stale"; do
+    [[ $v =~ ^[0-9]+$ ]] || { echo "rbw-sync-check: intervals are whole seconds" >&2; exit 2; }
+done
+
+cache=${XDG_CACHE_HOME:-$HOME/.cache}/rbw
+
+# The age in seconds of rbw's local copy of the vault, which each successful sync
+# rewrites; empty when there is none (no login).
+copy_age() {
+    local newest
+    newest=$(find "$cache" -maxdepth 1 -name '*.json' -printf '%T@\n' 2>/dev/null | sort -n | tail -1)
+    [ -n "$newest" ] && echo $(( $(date +%s) - ${newest%.*} ))
+}
+
+# One sync. Prints why it should notify and returns 1, or returns 0: synced,
+# nothing to check, or offline with a copy that is still recent.
+check() {
+    if ! command -v rbw >/dev/null 2>&1; then
+        echo "rbw is not installed"
+        return 1
+    fi
+    local age err
+    age=$(copy_age)
+    [ -n "$age" ] || return 0
+    err=$(rbw sync 2>&1 >/dev/null) && return 0
+    [ -n "$err" ] || err="rbw sync failed without a message"
+    case $err in
+        *"error sending request"*|*"dns error"*|*"Connection refused"*|*"timed out"*|*"Network is unreachable"*)
+            [ "$age" -lt "$stale" ] && return 0
+            err="no sync for $(( age / 86400 )) days: $err" ;;
+    esac
+    echo "$err"
+    return 1
+}
+
+notify() {
+    local body=$1
+    case $body in
+        *access_token*|*invalid_grant*|*"refresh token"*)
+            body+=$'\n'"Fix: rbw purge; rbw login; rbw sync" ;;
+    esac
+    echo "rbw-sync-check: $1" >&2
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u critical -a rbw-sync-check "Bitwarden sync failed (rbw)" "$body"
+    fi
+}
+
+if [ "$watch" = 0 ]; then
+    if err=$(check); then exit 0; fi
+    notify "$err"
+    exit 1
+fi
+
+exec 9>"${XDG_RUNTIME_DIR:-/tmp}/rbw-sync-check.lock"
+flock -n 9 || exit 0
+
+sleep "$delay"
+notified=0
+while :; do
+    if err=$(check); then
+        notified=0
+    else
+        now=$(date +%s)
+        if [ "$notified" = 0 ] || [ $(( now - notified )) -ge "$renotify" ]; then
+            notify "$err"
+            notified=$now
+        fi
+    fi
+    sleep "$interval"
+done

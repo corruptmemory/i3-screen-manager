@@ -64,6 +64,22 @@ device rules. X11 uses xdotool with a plain rofi-rbw binding. `Super+Alt+V` type
 the clipboard, with `wl-paste` and `ydotool` under Hyprland and the desktop's
 machine-local `xdtpaste.sh` under i3. Keep typing tests to non-secret sample text.
 
+rofi offers whatever `rbw`'s local copy of the vault holds. rofi-rbw's "Sync
+logins" (`Alt+s`) runs `rbw sync` and discards its exit status and message, and
+`rbw-agent`'s hourly sync reports nothing either. When the server rejected the
+saved login, both machines stayed on months-old copies, missing new entries and
+typing old passwords. `rbw-sync-check --watch`, started by every session
+(Hyprland autostart, both i3 configs, both IceWM xinitrc files), runs `rbw sync`
+two minutes after login and hourly after that. One watcher runs per user. It
+raises a critical notification on any failure, repeated at most every six
+hours. A network error notifies only once the copy is three days old. A
+rejected login (`missing field access_token`) comes with the fix: `rbw purge`,
+`rbw login`, `rbw sync`. `rbw login` alone does nothing while the rejected
+login is still saved. A sync needs only that saved login, never an unlocked
+vault. With no login at all the check does nothing, so it never prompts for the
+master password. Without secrets, the copy's age is the mtime of
+`~/.cache/rbw/*.json`. Never use `rbw get` in checks; it prints the password.
+
 An unavailable clipboard owner can block X11 paste; inspect the configured clipboard
 manager and the owning app before blaming the consumer. i3 runs `copyq`. Hyprland
 autostart runs `wl-clip-persist --clipboard regular` from the Artix repos, because

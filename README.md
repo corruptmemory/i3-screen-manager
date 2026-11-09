@@ -18,7 +18,7 @@ symlinked into `~/.local/bin`. Installing them does not install a desktop config
 | Hyprland session and sleep | `start-hyprland`, `hyprctl-live`, `hypr-dpms-all`                                                                                    |
 | Lid handling               | `laptop-monitor.sh`, `laptop-monitor-x11.sh`                                                                                         |
 | Screenshots                | `screenshot` (grim/slurp/tensaku), `screenshot.sh` (hyprshot/satty), `flameshot.sh`                                                  |
-| Desktop helpers            | `i3-cmos-battery`, `keybase-popup-anchor-x11`, `volumecontrol.sh`                                                                    |
+| Desktop helpers            | `i3-cmos-battery`, `keybase-popup-anchor-x11`, `volumecontrol.sh`, `rbw-sync-check` (Bitwarden sync watch)                           |
 | Network                    | `i3-tailscale-rofi`, `i3-net-profile`, `i3-net-profile-rofi`, `captive-portal` (portal sign-in)                                      |
 | Rex terminal server        | `rex-link` (SSH forward to another machine's Rex server)                                                                             |
 | Usage records              | `agent-usage`, `agent-usage-claude`, `agent-usage-codex`; `agent-usage-polybar`, `agent-usage-rofi` (i3/Polybar bar item and popout) |
