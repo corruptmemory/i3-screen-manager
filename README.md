@@ -208,6 +208,7 @@ The configured Hyprland bindings include:
 | `Super+Shift+B`        | Bitwarden via `rofi-rbw --typer ydotool`                             |
 | `Super+1` to `Super+0` | Slot 1-10 on the focused monitor; with Shift, move the window there  |
 | `Super+,` / `Super+.`  | Focus the previous / next monitor; with Shift, move the window there |
+| `Super+L`              | Float or tile the focused workspace's windows                        |
 | `Ctrl+Alt+Left/Right`  | Cycle the focused monitor's workspaces                               |
 | `Super+Shift+N`        | Tailscale menu on the laptop                                         |
 | `Print`                | Flameshot                                                            |

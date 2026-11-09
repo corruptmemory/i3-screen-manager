@@ -9,7 +9,7 @@ sources are `dotfiles/.config/hypr/` and `dotfiles/.config/quickshell/`.
 
 The live Hyprland config directory points into dotfiles. `hyprland.lua` loads
 `machine`, `vars`, `envs`, `monitors`, `workspaces`, `looknfeel`, `rules`,
-`autostart`, and `bindings`. `machine.lua` selects static capabilities by hostname; branch on
+`workspace-modes`, `autostart`, and `bindings`. `machine.lua` selects static capabilities by hostname; branch on
 traits for hardware behavior. `HYPR_MACHINE_OVERRIDE` supports the test harness.
 Keep config-load code cheap and free of startup side effects: configuration
 evaluation can happen more than once on a reload. Launch daemons from
@@ -85,6 +85,37 @@ Use Lua callbacks for short compositor-event logic that reads live compositor
 state. Keep blocking waits, external tool orchestration, and cross-session
 logic in scripts. Chat layout waits must not block a Lua event callback.
 
+## Floating Workspaces
+
+`workspace-modes.lua` lets any workspace float all its windows instead of
+tiling them, as DWM's floating layout does for a tag. `Super+L` toggles the
+focused workspace; a right-click on a bar slot toggles that slot. Hyprland has
+no floating layout, so the module floats each tiled window exactly where its
+tile was and tags it `wsmode-floated`. Tiling the workspace again tiles only
+tagged windows: one that floats on its own account (a dialog, a float rule,
+`Super+Shift+Space`) stays floating, and pinned and fullscreen windows are left
+alone. A window that opens on, or moves onto, a floating workspace floats at up
+to 1100x760, centered; a new one shows tiled for a frame first. A tagged window
+moved to a tiled workspace tiles. While a floating workspace has focus,
+`input.follow_mouse` is 0, because Hyprland raises a floating window it focuses.
+
+`~/.local/state/hypr/workspace-modes` holds the floating ids and, for a slot a
+guest workspace occupies, the slot's own mode. Modes last across reloads and
+logins. The per-monitor module calls `renumbered` (its local edit 7), so a
+merged guest keeps its mode on the other monitor and back home, and the slot it
+used gets its own mode back when the guest leaves, goes away, or the session
+ends.
+
+The module rests on these Hyprland 0.57.1 behaviors. In `window.open_early` a
+window has its rules and workspace but no layout slot: a float there is ignored
+and a resize crashes Hyprland, so floating waits for `window.open`. A named
+window rule keeps its first match when declared again, a disabled one still
+applies its tag, and a `float = false` match does not skip windows another rule
+floated, so a rule cannot float only the windows that would tile.
+`hl.dsp.event("x")` sends `custom>>x` on the event socket. Try dispatches in
+event hooks on a nested Hyprland, started from the session with `Hyprland -c
+CONFIG`, never the live one.
+
 ## Bar Contracts
 
 `shell.qml` creates one top bar per screen. Portrait screens use compact
@@ -136,7 +167,11 @@ a workspace, Quickshell keeps it under its old id: it ignores
 entries. Only Quickshell's internal refresh on `configreloaded` does. The stale
 entry showed as a phantom visiting workspace, and clicking it created an empty
 one. Urgency still comes from Quickshell, and `WindowTitle.qml` is unaffected,
-because Quickshell keeps the shown workspace current.
+because Quickshell keeps the shown workspace current. The same read takes the
+`floating` line of `workspace-modes`, and Hyprland's `custom` event, which the
+module sends after each change, triggers a reread. A floating slot has a
+triangle in its top-right corner, accent-colored, or white on a filled or
+urgent slot. A right-click runs `workspace_modes.toggle(ID)`.
 
 `Pulseaudio.qml` holds an `AudioControl` each for speaker and mic, matching
 Polybar: scroll changes volume on whole wheel notches, left-click mutes, right-click
@@ -206,7 +241,10 @@ machine branches, reload versus startup, focus at group edges, and every
 monitor when relevant. Bar checks include duplicate instances, tray menus,
 portrait overlap, popout dismissal, urgency, missing-data states, and the
 workspace buttons after a monitor leaves and returns, when the module
-renumbers workspaces: no phantom buttons. Capture
+renumbers workspaces: no phantom buttons. Workspace-mode checks: a toggle with a
+group, a dialog and a fullscreen window present, a new window, moves in and out,
+a reload, and a monitor leaving and returning while one of its slots floats.
+Capture
 checks include cancellation, clipboard output, and annotation availability.
 
 [Shared instructions and task index](../../CLAUDE.md#task-guides).

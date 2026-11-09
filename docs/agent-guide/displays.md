@@ -107,6 +107,8 @@ On `hyprland.start`, `config.reloaded`, and monitor addition or removal, the
 module puts each workspace back on its monitor and each monitor on one of its
 own. A removed monitor's workspaces join the remaining monitor's block after
 its own, and `monitor-workspaces-merged` sends them home when it returns. A
+floating workspace keeps floating through both moves
+([Floating Workspaces](hyprland.md#floating-workspaces)). A
 script shows a slot with `hyprctl dispatch 'workspaces.focus(N, "OUTPUT")'`.
 
 Disabling a monitor is a removal to Hyprland 0.57.1: `hl.monitor` with
