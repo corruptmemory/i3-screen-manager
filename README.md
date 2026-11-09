@@ -85,8 +85,8 @@ for script in agent-usage agent-usage-claude agent-usage-codex \
 done
 ```
 
-Link `i3-net-profile`, `i3-net-profile-rofi`, `captive-portal`, `tool-audit`, and `rex-link`
-the same way. Their setup, including the
+Link `i3-net-profile`, `i3-net-profile-rofi`, `captive-portal`, `tool-audit`, `rex-link`,
+and `rbw-sync-check` the same way. Their setup, including the
 root-owned files dotfiles stages for them, is in the
 [network profiles](docs/agent-guide/network-profiles.md) and
 [package](docs/agent-guide/packages.md) guides; Rex's is in the
