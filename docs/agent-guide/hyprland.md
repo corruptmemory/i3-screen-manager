@@ -243,7 +243,8 @@ portrait overlap, popout dismissal, urgency, missing-data states, and the
 workspace buttons after a monitor leaves and returns, when the module
 renumbers workspaces: no phantom buttons. Workspace-mode checks: a toggle with a
 group, a dialog and a fullscreen window present, a new window, moves in and out,
-a reload, and a monitor leaving and returning while one of its slots floats.
+a reload and a fresh login with a slot floating (separate code paths), and a
+monitor leaving and returning while one of its slots floats.
 Capture
 checks include cancellation, clipboard output, and annotation availability.
 
