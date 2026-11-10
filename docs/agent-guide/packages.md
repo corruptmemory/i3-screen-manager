@@ -43,18 +43,40 @@ removals, so a package that deliberately replaces another (as `git-wd40` does
 for `git`) fails with "unresolvable package conflicts"; add `--ask 4` to answer
 that question class yes without affecting any other prompt.
 
-The configured XLibre vendor source is `[xlibre-stable]`, with
-`https://packages.xlibre.net/arch/stable/$arch` before `[world]` and an
-`IgnorePkg` entry for `xorg-server xorg-server-common`. Preserve signature
-checking and verify publisher keys through current authoritative instructions
-before bootstrapping trust on another machine. Query package versions, owners,
-and repositories instead of recording a version inventory as enduring fact.
+The configured XLibre vendor source is `[xlibre-stable]` from XLibre for
+Artix, `https://github.com/xlibre-artix/stable/releases/download/$arch`, after
+`[system]` and before `[world]`, with an `IgnorePkg` entry for
+`xorg-server xorg-server-common`. Its packages are signed by "XLibre for Artix
+Linux Maintainers", key `AEF4CED426F70F7942FCB3D52AFFCD7B42ADD2E7`, locally
+signed in the pacman keyring; the repository database is unsigned. Do not use
+`packages.xlibre.net/arch` on Artix. Both repositories are built from the same
+PKGBUILDs (`github.com/xlibre-arch/xlibre-arch`): the Arch build sets
+`USE_SYSTEMD=1`, so its servers link libsystemd for the optional `sd_notify`
+and `sd_listen_fds` hooks and depend on `libsystemd.so`, which nothing on Artix
+provides (`artix-archlinux-support` provides only the names `systemd-libs` and
+`libsystemd`, not the library). The Artix build sets `USE_SYSTEMD=0`, needs
+only `libudev.so`, and lists `elogind` as optional. Preserve signature checking
+and verify publisher keys through current authoritative instructions before
+bootstrapping trust on another machine. Query package versions, owners, and
+repositories instead of recording a version inventory as enduring fact.
 
 For a dbus reload-hook error, compare the system hook, any local override,
 and `/usr/share/libalpm/scripts/openrc-hook`. A local override can shadow a
 correct packaged hook. The relevant dispatcher verb is `dbus_reload`; check
 the installed implementation before prescribing an override. Do not carry
 completed workaround deadlines forward as active tasks.
+
+Arch can rebuild an `[extra]` package against a library soname Artix has not
+shipped yet (OpenSSL 4, `libssl.so.4`, reached Arch `[core]` on 2026-10-24).
+An unversioned dependency such as `openssl` lets the upgrade through, and the
+program then fails with `error while loading shared libraries`. Compare
+`readelf -d` `NEEDED` entries with the installed library, reinstall the
+previous `pkgrel` from the cache with `pacman -U` (check its `NEEDED` first),
+and hold the package with `IgnorePkg` until Artix `[system]` ships the
+library; do not pull the library from an Artix testing repository. pacman.conf
+has no end-of-line comments: words after a `#` on an `IgnorePkg` line become
+package names (`pacman-conf IgnorePkg` lists them), so put notes on their own
+line.
 
 ## Mirror Freshness
 
@@ -210,5 +232,15 @@ match an official mirror (`mirror2.artixlinux.org`) and that `--source` with a
 missing file exits 2. Use current vendor documentation for native CLI
 installation and authentication instead of retaining dated migration recipes
 here.
+
+## Watch List: Package Holds
+
+Last reviewed: 2026-11-10. Both machines hold `mise` at 2026.11.5-1, the build
+linked against OpenSSL 3; Arch's 2026.11.5-2 needs `libssl.so.4`. Trigger:
+`pacman -Si system/openssl` reports version 4, or `-Syu` warns that it is
+ignoring a `mise` upgrade while Artix ships OpenSSL 4. Then remove the
+`IgnorePkg = mise` line and its note from `/etc/pacman.conf`, run `pacman -Syu`,
+and confirm `mise --version` runs. Artix's `system-gremlins` testing repository
+carried `openssl` 4.1.0 with an `openssl-3` compatibility package on 2026-11-10.
 
 [Shared instructions and task index](../../CLAUDE.md#task-guides).
