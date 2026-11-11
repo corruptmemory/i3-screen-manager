@@ -1,8 +1,8 @@
 # Applications
 
 Read this guide for Ghostty/Brave identity and config deployment, chat layout,
-GTK dialogs, the Rex terminal server, the ScreenConnect client, or application-specific
-desktop integration.
+GTK dialogs, the Rex and herdr terminal servers, the ScreenConnect client, or
+application-specific desktop integration.
 Sources are chiefly dotfiles' launchers, `.desktop` overrides, WM rules, terminal
 configs, and `rex-link`. The ArtCraft apps and `craft-apps` have their own
 [guide](artcraft.md).
@@ -157,12 +157,24 @@ install the key, repo, package, login server, and accounts file from dotfiles `e
 their headers say. Delete any tarball Rex in `/usr/local/bin`, which shadows `/usr/bin/rex`,
 then start the service and run `rex terminfo setup` and `rex skill setup`. The desktop's
 `config.fish` is a local file, not the dotfiles copy, so dotfiles changes to it reach the
-desktop only by hand. Link the machines with `rex-link desktop jim@192.168.1.19` from the
-laptop, and the reverse from the desktop.
+desktop only by hand. Link the machines with `rex-link` as above.
 
 `rex-link self jim@localhost` tests the forward without a second machine: create a
 session through `-S self`, check that `rex run --wait` returns the command's status, then
 `--stop self` and `rex hosts remove self`.
+
+## herdr
+
+herdr, a terminal workspace manager for coding agents, keeps its panes in a `herdr server`
+that the first `herdr` client starts and that outlives detached clients. To use the
+desktop's panes from the laptop, attach from a laptop terminal with
+`herdr --remote jim@100.64.248.76`, not by running `herdr` inside an `ssh` session. The
+`--remote` client runs on the laptop and reaches the server through a `herdr
+remote-client-bridge` over SSH, so only it can paste images. Its Ctrl+V
+(`remote_image_paste` under `[keys]`) reads the laptop's clipboard image, the server
+saves it under `/tmp/herdr-clipboard-images-1000/` and pastes that path, and Claude Code
+attaches the file as an image. Inside plain `ssh`, Ctrl+V reads the desktop's clipboard.
+Verified laptop to desktop over the tailnet.
 
 ## Hype and Omacalc
 
