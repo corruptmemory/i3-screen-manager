@@ -1,18 +1,17 @@
 # System Maintenance
 
-Read this guide for hardware, OpenRC services, the Tailscale helper, SSH host keys,
+Read this guide for hardware, OpenRC services, Tailscale, SSH host keys,
 the GRUB menu, the login keyring, CMOS monitoring, the local dictionary server, disk reclaim, or VM setup.
 Sources: `start-hyprland`, `i3-tailscale-rofi`, `i3-cmos-battery`, `volumecontrol.sh`,
 `ora4-hw-pin`, `win11-vm-setup.sh`, dotfiles' `etc/init.d/dictd`, and `/etc/default/grub`.
-Check active machine state before applying configuration outside this repository.
 
 ## Service and GPU Boundaries
 
 Use OpenRC service tools on these machines and elogind's `loginctl` for session
 operations. The user D-Bus socket is `/run/user/<uid>/bus`; launchers export
 its address. Gnome-keyring owns secrets/PKCS#11; a separate OpenSSH agent uses
-`$XDG_RUNTIME_DIR/ssh-agent.sock`. Check whether that agent is live and whether
-keys are loaded separately. Keep desktop-session and laptop-user-service
+`$XDG_RUNTIME_DIR/ssh-agent.sock`. Check that agent's liveness and its loaded
+keys separately. Keep desktop-session and laptop-user-service
 ownership of PipeWire distinct.
 
 The laptop launcher uses stable DRM PCI paths for Intel `0000:00:02.0` and
@@ -71,17 +70,21 @@ that screen: a hang over SSH.
 `i3-cmos-battery` reads an it87-family `Vbat` hwmon input in millivolts.
 Thresholds are OK at >=2800, LOW at 2500-2799, and DEAD below 2500. No sensor
 produces no output. `polybar` is the default output and emits markup;
-`quickshell` emits `<volts> <status>`; `cli`/`--cli` emits a report. Polling is
-owned by the bar. Keep thresholds and output shapes shared between consumers.
+`quickshell` emits `<volts> <status>`; `cli`/`--cli` emits a report. The bar owns
+polling. Keep thresholds and output shapes shared between consumers.
 
 ## Tailscale and Open Brain
 
-`i3-tailscale-rofi` controls the local daemon and rewrites only the Open Brain
-URL in `~/.claude.json`. It does not update Codex's MCP configuration. Its LAN
-URL, tailnet endpoint, and `tailscale up --hostname=nomad-artix
---accept-dns=false` arguments are machine-specific. Read them before adapting
-the script. Open Brain must be reachable on its configured interface/port.
-The menu also supports login and a manual URL toggle. Preserve other JSON
+Both machines start `tailscaled` at boot and stay up with `--accept-dns=false`: with
+no systemd-resolved, tailnet DNS would rewrite `/etc/resolv.conf`. Address peers by
+their stable `100.x` IPs; tailnet traffic skips UFW
+([Network profiles](network-profiles.md#behavior)). Approve a sign-in link while the
+`tailscale up` that printed it runs; a later approval did not take.
+
+`i3-tailscale-rofi` toggles the node, unprivileged through the laptop's `--operator=jim`,
+and rewrites only the Open Brain URL in `~/.claude.json`, not Codex's MCP configuration.
+Its LAN URL, tailnet endpoint, and `up` arguments are machine-specific; read them before
+adapting it. The menu also offers login and a manual URL toggle. Preserve other JSON
 fields and avoid logging authentication headers while investigating failures.
 
 ## SSH Host Keys
@@ -141,14 +144,12 @@ reviewed before use on another host. It does not create or install the Windows
 guest. Do not run it as a documentation or syntax check. With UFW on, guests need
 the rules in [Network profiles](network-profiles.md#setting-up-a-machine).
 
-For a guest, use the system libvirt connection, select UEFI/Secure Boot and a
-TPM 2.0 device, allocate suitable memory/CPU and disk in the intended pool,
-and supply the Windows installation ISO. A virtio disk needs its matching
-Windows driver; SATA avoids that installation-time dependency. Install Garmin
-Express in Windows and attach the device via USB Host Device or the console's
-USB-redirection control. USB-device passthrough is distinct from PCI/VFIO
-passthrough. Check `virsh list --all`, `net-list --all`, and `pool-list --all`
-for actual host/guest state.
+A guest uses the system libvirt connection, UEFI/Secure Boot, a TPM 2.0 device,
+memory/CPU and a disk in the intended pool, and the Windows ISO. A virtio disk
+needs its Windows driver at install time; SATA does not. Garmin Express runs in
+Windows, with the device attached as a USB Host Device or by the console's USB
+redirection, not PCI/VFIO passthrough. Check `virsh list --all`, `net-list --all`,
+and `pool-list --all` for actual host/guest state.
 
 ## Local Dictionary Server
 
@@ -264,8 +265,8 @@ The desktop root filesystem is a separate, modestly sized btrfs; `/home` and
 `/data` are separate, larger disks. When the root nears capacity, inspect live state
 before deleting anything: `df -hT`, `du -xh --max-depth=1 /` (`-x` stays on the
 root filesystem), and on btrfs `btrfs filesystem usage /` with `btrfs subvolume list /` to distinguish a
-genuine data fill from unreclaimed allocation or snapshots. Resolve the actual
-mount layout with `findmnt`; do not assume `/var` is its own partition.
+genuine data fill from unreclaimed allocation or snapshots. Resolve the mount
+layout with `findmnt`; `/var` may not be its own partition.
 
 The first and safest reclaim is the pacman package cache under
 `/var/cache/pacman/pkg`: `paccache -rk1` keeps one version of each package and
@@ -288,8 +289,8 @@ containerd; stop it explicitly to restore the prior state).
 
 ## System Verification
 
-Start with read-only queries. After a system change, verify both the intended
-state and user-visible behavior. Check absent-sensor output, Tailscale failure/auth paths, and the
-actual VM storage and service state when their respective tools change.
+Start with read-only queries. After a change, verify the intended state and the
+user-visible behavior: absent-sensor output, Tailscale failure/auth paths, and actual
+VM storage and service state when their tools change.
 
 [Shared instructions and task index](../../CLAUDE.md#task-guides).

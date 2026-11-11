@@ -132,9 +132,13 @@ leaves in the background ends with that command. Start either kind under Hyprlan
 
 `rex-link LABEL SSH_DESTINATION` forwards another machine's server socket over SSH,
 registers LABEL as a host, and checks that `rex -S LABEL` answers; `--stop LABEL` and
-`--status` manage forwards. It opens no port and never starts the remote server. Never
-add an `--allow-anonymous` listener: Rex has no logins yet, so anyone who reaches one gets
-a shell as the account. Admit callers only through SSH or Tailscale identity.
+`--status` manage forwards. It opens no port and never starts the remote server. The links
+run over the tailnet, so they work at home and away: on the laptop `rex-link desktop
+jim@100.64.248.76`, on the desktop `rex-link laptop jim@100.90.248.89`. A forward dies when
+the laptop sleeps or changes networks, so run the command again; an open label keeps its
+destination until `--stop LABEL`. Never add an `--allow-anonymous` listener: Rex has no
+logins yet, so anyone who reaches one gets a shell as the account. Admit callers only
+through SSH or Tailscale identity.
 
 `rex terminfo setup` installs `xterm-rex` in `~/.terminfo` and puts an `Include` of Rex's
 guard at the top of the machine-local `~/.ssh/config`. Outside a Rex terminal the guard

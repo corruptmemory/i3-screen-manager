@@ -31,6 +31,12 @@ The helper has no off command. `home` allows SSH from `192.168.1.0/24`, the subn
 both machines share, so any network numbered that way gets the exception; choose
 `away` when traveling.
 
+Tailscale is the exception to the deny, under every profile: `tailscaled`'s own
+`ts-input` chain comes first in `INPUT` (`sudo iptables -S INPUT`) and accepts
+everything arriving on `tailscale0` before UFW sees it. Tailnet peers, all of them Jim's
+own devices, therefore reach every port listening beyond loopback, which on both
+machines is SSH alone. The tailnet's access policy, not UFW, is what limits them.
+
 `i3-net-profile status|list|polybar|set NAME` calls the root-owned
 `/etc/net-profile/net-profile` through a narrow sudoers rule, so a bar can run it even
 where `sudo` prompts. `i3-net-profile-rofi` is the menu, and choosing the
