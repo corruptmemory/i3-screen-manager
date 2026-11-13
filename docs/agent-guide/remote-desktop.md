@@ -1,7 +1,7 @@
 # Remote Desktop
 
-Read this guide to reach a Windows or TSPlus server over RDP from Linux, let an agent
-drive a session, or work out a clipboard problem. Sources: `tools/rdp/`, FreeRDP, and
+Read this guide to reach a Windows or TSPlus server over RDP or SSH from Linux, let an
+agent drive a session, or work out a clipboard problem. Sources: `tools/rdp/`, FreeRDP, and
 the browser's debug port. Client comparison, measurements, and sources are in the
 [research note](../research/2026-11-02-rdp-clients-and-tsplus.md).
 
@@ -46,6 +46,28 @@ A person signs in; an agent never types a password into a login prompt or form.
   address and browser history. Do not read the page's `remoteapp2_psw` variable.
 - TSPlus publishes the login for its demo in its own documentation. It is not recorded
   here, and test sessions on that shared demo use harmless sample text only.
+
+## SSH to a Windows Server
+
+Found against OpenSSH for Windows 9.5:
+
+- `ssh -v` lists what the server accepts after `Authentications that can continue`. When it
+  offers only `publickey,keyboard-interactive`, the server takes keys only: Windows'
+  keyboard-interactive fails without a prompt, so the account's password cannot help. Make
+  a dedicated key per client, with `IdentitiesOnly yes`, and have the person install it
+  over RDP.
+- For a member of Administrators, sshd reads keys from
+  `C:\ProgramData\ssh\administrators_authorized_keys`, not the profile's
+  `.ssh\authorized_keys`, and ignores that file unless only Administrators and SYSTEM can
+  reach it: `icacls FILE /inheritance:r /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F"`. The
+  SIDs work whatever the language of the group names.
+- A local account written `.\NAME` is plain `NAME@HOST` to `ssh`.
+- Windows Firewall drops traffic to a closed or blocked port, so it times out instead of
+  being refused; a timeout does not prove the route is broken.
+- Before trusting the host key, have the person run `ssh-keygen -lf
+  C:\ProgramData\ssh\ssh_host_ed25519_key.pub` in the RDP session and compare it with
+  `ssh-keyscan -t ed25519 HOST | ssh-keygen -lf -`. Pin it as
+  [System maintenance](system.md#ssh-host-keys) describes.
 
 ## FreeRDP Bench
 

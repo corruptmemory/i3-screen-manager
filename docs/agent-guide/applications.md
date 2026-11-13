@@ -124,8 +124,11 @@ clears it: the keyring stays unlocked, keys loaded in the SSH agent stay loaded,
 same keyring daemon carries on into the next login. At boot the tty login's PAM still
 starts the keyring daemon and unlocks it. On the laptop, the session's `pam_openrc` starts
 the PipeWire user services at boot, before anyone logs in, and audio works as before.
-The server has no `DISPLAY`, so give commands that need the screen
-`DISPLAY=:0 XAUTHORITY=$HOME/.Xauthority`. Its session is not the seat's active one, so
+The server has no display variables, so give commands that need the screen
+`DISPLAY=:0 XAUTHORITY=$HOME/.Xauthority` under X11, or `WAYLAND_DISPLAY=wayland-1
+XDG_SESSION_TYPE=wayland DISPLAY=:0` under Hyprland. That includes `rbw` with a locked
+vault: it hands its environment to pinentry, which otherwise waits where nobody sees it.
+Its session is not the seat's active one, so
 polkit refuses it the seat's locks, such as the lid-switch lock, and a process a Rex command
 leaves in the background ends with that command. Start either kind under Hyprland with
 `hyprctl-live dispatch 'hl.dsp.exec_cmd("...")'`.

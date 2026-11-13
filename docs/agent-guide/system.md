@@ -46,7 +46,8 @@ after a reboot, so `ora4-hw-pin` pins that control open by name each login. It
 runs from the desktop session startup under both compositors: Hyprland's
 `autostart.lua` audio block and i3's `.xinitrc-i3` after the PipeWire trio. The
 drop-in applies under either session and is desktop-local, not carried by
-dotfiles; the pin script and its startup lines are.
+dotfiles; the pin script and its startup lines are. A mid-session power cycle or replug
+silences the card the same way; run `ora4-hw-pin` by hand.
 
 ## Login Keyring
 
@@ -95,6 +96,10 @@ recorded on first use, and a changed key fails the connection. `github.com` and
 `gitlab.com` use that default. Private addresses (`192.168.*`, `10.*`, `100.*`, `*.lan`,
 `*.localdomain`) and several named hosts turn checking off on purpose, because they get
 re-addressed; an earlier block always wins, so check `ssh -G HOST` for the effective value.
+A client's machine at a private address is pinned instead, by an alias above that block
+with `StrictHostKeyChecking yes` and `UserKnownHostsFile ~/.ssh/known_hosts`; its bare
+address still skips the check. Add its key only after matching the fingerprint read on the
+machine itself.
 
 GitHub is reached through `ssh.github.com:443`, so its keys are stored under
 `[ssh.github.com]:443`, not `github.com`. Before adding them, compare `ssh-keyscan`'s
@@ -261,31 +266,26 @@ block was edited.
 
 ## Storage and Disk Reclaim
 
-The desktop root filesystem is a separate, modestly sized btrfs; `/home` and
-`/data` are separate, larger disks. When the root nears capacity, inspect live state
-before deleting anything: `df -hT`, `du -xh --max-depth=1 /` (`-x` stays on the
-root filesystem), and on btrfs `btrfs filesystem usage /` with `btrfs subvolume list /` to distinguish a
-genuine data fill from unreclaimed allocation or snapshots. Resolve the mount
-layout with `findmnt`; `/var` may not be its own partition.
+The desktop root is a separate, modestly sized btrfs; `/home` and `/data` are larger
+disks. When the root nears capacity, inspect before deleting anything: `df -hT`,
+`du -xh --max-depth=1 /` (`-x` stays on the root), and `btrfs filesystem usage /` with
+`btrfs subvolume list /` to tell a real fill from unreclaimed allocation or snapshots.
+`findmnt` shows the layout; `/var` may not be its own partition.
 
-The first and safest reclaim is the pacman package cache under
-`/var/cache/pacman/pkg`: `paccache -rk1` keeps one version of each package and
-`paccache -ruk0` drops the cache for uninstalled packages. These remove only
-re-downloadable files; preview with the `-d` dry-run flag before removing.
+The safest reclaim is the pacman cache: `paccache -rk1` keeps one version of each
+package and `paccache -ruk0` drops uninstalled packages' files. Both remove only
+re-downloadable files; preview with `-d`.
 
-Two larger consumers commonly sit on the root. The libvirt `default` storage
-pool is `/var/lib/libvirt/images`; a guest qcow2 there is sparse (its apparent
-size is the maximum the guest can grow into, not the space used) and consumes
-the small root even while a pool on `/data` has room, so prefer the `/data`
-pool for guests (see VM Setup). Docker uses the containerd image store here, so
-its images live under the `moby` namespace in `/var/lib/containerd`, not
-`/var/lib/docker`, and the `docker`/`containerd` services are started on demand
-rather than from a runlevel. Prune only dangling images (`docker image prune`):
-tagged images are not garbage, and `prune -a` would drop images merely because
-nothing is running. To read image identities offline, start the daemon briefly
-(`rc-service docker start` pulls up containerd), inspect with `docker system df`
-and `docker images`, then stop both (`rc-service docker stop` does not stop
-containerd; stop it explicitly to restore the prior state).
+Two larger consumers sit on the root. The libvirt `default` pool is
+`/var/lib/libvirt/images`, where a sparse guest qcow2 (its apparent size is its growth
+limit, not its use) fills the small root even while the `/data` pool has room, so put
+guests on `/data` (see VM Setup). Docker uses the containerd image store, so its images
+live under the `moby` namespace in `/var/lib/containerd`, not `/var/lib/docker`;
+`docker` and `containerd` start on demand, not from a runlevel. Prune only dangling
+images (`docker image prune`): `prune -a` drops tagged images merely because nothing
+runs them. To list images, start `docker` briefly (it pulls up containerd), run
+`docker system df` and `docker images`, then stop both: `rc-service docker stop`
+leaves containerd running.
 
 ## System Verification
 

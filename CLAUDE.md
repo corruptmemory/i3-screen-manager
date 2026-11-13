@@ -64,7 +64,7 @@ further references only when relevant. Read source files to confirm behavior.
 | Ghostty/Brave config and identity, chat layout, GTK dialogs, desktop app integration, Rex, herdr             | [Applications](docs/agent-guide/applications.md)         | Dotfiles launchers, terminal config, WM rules, `rex-link`             |
 | ArtCraft apps: `craft-apps` launchers, control ports, MCP bridges, driving the apps, GPU use, demo recording | [ArtCraft apps](docs/agent-guide/artcraft.md)            | `craft-apps`, `craft-apps.toml`, each app's docs at its installed tag |
 | Firewall, VPNs, client network profiles and their credentials, captive portals, Wi-Fi backend                | [Network profiles](docs/agent-guide/network-profiles.md) | `i3-net-profile*`, `captive-portal`; dotfiles `etc/net-profile/`      |
-| RDP clients, TSPlus portal, agent-driven remote sessions, RDP clipboard problems, `rdp-lab`                  | [Remote desktop](docs/agent-guide/remote-desktop.md)     | `tools/rdp/`; FreeRDP, Xvfb/Xephyr, browser debug port                |
+| RDP clients, TSPlus portal, agent-driven remote sessions, RDP clipboard, `rdp-lab`, SSH to Windows           | [Remote desktop](docs/agent-guide/remote-desktop.md)     | `tools/rdp/`; FreeRDP, Xvfb/Xephyr, browser debug port                |
 | Install/update/remove packages, choose distributions, review AUR, pacman/XLibre/hooks/mirrors, malware scans | [Package installation](docs/agent-guide/packages.md)     | `aur-malware-check`, local pacman config, current vendor instructions |
 
 For installation, command usage, and dependencies, see [README.md](README.md).
