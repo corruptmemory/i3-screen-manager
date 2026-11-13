@@ -100,7 +100,7 @@ before approval is harmless and lists the node as a join request: `listnetworks`
 
 Docker publishes ports through its own firewall rules, which reportedly bypass UFW; this
 was not tested, and the service is not enabled at boot. The real `rbw` path and a real
-network were tested on `godlike-artix` up to a pending join request.
+network were tested end to end: a join request, the admin's approval, then traffic.
 
 ## Setting up a machine
 
