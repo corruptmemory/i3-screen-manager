@@ -78,22 +78,29 @@ ZeroTier has no user credentials. Its credential is a per-machine private key wh
 address the network admin approves, and two machines sharing one identity conflict, so
 each machine has its own login item, named by the profile with `%h`: the password is the
 contents of `identity.secret`, and the username is the 16-digit network ID. To create
-one, keeping the key off disk:
+one, keeping the key off disk and off the screen:
 
 ```sh
 d=$(mktemp -d /dev/shm/zt.XXXXXX)
 zerotier-idtool generate $d/identity.secret $d/identity.public >/dev/null
-cut -d: -f1 $d/identity.secret    # the address for the network admin to approve
-cat $d/identity.secret            # paste this as the first line in rbw's editor
-rbw add ITEM_NAME NETWORK_ID
+cut -d: -f1 $d/identity.secret    # the node ID for the network admin to approve
+rbw add ITEM_NAME NETWORK_ID <$d/identity.secret
+i3-net-profile set PROFILE
+sudo zerotier-cli -D/run/net-profile/zerotier-one/home info    # must show that node ID
 rm -rf $d
 ```
 
+When stdin is not a terminal, `rbw` reads the password from it and never opens its
+editor, so `rbw add` run that way without the redirect, as by an agent, saves an empty
+password. `rbw edit ITEM_NAME <FILE` replaces a password the same way. Delete `$d` only
+once `info` shows the node ID, because the key exists nowhere else. Starting the profile
+before approval is harmless and lists the node as a join request: `listnetworks` shows
+`ACCESS_DENIED` until the admin approves, then `OK` and an address. For any VPN the bar's
+`ok` means only that its service is running, not that the network admitted the machine.
+
 Docker publishes ports through its own firewall rules, which reportedly bypass UFW; this
-was not tested, and the service is not enabled at boot. A real ZeroTier network and the
-real `rbw` path were not tested when this was written: the checks used a stand-in `rbw`
-and a network ID that does not exist. To inspect a running daemon, use
-`sudo zerotier-cli -D/run/net-profile/zerotier-one/home info`.
+was not tested, and the service is not enabled at boot. The real `rbw` path and a real
+network were tested on `godlike-artix` up to a pending join request.
 
 ## Setting up a machine
 
