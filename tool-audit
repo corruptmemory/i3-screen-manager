@@ -43,6 +43,7 @@ TOOL_ROOTS = [
     "~/.local/share/claude/versions",
     "~/.codex/packages",
     "~/.grok",
+    "~/.local/share/cursor-agent",
     "~/.cargo/bin",
     "~/go/bin",
     "~/.local/share/pipx",
@@ -57,6 +58,7 @@ TOOL_ROOTS = [
 IMMUTABLE = [
     "~/.local/share/claude/versions",
     "~/.codex/packages/standalone/releases",
+    "~/.local/share/cursor-agent/versions",
 ]
 
 # Places malware uses to survive a restart or capture credentials. A change here is
@@ -277,6 +279,7 @@ NOT_VERIFIABLE = {
     "codex": "publishes digests for its archive, not the unpacked binary",
     "agy": "no published checksum found",
     "grok": "no check written yet",
+    "cursor-agent": "its installer downloads without a checksum",
 }
 
 

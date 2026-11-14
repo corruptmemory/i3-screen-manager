@@ -23,9 +23,11 @@ Avoid sudo-driven global npm installs for project tooling. A vendor URL or
 container namespace must actually belong to the publisher; retain available
 signature/checksum verification. Read installer behavior before executing it.
 
-Rung-5 forks in use on both machines: `odin-git-local`, `cursor-bin-local`, and
-`git-wd40` (Git with the WD-40 patchset; it provides and conflicts with `git`).
-The first two rename the package, so the AUR never offers an update. `git-wd40`
+Rung-5 forks in use on both machines: `odin-git-local`, `cursor-bin-local`,
+`claude-desktop-local`, and `git-wd40` (Git with the WD-40 patchset; it provides and
+conflicts with `git`). The first three rename the package, so the AUR never offers an
+update. `claude-desktop-local`'s `update.sh` pins each `.deb` from Anthropic's signed apt
+index; `cursor-bin-local`'s takes its hash from Cursor's download API. `git-wd40`
 keeps the AUR `pkgname`, so `yay -Syu` offers to rebuild it from the AUR, which
 would drop the fork's Artix deltas; exclude it (`--ignore git-wd40`) and sync
 the fork at `~/projects/git-wd40` instead, per that repo's README.
