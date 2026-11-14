@@ -32,6 +32,18 @@ keeps the AUR `pkgname`, so `yay -Syu` offers to rebuild it from the AUR, which
 would drop the fork's Artix deltas; exclude it (`--ignore git-wd40`) and sync
 the fork at `~/projects/git-wd40` instead, per that repo's README.
 
+Gemini CLI and opencode come from `extra`. Cursor's CLI and Grok's both install as
+`~/.local/bin/agent`; here `agent` is Cursor's and Grok runs as `grok`. Cursor's updater
+relinks `agent` on every update. Grok's fish block reads `fish_add_path --path --append
+$HOME/.grok/bin`, so `~/.grok/bin/agent` stays behind `~/.local/bin`. Grok's installer, not
+its updater, relinks `agent` and rewrites that block; after running it, run
+`ln -sfn "$(readlink ~/.local/bin/cursor-agent)" ~/.local/bin/agent` and edit the block back.
+
+A tool that runs `npx -y NAME` downloads `NAME` from npm unless npm's global folder,
+`/usr/lib/node_modules`, where Arch's node packages install, already has it. Cursor's CLI runs
+`npx -y typescript-language-server` in every folder it opens, so both machines install
+`typescript-language-server` from `extra`; with npm's registry unreachable, `npx` still ran it.
+
 ## Pacman and XLibre
 
 Inspect `/etc/pacman.conf` and sync metadata before assuming a package is AUR

@@ -179,6 +179,12 @@ saves it under `/tmp/herdr-clipboard-images-1000/` and pastes that path, and Cla
 attaches the file as an image. Inside plain `ssh`, Ctrl+V reads the desktop's clipboard.
 Verified laptop to desktop over the tailnet.
 
+`herdr integration install NAME` hooks an agent CLI into herdr, so its pane reports the
+agent's session. Both machines have the claude, codex, opencode, cursor, antigravity-cli,
+and grok integrations (`herdr integration status`); Gemini CLI has none. Cursor's adds a
+`sessionStart` hook to `~/.cursor/hooks.json`, which the Cursor app's agent reads too; the
+hook does nothing outside a herdr pane. `herdr agent list` shows each detected agent.
+
 ## Hype and Omacalc
 
 Omarchy's MIT-licensed Qt Quick apps, Hype (Markdown presentations) and Omacalc
