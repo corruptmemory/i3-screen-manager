@@ -114,24 +114,22 @@ connection. `SendEnv AWS_*` and `GIT_*` are still in `Host *`.
 
 ## GRUB Menu
 
-On `nomad-artix` the menu holds this OS and whatever `os-prober` finds, nothing else. With
-one kernel installed that is one entry, `Artix Linux, with Linux linux`; the longer name
-comes with `GRUB_DISABLE_SUBMENU=y`, which also removes `Advanced options`.
-`GRUB_DISABLE_BOOTNEXT=true` stops `31_efi_bootnext` adding an entry for every firmware
-boot option. `godlike-artix` sets `GRUB_DISABLE_BOOTNEXT=true` and the kernel parameter
-`video=HDMI-A-1:e` (see `hyprland.md`).
+`/etc/default/grub` stays stock. `grub-mkconfig` reads dotfiles' `etc/default/grub.d/`
+drop-ins after it; copy them in with `install -m644`. Both take `50-boot-menu.cfg`:
+`os-prober` entries, and `GRUB_DISABLE_BOOTNEXT=true`, so `31_efi_bootnext` adds no entry
+per firmware boot option. The laptop adds `60-nomad-artix.cfg`: `GRUB_DISABLE_SUBMENU=y`,
+one entry per kernel (`Artix Linux, with Linux linux`), no `Advanced options`. The desktop
+adds `60-godlike-artix.cfg`: `video=HDMI-A-1:e` (see `hyprland.md`).
 
-`30_uefi-firmware` has no setting, so the laptop's `/etc/pacman.conf` carries
-`NoExtract = etc/grub.d/30_uefi-firmware`. Any `grub` upgrade or reinstall then deletes that
-script. To undo this, remove the line and reinstall `grub`.
-
-`/etc/default/grub` and `/etc/pacman.conf` are in no repository; redo them after a reinstall.
+`30_uefi-firmware` has no setting, so the laptop's `/etc/pacman.conf` carries `NoExtract =
+etc/grub.d/30_uefi-firmware`. Any `grub` upgrade or reinstall then deletes that script. To
+undo, remove the line and reinstall `grub`. The line is in no repository.
 
 Nothing reruns `grub-mkconfig` on its own, so run it after changing these settings or
-installing another OS. To check a change first, render to a scratch file with `-o`, confirm
-its `search`, `linux`, and `initrd` lines match the entry that last booted, and only then
-render to `/boot/grub/grub.cfg`. To test `os-prober` with no other OS present, put a stub
-first in `PATH` that prints
+installing another OS. To check a change first, render to a scratch file with `-o` and diff
+it with `/boot/grub/grub.cfg`: only the intended lines may differ. The locale lines follow
+`LANG`; use the last run's. Then render to `/boot/grub/grub.cfg`. To test `os-prober` with
+no other OS present, put a stub first in `PATH` that prints
 `/dev/nvme0n1p5@/EFI/Microsoft/Boot/bootmgfw.efi:Windows Boot Manager:Windows:efi`; the
 render must list it after this OS.
 

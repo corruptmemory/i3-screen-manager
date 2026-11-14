@@ -236,8 +236,9 @@ single string-form DPMS call when changing multi-monitor sleep.
 The desktop's portrait ASUS PA248QV drops its HDMI hotplug line 12 s after it
 sleeps and raises it again. Hyprland keeps no DPMS state across a reconnect, so
 it lit the monitor, and sleeping it again repeats this every 14 s. The kernel
-parameter `video=HDMI-A-1:e` forces the connector connected, so Hyprland never
-sees the toggle; an unplugged monitor still reads as connected.
+parameter `video=HDMI-A-1:e`, from a GRUB drop-in (`system.md`), forces the
+connector connected, so Hyprland never sees the toggle; an unplugged monitor
+still reads as connected.
 `echo on|detect > /sys/class/drm/card1-HDMI-A-1/status` sets or clears this
 until reboot.
 
