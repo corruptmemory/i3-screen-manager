@@ -24,6 +24,19 @@ for long-running daemons and retain single-instance guards on restart hooks.
 Validate config with `i3 -C -c PATH`. Live behavior requires the real session;
 a single-screen nested X server cannot verify physical multi-monitor layout.
 
+The `WINDOW RULES` block is identical in `config-desktop` and `config-laptop`,
+and each of its float rules matches one in dotfiles `.config/hypr/rules.lua`;
+change the three together. i3 already floats dialog, utility, splash and
+transient windows, so Hyprland's file-dialog rules have no i3 counterpart. X11
+classes can differ in case from Wayland app ids (`Nm-connection-editor`,
+`Pinentry-gtk`), so read them with `xprop WM_CLASS` from the app under Xvfb.
+Brave's windows share class `Brave-origin`; an extension's window has instance
+`crx_<id>`, which the chat PWAs share, and an `--app` window has its URL as
+instance. i3 reruns a rule when a window's title changes to match it, so anchor
+title patterns, or a tab title can float a whole browser window. To verify, run
+i3 under Xvfb with the block and `xterm -name INSTANCE -class CLASS -T TITLE`
+windows, and read `i3-msg -t get_tree`.
+
 ## Keyboard, Mouse, and Clipboard
 
 `i3-keyboard-rofi` toggles `ctrl:nocaps,shift:both_capslock_cancel` versus no
@@ -86,7 +99,17 @@ autostart runs `wl-clip-persist --clipboard regular` from the Artix repos, becau
 Wayland drops a selection when its source app exits. To check it, copy with `wl-copy
 --foreground`, kill that, and run `wl-paste`; without the daemon it reports nothing
 copied. Emacs is a GTK build, so under Hyprland it reaches the clipboard through
-XWayland.
+XWayland. It starts there only because `envs.lua` sets `GDK_BACKEND=wayland,x11,*`
+(and `QT_QPA_PLATFORM=wayland;xcb`) on both machines; with a bare `wayland` it
+exits with "cannot open display: :0".
+
+Middle-click pastes the primary selection under Hyprland as well. Hyprland
+0.57 passes PRIMARY and the clipboard to and from XWayland only while an X11
+window has keyboard focus, so `xclip` run from a Wayland terminal reads
+nothing; test with the X11 app focused. herdr captures the mouse
+(`mouse_capture`) and does nothing with a middle-click. In a herdr pane,
+Shift+middle-click pastes, because Ghostty keeps Shift+mouse for itself
+(`mouse-shift-capture = false`).
 
 ## Keybase Popup and Application Identity
 
