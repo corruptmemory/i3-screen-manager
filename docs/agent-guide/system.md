@@ -118,14 +118,14 @@ On `nomad-artix` the menu holds this OS and whatever `os-prober` finds, nothing 
 one kernel installed that is one entry, `Artix Linux, with Linux linux`; the longer name
 comes with `GRUB_DISABLE_SUBMENU=y`, which also removes `Advanced options`.
 `GRUB_DISABLE_BOOTNEXT=true` stops `31_efi_bootnext` adding an entry for every firmware
-boot option. `godlike-artix` sets only `GRUB_DISABLE_BOOTNEXT=true`.
+boot option. `godlike-artix` sets `GRUB_DISABLE_BOOTNEXT=true` and the kernel parameter
+`video=HDMI-A-1:e` (see `hyprland.md`).
 
 `30_uefi-firmware` has no setting, so the laptop's `/etc/pacman.conf` carries
 `NoExtract = etc/grub.d/30_uefi-firmware`. Any `grub` upgrade or reinstall then deletes that
-script and does not restore it. To undo this, remove the line and reinstall `grub`.
+script. To undo this, remove the line and reinstall `grub`.
 
-`/etc/default/grub` and `/etc/pacman.conf` are in no repository, so set these again after
-reinstalling the OS.
+`/etc/default/grub` and `/etc/pacman.conf` are in no repository; redo them after a reinstall.
 
 Nothing reruns `grub-mkconfig` on its own, so run it after changing these settings or
 installing another OS. To check a change first, render to a scratch file with `-o`, confirm
