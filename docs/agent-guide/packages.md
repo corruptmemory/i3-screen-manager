@@ -251,13 +251,6 @@ here.
 
 Last reviewed: 2026-11-15.
 
-`mise` was held at 2026.11.5-1, the build linked against OpenSSL 3, until Artix
-shipped OpenSSL 4, which it now does. `godlike-artix` lifted the hold on
-2026-11-15: it removed `IgnorePkg = mise` and its note from `/etc/pacman.conf`,
-ran `pacman -Syu`, and `mise --version` reports 2026.11.8, linked against
-`libssl.so.4`. `nomad-artix` still holds it; repeat those steps there, then
-delete this entry.
-
 `godlike-artix` skips the AUR's `lib32-openal` 1.25.2-2; the installed 1.25.2-1
 is the same upstream release. The -2 build fails because CMake 4.5 compiles GCC
 16's `std.cc` with OpenAL's unconditional `-Werror=undef`. Trigger: a new AUR
