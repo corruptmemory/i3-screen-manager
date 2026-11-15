@@ -249,12 +249,18 @@ here.
 
 ## Watch List: Package Holds
 
-Last reviewed: 2026-11-10. Both machines hold `mise` at 2026.11.5-1, the build
-linked against OpenSSL 3; Arch's 2026.11.5-2 needs `libssl.so.4`. Trigger:
-`pacman -Si system/openssl` reports version 4, or `-Syu` warns that it is
-ignoring a `mise` upgrade while Artix ships OpenSSL 4. Then remove the
-`IgnorePkg = mise` line and its note from `/etc/pacman.conf`, run `pacman -Syu`,
-and confirm `mise --version` runs. Artix's `system-gremlins` testing repository
-carried `openssl` 4.1.0 with an `openssl-3` compatibility package on 2026-11-10.
+Last reviewed: 2026-11-15.
+
+`mise` was held at 2026.11.5-1, the build linked against OpenSSL 3, until Artix
+shipped OpenSSL 4, which it now does. `godlike-artix` lifted the hold on
+2026-11-15: it removed `IgnorePkg = mise` and its note from `/etc/pacman.conf`,
+ran `pacman -Syu`, and `mise --version` reports 2026.11.8, linked against
+`libssl.so.4`. `nomad-artix` still holds it; repeat those steps there, then
+delete this entry.
+
+`godlike-artix` skips the AUR's `lib32-openal` 1.25.2-2; the installed 1.25.2-1
+is the same upstream release. The -2 build fails because CMake 4.5 compiles GCC
+16's `std.cc` with OpenAL's unconditional `-Werror=undef`. Trigger: a new AUR
+pkgrel or upstream release. Deleting `-Werror=undef` in `prepare()` builds it.
 
 [Shared instructions and task index](../../CLAUDE.md#task-guides).
