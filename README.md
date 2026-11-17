@@ -245,8 +245,9 @@ format is Polybar markup; `quickshell` emits volts and status for the widget.
 
 `i3-tailscale-rofi` updates the Open Brain URL in Claude Code's `~/.claude.json`
 only. `aur-malware-check` reports incident-denylist matches without removing
-packages. `artix-rank-mirrors` prints a mirrorlist ranked by content freshness
-and speed (`--arch` for the `[extra]` overlay) without editing `/etc/pacman.d`.
+packages. `artix-rank-mirrors` prints a mirrorlist of HTTPS mirrors ranked by
+content freshness and speed (`--arch` for the `[extra]` overlay) without
+editing `/etc/pacman.d`.
 `craft-apps` writes desktop launchers that start the ArtCraft apps with their
 control port and registers their MCP bridges with Claude Code.
 `win11-vm-setup.sh` performs privileged host setup and does not

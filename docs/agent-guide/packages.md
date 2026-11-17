@@ -122,14 +122,18 @@ judges freshness by database content, because some mirrors misreport
 other probed mirror, checking `system` then `world` in stages so that only
 mirrors current on the small database download the large one. It ranks by
 stages passed, then lag, then speed, and prints the top `--count` (default 8)
-as a mirrorlist. Candidates come from `mirrorlist.pacnew`, else the cached
-`artix-mirrorlist` package, else `--source FILE`. `--arch` ranks the `[extra]`
-overlay from archlinux.org's status data (`--country`, default `US,CA`;
-`--max-candidates`, default 20). Install the output with a backup:
+as a mirrorlist. Candidates come from `--source FILE`, else
+`mirrorlist.pacnew`, else the cached `artix-mirrorlist` package. `--arch` ranks
+the `[extra]` overlay from archlinux.org's status data (`--country`, default
+`US,CA`; `--max-candidates`, default 20). It ranks HTTPS mirrors only: Artix
+and Arch databases are unsigned (`DatabaseOptional`), so over plain HTTP anyone
+on the network could serve a stale one and hold back updates. It names skipped
+plain-HTTP candidates on stderr, and a mirror that redirects off HTTPS fails
+its probe. Install the output with a dated backup, so older ones survive:
 
 ```sh
 artix-rank-mirrors -o /tmp/mirrorlist &&
-  sudo cp -a /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.bak &&
+  sudo cp -a /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.pre-rank-$(date +%F) &&
   sudo install -m644 /tmp/mirrorlist /etc/pacman.d/mirrorlist
 ```
 
@@ -242,10 +246,10 @@ tool with a local denylist and controlled package/indicator fixtures when
 changing its matching logic; a live incident-list check is not broad test
 coverage. After changing `artix-rank-mirrors`, run both modes and check the
 exit status and the stderr ranking. Confirm that the first entry's databases
-match an official mirror (`mirror2.artixlinux.org`) and that `--source` with a
-missing file exits 2. Use current vendor documentation for native CLI
-installation and authentication instead of retaining dated migration recipes
-here.
+match an official mirror (`mirror2.artixlinux.org`), that the output has no
+`http://` entry, and that `--source` with a missing or HTTP-only file exits 2.
+Use current vendor documentation for native CLI installation and
+authentication instead of retaining dated migration recipes here.
 
 ## Watch List: Package Holds
 
