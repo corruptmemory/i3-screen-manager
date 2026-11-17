@@ -226,6 +226,20 @@ all its output to `~/.local/share/applications/connectwisecontrol-<instance>-log
 a failed start shows nothing in the browser. Read that log first, and check a Join after
 a fresh Hyprland login when the session's startup environment changes.
 
+## Steam
+
+Steam's client starts inside its pressure-vessel container, and `pressure-vessel-wrap`
+inspects every top-level directory. A FUSE mount under `/` whose daemon has stopped
+answering therefore hangs the start, and any process that touches that mount, with
+`~/.local/share/Steam/logs/console-linux.txt` ending at "re-launching steam in SteamRT
+runtime". Keybase's root redirector (`keybase-redirector /keybase`) has done this by
+deadlocking on its own mount. Diagnose without touching mounts:
+`/sys/fs/fuse/connections/<N>/waiting` counts unanswered requests (root-only for root
+mounts), where `<N>` is the mount's minor device number in `/proc/self/mountinfo`.
+Quitting Keybase ends the redirector, and the waiting start continues. Run
+`sudo fusermount -uz /keybase` before restarting Keybase: its redirector will not mount
+over the stale mount (`~/.cache/keybase/keybase.redirector.log`).
+
 ## Application Verification
 
 Check the resolved config, effective settings, actual window identity, and
