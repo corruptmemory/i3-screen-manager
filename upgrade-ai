@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+claude upgrade && \
+codex update && \
+agy update && \
+grok update && \
+agent update && \
+herdr update;
