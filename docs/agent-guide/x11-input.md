@@ -33,7 +33,11 @@ classes can differ in case from Wayland app ids (`Nm-connection-editor`,
 Brave's windows share class `Brave-origin`; an extension's window has instance
 `crx_<id>`, which the chat PWAs share, and an `--app` window has its URL as
 instance. i3 reruns a rule when a window's title changes to match it, so anchor
-title patterns, or a tab title can float a whole browser window. To verify, run
+title patterns, or a tab title can float a whole browser window. A browser's "is
+sharing your screen" bar is kept out of sight: i3 moves it to the scratchpad, and
+Hyprland to `special:sharing` with `silent`. Without `silent`, Hyprland opens that
+special workspace when the bar appears, and an open special workspace takes every
+click until it is toggled closed. To verify, run
 i3 under Xvfb with the block and `xterm -name INSTANCE -class CLASS -T TITLE`
 windows, and read `i3-msg -t get_tree`.
 
