@@ -27,7 +27,11 @@ Rung-5 forks in use on both machines: `odin-git-local`, `cursor-bin-local`,
 `claude-desktop-local`, and `git-wd40` (Git with the WD-40 patchset; it provides and
 conflicts with `git`). The first three rename the package, so the AUR never offers an
 update. `claude-desktop-local`'s `update.sh` pins each `.deb` from Anthropic's signed apt
-index; `cursor-bin-local`'s takes its hash from Cursor's download API. `git-wd40`
+index; `cursor-bin-local`'s takes its hash from Cursor's download API. The desktop
+also has `dreamcoder-local` (public repo `corruptmemory/dream-coder`, built from
+DreamCoder's `.deb`); its vendor publishes no checksum or signature, so its
+`update.sh` takes the `.deb` URL from the vendor's `install.sh` and pins the hash
+of that download. `git-wd40`
 keeps the AUR `pkgname`, so `yay -Syu` offers to rebuild it from the AUR, which
 would drop the fork's Artix deltas; exclude it (`--ignore git-wd40`) and sync
 the fork at `~/projects/git-wd40` instead, per that repo's README.
