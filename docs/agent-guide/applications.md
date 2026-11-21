@@ -3,8 +3,8 @@
 Read this guide for Ghostty/Brave identity and config deployment, chat layout,
 GTK dialogs, the Rex and herdr terminal servers, the ScreenConnect client, or
 application-specific desktop integration.
-Sources are chiefly dotfiles' launchers, `.desktop` overrides, WM rules, terminal
-configs, and `rex-link`. The ArtCraft apps and `craft-apps` have their own
+Sources are chiefly dotfiles' launchers, `.desktop` overrides, WM rules, and terminal
+configs. The ArtCraft apps and `craft-apps` have their own
 [guide](artcraft.md).
 
 ## Configuration and Window Identity
@@ -87,8 +87,10 @@ package-removal commands from an assumed dependency graph.
 
 Rex, a beta from Superlogical, is a terminal multiplexer. Its server holds sessions,
 windows, and terminal blocks, and the `rex` CLI drives them on this machine or, with
-`-S`, on another. Linux has only the server and CLI; the app that shows sessions is
-macOS-only, so here agents use `rex run`, `send`, `capture`, and `wait`.
+`-S`, on another. Its apps are for macOS, iOS, and Windows, not Linux, so here agents use
+`rex run`, `send`, `capture`, and `wait`. GoRex is a replica with its own server, not a
+client. Docs:
+`superlogical.com/rex/docs/llms.txt`; changelog: the `rex-community` MCP (Discord login).
 
 Rex comes from Superlogical's pacman repository, set up by hand: its `install.sh` takes
 the pacman route only when os-release says `arch`, and Artix says `ID=artix` with no
@@ -113,7 +115,7 @@ At boot the service starts before any login. The server restores `home` from its
 state with a fresh shell, so `start_post` finds it and opens nothing. The log's "PAM
 credentials not established" warning is expected: the policy's auth section is `pam_deny`.
 
-Plain `rex`, the agent skill, and `rex-link` reach that server at the usual path, and the
+Plain `rex`, the agent skill, and the other machine's host reach that server at the usual path, and the
 session autostarts start no Rex server. A server started any other way, such as by a plain
 `rex` command after `home` was closed, has no login session of its own: a logout deletes
 its socket and leaves it running, unreachable, with its saved sessions locked against the
@@ -133,15 +135,17 @@ polkit refuses it the seat's locks, such as the lid-switch lock, and a process a
 leaves in the background ends with that command. Start either kind under Hyprland with
 `hyprctl-live dispatch 'hl.dsp.exec_cmd("...")'`.
 
-`rex-link LABEL SSH_DESTINATION` forwards another machine's server socket over SSH,
-registers LABEL as a host, and checks that `rex -S LABEL` answers; `--stop LABEL` and
-`--status` manage forwards. It opens no port and never starts the remote server. The links
-run over the tailnet, so they work at home and away: on the laptop `rex-link desktop
-jim@100.64.248.76`, on the desktop `rex-link laptop jim@100.90.248.89`. A forward dies when
-the laptop sleeps or changes networks, so run the command again; an open label keeps its
-destination until `--stop LABEL`. Never add an `--allow-anonymous` listener: Rex has no
-logins yet, so anyone who reaches one gets a shell as the account. Admit callers only
-through SSH or Tailscale identity.
+Each machine reaches the other as a Rex host over SSH, LAN first: `laptop` is
+`ssh://nomad-artix` then `ssh://jim@100.90.248.89`, `desktop` is `ssh://jim@192.168.1.19`
+then `ssh://jim@100.64.248.76`, each plus `/run/user/1000/rex/server.sock`. Each command
+runs `ssh` anew, so a sleeping laptop breaks nothing. Without the socket path, Rex
+would start a server outside the login session. Its 10-second connect timeout spans all
+endpoints, so each `~/.ssh/config` sets `ConnectTimeout 4` for these addresses, above
+`Host *`; a dead first address then costs 4 seconds.
+
+Rex has no logins; it admits callers by connection: its socket's owner, or whoever SSH
+logs in as `jim`. Its Tailscale node (`rex server tailscale`, off on both) admits its
+owner. Never add `--allow-anonymous`: every caller gets a shell as the account.
 
 `rex terminfo setup` installs `xterm-rex` in `~/.terminfo` and puts an `Include` of Rex's
 guard at the top of the machine-local `~/.ssh/config`. Outside a Rex terminal the guard
@@ -160,11 +164,10 @@ install the key, repo, package, login server, and accounts file from dotfiles `e
 their headers say. Delete any tarball Rex in `/usr/local/bin`, which shadows `/usr/bin/rex`,
 then start the service and run `rex terminfo setup` and `rex skill setup`. The desktop's
 `config.fish` is a local file, not the dotfiles copy, so dotfiles changes to it reach the
-desktop only by hand. Link the machines with `rex-link` as above.
+desktop only by hand. Add the hosts as above.
 
-`rex-link self jim@localhost` tests the forward without a second machine: create a
-session through `-S self`, check that `rex run --wait` returns the command's status, then
-`--stop self` and `rex hosts remove self`.
+To test a host, create a throwaway session with `rex -S LABEL new`, check that
+`rex -S LABEL run --wait` returns the command's exit status, then `kill` the session.
 
 ## herdr
 

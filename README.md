@@ -20,7 +20,6 @@ symlinked into `~/.local/bin`. Installing them does not install a desktop config
 | Screenshots                | `screenshot` (grim/slurp/tensaku), `screenshot.sh` (hyprshot/satty), `flameshot.sh`                                                  |
 | Desktop helpers            | `i3-cmos-battery`, `keybase-popup-anchor-x11`, `volumecontrol.sh`, `rbw-sync-check` (Bitwarden sync watch)                           |
 | Network                    | `i3-tailscale-rofi`, `i3-net-profile`, `i3-net-profile-rofi`, `captive-portal` (portal sign-in)                                      |
-| Rex terminal server        | `rex-link` (SSH forward to another machine's Rex server)                                                                             |
 | Usage records              | `agent-usage`, `agent-usage-claude`, `agent-usage-codex`; `agent-usage-polybar`, `agent-usage-rofi` (i3/Polybar bar item and popout) |
 | System utilities           | `aur-malware-check`, `tool-audit`, `artix-rank-mirrors`, `win11-vm-setup.sh`, `upgrade-ai` (coding-agent CLI updates)                |
 | ArtCraft agent control     | `craft-apps` (with `craft-apps.toml`)                                                                                                |
@@ -85,7 +84,7 @@ for script in agent-usage agent-usage-claude agent-usage-codex \
 done
 ```
 
-Link `i3-net-profile`, `i3-net-profile-rofi`, `captive-portal`, `tool-audit`, `rex-link`,
+Link `i3-net-profile`, `i3-net-profile-rofi`, `captive-portal`, `tool-audit`,
 `rbw-sync-check`, and `upgrade-ai` the same way. Their setup, including the
 root-owned files dotfiles stages for them, is in the
 [network profiles](docs/agent-guide/network-profiles.md) and
