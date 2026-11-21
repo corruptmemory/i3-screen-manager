@@ -7,9 +7,9 @@ Sources: `start-hyprland`, `i3-tailscale-rofi`, `i3-cmos-battery`, `volumecontro
 
 ## Service and GPU Boundaries
 
-Use OpenRC service tools on these machines and elogind's `loginctl` for session
-operations. The user D-Bus socket is `/run/user/<uid>/bus`; launchers export
-its address. Gnome-keyring owns secrets/PKCS#11; a separate OpenSSH agent uses
+Use OpenRC service tools and elogind's `loginctl` for session operations. The
+user D-Bus socket is `/run/user/<uid>/bus`; launchers export its address.
+Gnome-keyring owns secrets/PKCS#11; a separate OpenSSH agent uses
 `$XDG_RUNTIME_DIR/ssh-agent.sock`. Check that agent's liveness and its loaded
 keys separately. Keep desktop-session and laptop-user-service
 ownership of PipeWire distinct.
@@ -18,8 +18,8 @@ The laptop launcher uses stable DRM PCI paths for Intel `0000:00:02.0` and
 NVIDIA `0000:01:00.0`. Hybrid mode lists Intel first in `AQ_DRM_DEVICES`, then
 NVIDIA for the external ports; discrete mode selects NVIDIA alone. Only the
 discrete branch forces `GBM_BACKEND=nvidia-drm` and NVIDIA GLX. Hybrid uses
-Intel VA-API (`iHD`). Detect a card with `readlink -e`; `-f` echoes a missing
-path back as if the card existed. Do not apply these laptop-specific paths or
+Intel VA-API (`iHD`). Detect a card with `readlink -e`; `-f` prints a missing
+path as if the card existed. Do not apply these laptop-specific paths or
 driver overrides to the AMD desktop launcher in dotfiles.
 
 Under X11, `/etc/X11/xorg.conf.d/10-nvidia-prime.conf` defines two layouts.
@@ -28,8 +28,8 @@ inactive PRIME source; `discrete` puts it on the NVIDIA driver. Dotfiles'
 `start-i3-laptop` and `start-icewm-laptop` pass `-layout discrete` to `startx`
 when the Intel card is absent; without it X finds no screens in Discrete mode.
 
-The laptop firmware supports Hybrid and Discrete graphics modes. Changing
-that mode requires a reboot and changes GPU availability and power use.
+The laptop firmware has Hybrid and Discrete graphics modes; switching needs a
+reboot and changes GPU availability and power use.
 For poor external rendering, inspect actual GPU routing, DRM modeset state,
 and frame behavior before adjusting compositor settings.
 
@@ -72,21 +72,23 @@ that screen: a hang over SSH.
 Thresholds are OK at >=2800, LOW at 2500-2799, and DEAD below 2500. No sensor
 produces no output. `polybar` is the default output and emits markup;
 `quickshell` emits `<volts> <status>`; `cli`/`--cli` emits a report. The bar owns
-polling. Keep thresholds and output shapes shared between consumers.
+polling. Keep thresholds and output shapes shared by consumers.
 
 ## Tailscale and Open Brain
 
-Both machines start `tailscaled` at boot and stay up with `--accept-dns=false`: with
-no systemd-resolved, tailnet DNS would rewrite `/etc/resolv.conf`. Address peers by
-their stable `100.x` IPs; tailnet traffic skips UFW
-([Network profiles](network-profiles.md#behavior)). Approve a sign-in link while the
-`tailscale up` that printed it runs; a later approval did not take.
+Both machines start `tailscaled` at boot with `--accept-dns=false`: with no
+systemd-resolved, tailnet DNS would rewrite `/etc/resolv.conf`. The desktop stays
+connected, so SSH and Rex reach it from the road; the laptop stays off
+(`tailscale down` saves `WantRunning=false`) until the menu below turns it on.
+Address peers by stable `100.x` IPs; tailnet traffic skips UFW
+([Network profiles](network-profiles.md#behavior)). Approve a sign-in link while
+its `tailscale up` still runs; a later approval did not take.
 
 `i3-tailscale-rofi` toggles the node, unprivileged through the laptop's `--operator=jim`,
-and rewrites only the Open Brain URL in `~/.claude.json`, not Codex's MCP configuration.
-Its LAN URL, tailnet endpoint, and `up` arguments are machine-specific; read them before
-adapting it. The menu also offers login and a manual URL toggle. Preserve other JSON
-fields and avoid logging authentication headers while investigating failures.
+and rewrites only the Open Brain URL in `~/.claude.json`, not Codex's MCP config.
+Its URLs and `up` arguments are machine-specific; read them before adapting it. It
+also offers login and a manual URL toggle. Preserve other JSON fields; never log
+the authentication header.
 
 ## SSH Host Keys
 
@@ -152,7 +154,7 @@ memory/CPU and a disk in the intended pool, and the Windows ISO. A virtio disk
 needs its Windows driver at install time; SATA does not. Garmin Express runs in
 Windows, with the device attached as a USB Host Device or by the console's USB
 redirection, not PCI/VFIO passthrough. Check `virsh list --all`, `net-list --all`,
-and `pool-list --all` for actual host/guest state.
+and `pool-list --all` for host/guest state.
 
 ## Local Dictionary Server
 
@@ -172,9 +174,8 @@ Artix. They total about 365 MiB, most of it Wiktionary.
 
 ### Setting up a machine
 
-Run the steps in order, in bash: the audit loop uses bash parameter expansion,
-which fish lacks. `sudo` and `yay` prompt for a password, so a person runs
-those.
+Run the steps in order, in bash: the audit loop uses bash parameter expansion.
+`sudo` and `yay` prompt for a password, so a person runs those.
 
 1. **Prerequisites.** Pull `~/projects/dotfiles`, `~/projects/i3-screen-manager`,
    and emacs-again (`~/.config/emacs`). `locale -a | grep -x en_US.utf8` must
