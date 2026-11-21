@@ -1,8 +1,109 @@
 #!/usr/bin/env bash
+# upgrade-ai - update the coding-agent CLIs that update themselves.
+#
+# Runs each vendor's own updater in turn. One failing (or missing) tool does
+# not stop the others; a summary lists each tool's version before and after.
+# Gemini CLI and opencode come from Arch's `extra` repository, so pacman
+# updates them, not this script.
+#
+# Usage:
+#   upgrade-ai             # run every updater, then print the summary
+#   upgrade-ai --dry-run   # show current versions and the commands; change nothing
+#   upgrade-ai --audit     # afterwards, run tool-audit on what the updaters wrote
+#
+# Exit status: 0 when every installed tool updated or was current, 1 when an
+# updater failed or tool-audit reported a red flag, 2 on a usage error.
+set -uo pipefail
 
-claude upgrade && \
-codex update && \
-agy update && \
-grok update && \
-agent update && \
-herdr update;
+# name | update command. Cursor's CLI is called by its own name, cursor-agent:
+# Grok's installer can re-link ~/.local/bin/agent to Grok.
+UPDATERS=(
+    "claude|claude update"
+    "codex|codex update"
+    "agy|agy update"
+    "grok|grok update"
+    "cursor-agent|cursor-agent update"
+    "herdr|herdr update"
+)
+TIMEOUT=600   # seconds per updater
+
+dry_run=0
+audit=0
+for a in "$@"; do
+    case "$a" in
+        -n|--dry-run) dry_run=1 ;;
+        --audit) audit=1 ;;
+        -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+        *) echo "upgrade-ai: unknown argument: $a" >&2; exit 2 ;;
+    esac
+done
+
+# First version-looking token of `TOOL --version`, or "?".
+version_of() {
+    local v
+    v=$(timeout 30 "$1" --version 2>/dev/null | head -1 |
+        grep -oE '[0-9]+(\.[0-9]+)+([-+][0-9A-Za-z.]+)?' | head -1)
+    echo "${v:-?}"
+}
+
+if [ -t 1 ]; then bold=$'\e[1m'; red=$'\e[31m'; green=$'\e[32m'; off=$'\e[0m'
+else bold='' red='' green='' off=''; fi
+
+rows=()
+failed=0
+changed=0
+for entry in "${UPDATERS[@]}"; do
+    name=${entry%%|*}
+    cmd=${entry#*|}
+    if ! command -v "$name" >/dev/null 2>&1; then
+        rows+=("$name|-|-|not installed")
+        continue
+    fi
+    before=$(version_of "$name")
+    if [ "$dry_run" -eq 1 ]; then
+        rows+=("$name|$before|-|would run: $cmd")
+        continue
+    fi
+
+    printf '\n%s==> %s%s  (%s)\n' "$bold" "$cmd" "$off" "$before"
+    # shellcheck disable=SC2086  # cmd is a fixed word list from UPDATERS
+    timeout "$TIMEOUT" $cmd
+    rc=$?
+    after=$(version_of "$name")
+    if [ "$rc" -ne 0 ]; then
+        failed=$((failed + 1))
+        if [ "$rc" -eq 124 ]; then status="${red}FAILED: timed out after ${TIMEOUT}s${off}"
+        else status="${red}FAILED: exit $rc${off}"; fi
+    elif [ "$after" != "$before" ]; then
+        changed=$((changed + 1))
+        status="${green}updated${off}"
+    else
+        status="current"
+    fi
+    rows+=("$name|$before|$after|$status")
+done
+
+printf '\n%s%-13s %-22s %-22s %s%s\n' "$bold" TOOL BEFORE AFTER STATUS "$off"
+for r in "${rows[@]}"; do
+    IFS='|' read -r name before after status <<<"$r"
+    printf '%-13s %-22s %-22s %s\n' "$name" "$before" "$after" "$status"
+done
+
+[ "$dry_run" -eq 1 ] && exit 0
+
+rc=0
+[ "$failed" -eq 0 ] || rc=1
+
+if [ "$audit" -eq 1 ]; then
+    if command -v tool-audit >/dev/null 2>&1; then
+        printf '\n%s==> tool-audit%s\n' "$bold" "$off"
+        tool-audit || rc=1
+    else
+        echo "upgrade-ai: --audit needs tool-audit on PATH" >&2
+        rc=1
+    fi
+elif [ "$changed" -gt 0 ]; then
+    echo
+    echo "$changed tool(s) changed. Review them with tool-audit, then tool-audit --accept."
+fi
+exit "$rc"
