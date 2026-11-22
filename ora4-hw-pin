@@ -33,5 +33,20 @@ if [ -z "$idx" ]; then
   exit 0
 fi
 
+# The card can be there before we may use it: the seat's sound devices get the
+# user's ACL only when the login session becomes active on its VT, a moment
+# after the desktop session starts this (Omarchy, 2026-11-21: amixer said
+# "Invalid card number '0'." 2 s into the session, and worked 30 s later).
+# [ -w ] goes through access(2), so it sees the ACL.
+ctl="/dev/snd/controlC$idx"
+for _ in $(seq 1 30); do
+  if [ -w "$ctl" ]; then break; fi
+  sleep 0.5
+done
+if [ ! -w "$ctl" ]; then
+  echo "ora4-hw-pin: $ctl is not writable after 15 s (no seat ACL for $(id -un)?)" >&2
+  exit 1
+fi
+
 amixer -c "$idx" sset PCM "$level" unmute >/dev/null
 echo "ora4-hw-pin: card $idx 'PCM' -> $level, unmuted"
