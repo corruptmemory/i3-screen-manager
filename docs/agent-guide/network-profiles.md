@@ -102,6 +102,16 @@ Docker publishes ports through its own firewall rules, which reportedly bypass U
 was not tested, and the service is not enabled at boot. The real `rbw` path and a real
 network were tested end to end: a join request, the admin's approval, then traffic.
 
+## On Omarchy
+
+omarchy-tweaks' `netprofile` slice sets all of this up on Omarchy, with systemd:
+its own port of the helper (`config/net-profile/net-profile`, where a profile's
+`service = NAME` is the never-enabled unit `net-profile-NAME.service`), the unit
+`net-profile-zerotier-one.service` in place of `etc/init.d/zerotier-one`, the package's
+`zerotier-one.service` masked, and this repository's profiles, runner and sudoers rule
+copied in. Omarchy's own `22/tcp LIMIT` SSH rule is removed, so the profile decides who
+reaches SSH. Its bar shows the same shields. The steps below are Artix's.
+
 ## Setting up a machine
 
 From dotfiles' `etc/` directory:
