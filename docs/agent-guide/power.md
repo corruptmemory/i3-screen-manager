@@ -1,8 +1,9 @@
 # Power
 
-Read this guide for the laptop's power settings: TLP, the power key and its menu, the
-resume hook, low-battery notices, and the known power defects. Sources: `i3-power-rofi`,
-`hypr-dpms-all`, and dotfiles' `etc/tlp.d/`, `etc/elogind/`,
+Read this guide for the laptop's power settings: TLP, the power key and its menu,
+hibernation, the resume hook, low-battery notices, and the known power defects. Sources:
+`i3-power-rofi`, `hypr-dpms-all`, and dotfiles' `etc/tlp.d/`, `etc/elogind/`,
+`etc/default/grub.d/`, `etc/UPower/`, `etc/pacman.d/hooks/95-nvidia-rtd3-check.hook`,
 `.config/quickshell/BatteryState.qml`, `.config/hypr/hypridle.conf`.
 
 ## TLP
@@ -27,6 +28,28 @@ Log out exits Hyprland through `hyprctl-live`, i3 through `i3-msg`, and IceWM th
 `sudo loginctl daemon-reload` (elogind's `loginctl` has no `reload`) without touching
 sessions.
 
+## Hibernation
+
+The image goes to the swap partition, `/dev/nvme0n1p3`: 64 GiB against 62 GiB of RAM.
+Dotfiles' `etc/default/grub.d/60-nomad-artix.cfg` adds `resume=UUID=83bc52c1-…` to the
+kernel command line. `/etc/mkinitcpio.conf`, in no repository, puts the `resume` hook
+after `block` and before `filesystems`, so the image is read before root is mounted.
+`loginctl hibernate` writes the image and powers off through ACPI S4. Only that command
+and UPower's critical action (see [Low Battery](#low-battery)) hibernate; the lid and
+hypridle suspend. The NVIDIA driver saves video memory through its kernel suspend
+notifiers (`NVreg_UseKernelSuspendNotifiers=1`, files in `/var/tmp`), so it needs no
+sleep hook.
+
+nvidia must stay out of the initramfs: `MODULES=(i915)`. udev loads it from the root
+filesystem about 7 s into boot, with its `/etc/modprobe.d` options. When the boot kernel
+had loaded nvidia before the restore, its freeze callback refused (`nv_pmops_freeze …
+returns -5` after "System Power Management attempted without driver procfs suspend
+interface"). nvidia 620's notifier handles `PM_HIBERNATION_PREPARE` but not the boot
+kernel's `PM_RESTORE_PREPARE`. The kernel then abandoned the image ("Failed to load
+image, recovering") and booted fresh. `/etc/conf.d/bootmisc` sets `previous_dmesg=yes`:
+OpenRC rewrites `/var/log/dmesg` at every boot, and a failed boot's log now survives one
+reboot as `/var/log/dmesg.old`.
+
 ## Sleep Hook
 
 Hypridle blanks the monitors and, on battery, suspends; see
@@ -48,24 +71,32 @@ sends that notice alone. The widget turns red below 15% on battery. Without a ba
 singleton sends nothing.
 
 UPower keeps its own thresholds in `/etc/UPower/UPower.conf`: low 20%, critical 5%, and
-`CriticalPowerAction=Auto` at 2%.
+an action at 2%. Dotfiles' `etc/UPower/UPower.conf.d/70-nomad-artix.conf` makes that
+action `Hibernate`. UPower 1.91 turns the stock `Auto` into logind's `Sleep`, which
+elogind reports unavailable (`CanSleep` answers `na`), so `Auto` falls through to
+`Ignore` and the battery runs flat. UPower is started by D-Bus, not OpenRC: after a
+config change, `sudo pkill -x upowerd`, and the next query starts it again.
 
 ## Known Defects
 
-- **The dGPU never runtime-suspends.** `/proc/driver/nvidia/gpus/*/power` reports
-  `Runtime D3 status: Not supported`, and `01:00.0` stays `active` with no suspended time,
-  although `NVreg_DynamicPowerManagement=0x02` (`/etc/modprobe.d/nvidia.conf`) is live and
-  `/etc/udev/rules.d/80-nvidia-pm.rules` sets `power/control=auto`. The cause is Linux
-  7.3, which starts kernel threads in an empty root: the driver's `nv-probe-*` thread
-  cannot open `/sys/bus/pci/devices/…/config`, so it turns dynamic power off at probe,
-  with no error logged. The upstream issue is NVIDIA/open-gpu-kernel-modules#1507, with
-  the fix in #1512. Until a driver ships it, the choices are #1512 applied to the DKMS
-  source, a 7.2 or LTS kernel, or a driver unbind and bind from user context, which
-  needs Hyprland stopped. Read `power/runtime_status` in sysfs: `nvidia-smi` and `lspci`
-  wake the card.
-- **The critical battery action cannot save the session.** `Auto` hibernates, but the
-  kernel command line has no `resume=` and the initramfs no `resume` hook, so the image is
-  never restored and the session is lost as with a power-off.
+- **The dGPU's runtime suspend depends on a local driver patch.** Linux 7.3 starts kernel
+  threads in an empty root, so stock nvidia-open's `nv-probe-*` thread cannot open
+  `/sys/bus/pci/devices/…/config` and turns dynamic power off at probe, logging nothing
+  visible: `/proc/driver/nvidia/gpus/*/power` reads `Runtime D3 status: Not supported`
+  (NVIDIA/open-gpu-kernel-modules#1507). The fix, PR #1512, is applied by hand to
+  `/usr/src/nvidia-620.73.04` and built with DKMS; with it the file reads `Enabled
+  (fine-grained)` and the GPU and its root port reach D3cold. A new `nvidia-open-dkms`
+  ships unpatched source unless it contains `scoped_with_init_fs`: reapply as
+  `~/.local/share/nvidia-rtd3/README` says, then reboot. Dotfiles'
+  `95-nvidia-rtd3-check.hook` warns after each `nvidia-open-dkms` install or upgrade
+  whose source lacks the fix; it never patches. Until then an unbind and bind from user
+  context, with nothing holding the card, restores it until reboot. Read
+  `power/runtime_status` in sysfs: `nvidia-smi` and `lspci` wake the card.
+- **A failed restore leaves the panel dark.** After the kernel abandons an image, the
+  fresh boot runs normally (network, Rex and the lid switch work), but fbcon never logs
+  `Taking over console`, so the internal panel stays black. Seen only while nvidia was
+  in the initramfs; the cause is not established. Reach the laptop over SSH or Rex, or
+  force a power-off and boot again.
 
 ## Verification
 
@@ -76,6 +107,17 @@ After a TLP change run `sudo tlp start`. On AC every CPU's
 file each value came from. After the power-key drop-in, `busctl get-property
 org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager
 HandlePowerKey` must read `ignore`, and a press must open the menu.
+
+After a hibernation change, `/sys/power/resume` must read `259:3`, and a fresh boot's
+`dmesg` must show `PM: Image not found (code -22)`, proof that the `resume` hook looked.
+`loginctl hibernate` must come back with the same `/proc/sys/kernel/random/boot_id` and
+`ACPI: PM: Waking up from system sleep state S4`; a new `boot_id` means the image was
+abandoned, and `/var/log/dmesg.old` says why. `test_resume` in `/sys/power/disk` writes
+and restores the image in one boot, so it never exercises the boot kernel. Its log looks
+cut short because the log buffer is restored with the image. `busctl call
+org.freedesktop.UPower /org/freedesktop/UPower org.freedesktop.UPower GetCriticalAction`
+must answer `Hibernate`, and `sudo /etc/pacman.d/scripts/nvidia-rtd3-check` must report
+the RTD3 fix in the current driver source.
 
 Run the resume hook by hand while the monitors are blanked: `post suspend` must light
 every monitor, and `pre suspend` must exit at once. Check the low-battery decision offline

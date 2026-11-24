@@ -120,8 +120,8 @@ connection. `SendEnv AWS_*` and `GIT_*` are still in `Host *`.
 drop-ins after it; copy them in with `install -m644`. Both take `50-boot-menu.cfg`:
 `os-prober` entries, and `GRUB_DISABLE_BOOTNEXT=true`, so `31_efi_bootnext` adds no entry
 per firmware boot option. The laptop adds `60-nomad-artix.cfg`: `GRUB_DISABLE_SUBMENU=y`,
-one entry per kernel (`Artix Linux, with Linux linux`), no `Advanced options`. The desktop
-adds `60-godlike-artix.cfg`: `video=HDMI-A-1:e` (see `hyprland.md`).
+one entry per kernel with no `Advanced options`, and `resume=` (`power.md`). The desktop
+adds `60-godlike-artix.cfg`: `video=HDMI-A-1:e` (`hyprland.md`).
 
 `30_uefi-firmware` has no setting, so the laptop's `/etc/pacman.conf` carries `NoExtract =
 etc/grub.d/30_uefi-firmware`. Any `grub` upgrade or reinstall then deletes that script. To
