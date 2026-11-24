@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+#
+# i3-power-rofi — lock, suspend, log out, reboot or power off from a rofi menu.
+#
+# The laptop's power key opens it: elogind's HandlePowerKey=ignore (dotfiles
+# etc/elogind/logind.conf.d/20-power-key.conf) leaves XF86PowerOff to the session,
+# and Hyprland and i3 bind it here. Holding the button about 4 s still forces a
+# firmware power-off. See docs/agent-guide/power.md.
+#
+# Hyprland/Wayland and X11 (i3, IceWM) branches; detection via $XDG_SESSION_TYPE
+# with a $WAYLAND_DISPLAY fallback, as in i3-keyboard-rofi.
+
+set -euo pipefail
+
+# Silent-failure guard: shared _require helper. See
+# ~/.local/lib/sh/require.sh (symlinked from i3-screen-manager/lib/require.sh)
+# and docs/agent-guide/x11-input.md for dependency diagnostics.
+. "$HOME/.local/lib/sh/require.sh"
+_require rofi loginctl
+
+is_wayland() {
+    [[ "${XDG_SESSION_TYPE:-}" == "wayland" || -n "${WAYLAND_DISPLAY:-}" ]]
+}
+
+lock() {
+    if is_wayland; then
+        _require hyprlock
+        pidof -q hyprlock || setsid -f hyprlock >/dev/null 2>&1
+    else
+        _require i3lock
+        i3lock -c 000000
+    fi
+}
+
+log_out() {
+    if is_wayland; then
+        _require hyprctl-live
+        hyprctl-live dispatch 'hl.dsp.exit()' >/dev/null
+    elif pgrep -x -u "$USER" i3 >/dev/null; then
+        i3-msg exit >/dev/null
+    elif pgrep -x -u "$USER" icewm >/dev/null; then
+        icesh logout
+    else
+        notify-send -u critical "Power menu" "No log-out method for this session" 2>/dev/null || true
+        exit 1
+    fi
+}
+
+choice=$(printf '%s\n' Lock Suspend "Log out" Reboot "Power off" |
+    rofi -dmenu -i -no-custom -p "Power" -theme-str 'window {width: 300px;}') || exit 0
+
+case "$choice" in
+    Lock)        lock ;;
+    Suspend)     loginctl suspend ;;
+    "Log out")   log_out ;;
+    Reboot)      loginctl reboot ;;
+    "Power off") loginctl poweroff ;;
+esac

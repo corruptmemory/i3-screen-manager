@@ -16,8 +16,9 @@ symlinked into `~/.local/bin`. Installing them does not install a desktop config
 | Display CLI and menu       | `i3-screen-manager`, `i3-screen-rofi`                                                                                                |
 | Keyboard and mouse         | `i3-keyboard-rofi`, `i3-mouse-setup`, `i3-mouse-rofi`                                                                                |
 | Hyprland session and sleep | `start-hyprland`, `hyprctl-live`, `hypr-dpms-all`                                                                                    |
+| Power                      | `i3-power-rofi` (the laptop's power-key menu)                                                                                        |
 | Lid handling               | `laptop-monitor.sh`, `laptop-monitor-x11.sh`                                                                                         |
-| Screenshots                | `screenshot` (grim/slurp/tensaku), `screenshot.sh` (hyprshot/satty), `flameshot.sh`                                                  |
+| Screenshots                | `screenshot` (grim/slurp/tensaku; OCR and QR), `screenshot.sh` (hyprshot/satty), `flameshot.sh`                                      |
 | Desktop helpers            | `i3-cmos-battery`, `keybase-popup-anchor-x11`, `volumecontrol.sh`, `rbw-sync-check` (Bitwarden sync watch)                           |
 | Network                    | `i3-tailscale-rofi`, `i3-net-profile`, `i3-net-profile-rofi`, `captive-portal` (portal sign-in)                                      |
 | Usage records              | `agent-usage`, `agent-usage-claude`, `agent-usage-codex`; `agent-usage-polybar`, `agent-usage-rofi` (i3/Polybar bar item and popout) |
@@ -30,25 +31,26 @@ symlinked into `~/.local/bin`. Installing them does not install a desktop config
 The shell tools assume Linux, Bash, GNU core utilities, grep, sed, and gawk.
 Install additional dependencies for the features being used:
 
-| Feature                        | Dependencies                                                                                                           |
-|--------------------------------|------------------------------------------------------------------------------------------------------------------------|
-| Hyprland displays              | Lua-configured Hyprland, `hyprctl`, `wlr-randr`, `jq`, installed `hyprctl-live`                                        |
-| X11 displays / DPI             | `xrandr`, `xrdb`                                                                                                       |
-| Rofi menus                     | `rofi`, the installed shared helper, `notify-send` for notifications                                                   |
-| Clamshell                      | `elogind-inhibit`, readable ACPI lid state                                                                             |
-| Keyboard / mouse               | `hyprctl` or `setxkbmap`; `solaar` for Logitech DPI                                                                    |
-| Session launcher               | gnome-keyring, OpenSSH agent tools, `/usr/bin/start-hyprland`, configured user D-Bus                                   |
-| `screenshot`                   | `grim`, `slurp`, `wl-clipboard`, `hyprctl`, `jq`; optional `hyprpicker`, `tensaku-edit`                                |
-| Other capture / audio wrappers | `hyprshot`, `satty`, `flameshot`, or `pavucontrol`, as applicable                                                      |
-| Agent usage                    | Python 3.10+, `jq`; agent login and `codex` for live Codex limits; `rofi` and the bar's Nerd Font for the Polybar item |
-| Tailscale menu                 | `tailscale`, Python 3, `jq`, `curl`, `xdg-open`, configured `~/.claude.json`                                           |
-| Keybase popup                  | i3, `jq`, `flock`                                                                                                      |
-| CMOS monitoring                | it87-family Vbat sensor                                                                                                |
-| AUR audit                      | `pacman`, `curl` or a local denylist                                                                                   |
-| Mirror ranking                 | Python 3.10+, `vercmp` (pacman), `bsdtar` (libarchive), network access                                                 |
-| RDP test bench (`tools/rdp/`)  | `freerdp`, Xvfb or Xephyr, `xdotool`, ImageMagick, `xclip`, `xdpyinfo`, Node 21+                                       |
-| Rex link                       | `rex`, OpenSSH, `jq`                                                                                                   |
-| ArtCraft control               | Python 3.11+, the ArtCraft app packages, `claude` for `register`, `notify-send`                                        |
+| Feature                        | Dependencies                                                                                                                                           |
+|--------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Hyprland displays              | Lua-configured Hyprland, `hyprctl`, `wlr-randr`, `jq`, installed `hyprctl-live`                                                                        |
+| X11 displays / DPI             | `xrandr`, `xrdb`                                                                                                                                       |
+| Rofi menus                     | `rofi`, the installed shared helper, `notify-send` for notifications                                                                                   |
+| Power menu                     | `rofi`, elogind's `loginctl`; `hyprlock` (Wayland) or `i3lock` (X11)                                                                                   |
+| Clamshell                      | `elogind-inhibit`, readable ACPI lid state                                                                                                             |
+| Keyboard / mouse               | `hyprctl` or `setxkbmap`; `solaar` for Logitech DPI                                                                                                    |
+| Session launcher               | gnome-keyring, OpenSSH agent tools, `/usr/bin/start-hyprland`, configured user D-Bus                                                                   |
+| `screenshot`                   | `grim`, `slurp`, `wl-clipboard`, `hyprctl`, `jq`; optional `hyprpicker`, `tensaku-edit`; `tesseract`, `tesseract-data-eng` for `text`; `zbar` for `qr` |
+| Other capture / audio wrappers | `hyprshot`, `satty`, `flameshot`, or `pavucontrol`, as applicable                                                                                      |
+| Agent usage                    | Python 3.10+, `jq`; agent login and `codex` for live Codex limits; `rofi` and the bar's Nerd Font for the Polybar item                                 |
+| Tailscale menu                 | `tailscale`, Python 3, `jq`, `curl`, `xdg-open`, configured `~/.claude.json`                                                                           |
+| Keybase popup                  | i3, `jq`, `flock`                                                                                                                                      |
+| CMOS monitoring                | it87-family Vbat sensor                                                                                                                                |
+| AUR audit                      | `pacman`, `curl` or a local denylist                                                                                                                   |
+| Mirror ranking                 | Python 3.10+, `vercmp` (pacman), `bsdtar` (libarchive), network access                                                                                 |
+| RDP test bench (`tools/rdp/`)  | `freerdp`, Xvfb or Xephyr, `xdotool`, ImageMagick, `xclip`, `xdpyinfo`, Node 21+                                                                       |
+| Rex link                       | `rex`, OpenSSH, `jq`                                                                                                                                   |
+| ArtCraft control               | Python 3.11+, the ArtCraft app packages, `claude` for `register`, `notify-send`                                                                        |
 
 Quickshell and Polybar are output consumers, not requirements for the display
 CLI. See [package installation guidance](docs/agent-guide/packages.md)
@@ -210,8 +212,11 @@ The configured Hyprland bindings include:
 | `Super+L`              | Float or tile the focused workspace's windows                        |
 | `Ctrl+Alt+Left/Right`  | Cycle the focused monitor's workspaces                               |
 | `Super+Shift+N`        | Tailscale menu on the laptop                                         |
+| Power key              | Power menu on the laptop                                             |
 | `Print`                | Flameshot                                                            |
 | `Super+Print`          | Region capture and annotation, with tensaku enabled                  |
+| `Ctrl+Shift+Print`     | Copy a region's text (OCR)                                           |
+| `Ctrl+Alt+Print`       | Copy a region's QR code value, marked sensitive                      |
 | `Super+Shift+P`        | Quickshell restart                                                   |
 
 The authoritative bindings and machine gates are in
@@ -223,6 +228,8 @@ The authoritative bindings and machine gates are in
 screenshot region
 screenshot full --annotate
 screenshot clipboard
+screenshot text
+screenshot qr
 agent-usage
 agent-usage --limits-only
 agent-usage --force
@@ -231,7 +238,9 @@ i3-cmos-battery quickshell
 ```
 
 `screenshot` saves under `${XDG_PICTURES_DIR:-$HOME/Pictures}` and copies
-captures to the clipboard. Clipboard annotation requires `tensaku-edit`.
+captures to the clipboard. Clipboard annotation requires `tensaku-edit`. `text`
+and `qr` save nothing and copy only the decoded result; `qr` marks it sensitive
+so a clipboard history skips it, and never prints it.
 
 `agent-usage` prints a merged JSON array and caches successful per-agent records
 under `${XDG_STATE_HOME:-$HOME/.local/state}/agent-usage/`. Collectors use

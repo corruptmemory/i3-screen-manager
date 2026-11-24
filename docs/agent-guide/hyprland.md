@@ -123,7 +123,7 @@ content; the system widget cluster belongs on landscape bars, and a `Loader`
 builds it only there, because hidden widgets would still run their polls. State
 that several bars show lives in a root `pragma Singleton` file, so it is read,
 and acted on, once: `NetProfileState.qml` and `DndState.qml`, each also one IPC
-target, and `Connectivity.qml`, which sends one notification. `Theme.qml`
+target, and `Connectivity.qml` and `BatteryState.qml`, which notify once. `Theme.qml`
 owns typography and colors. Keep the existing square, opaque, restrained
 styling and immediate interactions. `Popout.qml` supplies anchoring, screen
 clamping, and click-outside dismissal through `HyprlandFocusGrab`.
@@ -154,8 +154,7 @@ shows is filled with the accent while that monitor has focus, and outlined
 otherwise. A click on a slot runs `workspaces.focus(slot, "OUTPUT")`; on the
 slot already shown it only focuses the monitor, since a workspace focus there
 would bounce back. A monitor the state file does not list yet, in a session's
-first moments or just plugged in, uses the block of the workspace it shows, as
-Omarchy's bar does.
+first moments or just plugged in, uses the block of the workspace it shows.
 
 The buttons take which workspaces exist, their monitor and window count, and
 what each monitor shows from the `WorkspaceState.qml` singleton. It runs
@@ -164,9 +163,7 @@ Hyprland event, and runs again once if events arrive during a read. Quickshell
 0.3.2's own workspace list cannot be used for this. When the module renumbers
 a workspace, Quickshell keeps it under its old id: it ignores
 `changeworkspaceid`, and `Hyprland.refreshWorkspaces()` never adds or removes
-entries. Only Quickshell's internal refresh on `configreloaded` does. The stale
-entry showed as a phantom visiting workspace, and clicking it created an empty
-one. Urgency still comes from Quickshell, and `WindowTitle.qml` is unaffected,
+entries. Only Quickshell's internal refresh on `configreloaded` does. Urgency still comes from Quickshell, and `WindowTitle.qml` is unaffected,
 because Quickshell keeps the shown workspace current. The same read takes the
 `floating` line of `workspace-modes`, and Hyprland's `custom` event, which the
 module sends after each change, triggers a reread. A floating slot has a
@@ -186,7 +183,8 @@ and on `qs ipc call dnd refresh`. Mako still shows critical notifications in tha
 mode. `Submap.qml` shows the active submap on
 every bar from the `submap` raw event, because every other bind is dead inside one.
 `NetProfile.qml`, and `Network.qml` with its `Connectivity.qml` singleton, are covered
-in [Network profiles](network-profiles.md#captive-portals).
+in [Network profiles](network-profiles.md#captive-portals); `Battery.qml` in
+[Power](power.md#low-battery).
 
 Weather reads machine-local `~/.config/quickshell/weather-location.json`
 (`name`, `lat`, `lon`) at startup, falling back to its configured coordinates.
@@ -214,6 +212,8 @@ local edit reads the local zone from `/etc/localtime` instead of systemd's
 `Print` opens Flameshot. With `m.screenshot == 'tensaku'`, `Super+Print`
 captures/annotates a region, `Shift+Print` captures/annotates the active monitor,
 `Ctrl+Print` copies a region, and `Super+Ctrl+Print` annotates the clipboard.
+`Ctrl+Shift+Print` and `Ctrl+Alt+Print` run `screenshot text` and `qr`, which copy only
+a region's OCR text or QR value (marked sensitive) and save no image.
 
 `screenshot` uses grim, slurp, and wl-clipboard, saving under
 `${XDG_PICTURES_DIR:-$HOME/Pictures}`. Region selection can freeze with

@@ -15,10 +15,10 @@ Quickshell UI. Paths written as `dotfiles/...` in these guides refer to that
 sibling repository, not to a directory in this one. Read its instructions
 before editing it. A shared contract may need changes in both repositories.
 
-| Machine         | Configured role                                                                                                 |
-|-----------------|-----------------------------------------------------------------------------------------------------------------|
-| `nomad-artix`   | ThinkPad X1 Extreme Gen 5, Intel/NVIDIA graphics, dynamic docking, battery/backlight, OpenRC-managed user audio |
-| `godlike-artix` | AMD desktop, fixed landscape plus portrait monitors, audio launched by the desktop session                      |
+| Machine | Configured role |
+|---|---|
+| `nomad-artix` | ThinkPad X1 Extreme Gen 5, Intel/NVIDIA graphics, dynamic docking, battery/backlight, OpenRC-managed user audio |
+| `godlike-artix` | AMD desktop, fixed landscape plus portrait monitors, audio launched by the desktop session |
 
 Both Hyprland profiles select Quickshell and enable the tensaku screenshot
 bindings. X11 i3/IceWM configurations also exist. Inspect the active session,
@@ -54,18 +54,19 @@ needed for the task; links are not instructions to preload the whole directory.
 For work crossing boundaries, read each affected guide. Within a guide, follow
 further references only when relevant. Read source files to confirm behavior.
 
-| Task or trigger                                                                                              | Guide                                                    | Main sources                                                          |
-|--------------------------------------------------------------------------------------------------------------|----------------------------------------------------------|-----------------------------------------------------------------------|
-| Displays, docking, scale/DPI, lid transitions, workspace placement                                           | [Displays](docs/agent-guide/displays.md)                 | `i3-screen-manager`, lid helpers; dotfiles monitors, workspace blocks |
-| Hyprland Lua, session startup, focus/groups, Quickshell bars/popouts/tray, screenshots, DPMS                 | [Hyprland and Quickshell](docs/agent-guide/hyprland.md)  | Session/capture helpers; dotfiles `hypr/` and `quickshell/`           |
-| i3/IceWM, keyboard/mouse, rofi dependencies, clipboard/typing, Keybase popup, Bitwarden/rbw                  | [X11 and input](docs/agent-guide/x11-input.md)           | Input/rofi helpers, `lib/require.sh`; dotfiles WM configs             |
-| Agent collection, auth/limits, caches, JSON schema, usage widget                                             | [Agent usage](docs/agent-guide/agent-usage.md)           | `agent-usage*`; dotfiles `Agents.qml` and `AgentsPanel.qml`           |
-| OpenRC/audio ownership, GPU routing, CMOS, Tailscale/Open Brain, disk reclaim, VM host, dictd, GRUB, keyring | [System maintenance](docs/agent-guide/system.md)         | `start-hyprland`, system utilities, machine-local services            |
-| Ghostty/Brave config and identity, chat layout, GTK dialogs, desktop app integration, Rex, herdr             | [Applications](docs/agent-guide/applications.md)         | Dotfiles launchers, terminal config, WM rules                         |
-| ArtCraft apps: `craft-apps` launchers, control ports, MCP bridges, driving the apps, GPU use, demo recording | [ArtCraft apps](docs/agent-guide/artcraft.md)            | `craft-apps`, `craft-apps.toml`, each app's docs at its installed tag |
-| Firewall, VPNs, client network profiles and their credentials, captive portals, Wi-Fi backend                | [Network profiles](docs/agent-guide/network-profiles.md) | `i3-net-profile*`, `captive-portal`; dotfiles `etc/net-profile/`      |
-| RDP clients, TSPlus portal, agent-driven remote sessions, RDP clipboard, `rdp-lab`, SSH to Windows           | [Remote desktop](docs/agent-guide/remote-desktop.md)     | `tools/rdp/`; FreeRDP, Xvfb/Xephyr, browser debug port                |
-| Install/update/remove packages, choose distributions, review AUR, pacman/XLibre/hooks/mirrors, malware scans | [Package installation](docs/agent-guide/packages.md)     | `aur-malware-check`, local pacman config, current vendor instructions |
+| Task or trigger | Guide | Main sources |
+|---|---|---|
+| Displays, docking, scale/DPI, lid transitions, workspace placement | [Displays](docs/agent-guide/displays.md) | `i3-screen-manager`, lid helpers; dotfiles monitors, workspace blocks |
+| Hyprland Lua, session startup, focus/groups, Quickshell bars/popouts/tray, screenshots, DPMS | [Hyprland and Quickshell](docs/agent-guide/hyprland.md) | Session/capture helpers; dotfiles `hypr/` and `quickshell/` |
+| i3/IceWM, keyboard/mouse, rofi dependencies, clipboard/typing, Keybase popup, Bitwarden/rbw | [X11 and input](docs/agent-guide/x11-input.md) | Input/rofi helpers, `lib/require.sh`; dotfiles WM configs |
+| Agent collection, auth/limits, caches, JSON schema, usage widget | [Agent usage](docs/agent-guide/agent-usage.md) | `agent-usage*`; dotfiles `Agents.qml` and `AgentsPanel.qml` |
+| OpenRC/audio ownership, GPU routing, CMOS, Tailscale/Open Brain, disk reclaim, VM host, dictd, GRUB, keyring | [System maintenance](docs/agent-guide/system.md) | `start-hyprland`, system utilities, machine-local services |
+| Ghostty/Brave config and identity, chat layout, GTK dialogs, desktop app integration, Rex, herdr | [Applications](docs/agent-guide/applications.md) | Dotfiles launchers, terminal config, WM rules |
+| ArtCraft apps: `craft-apps` launchers, control ports, MCP bridges, driving the apps, GPU use, demo recording | [ArtCraft apps](docs/agent-guide/artcraft.md) | `craft-apps`, `craft-apps.toml`, each app's docs at its installed tag |
+| Firewall, VPNs, client network profiles and their credentials, captive portals, Wi-Fi backend | [Network profiles](docs/agent-guide/network-profiles.md) | `i3-net-profile*`, `captive-portal`; dotfiles `etc/net-profile/` |
+| RDP clients, TSPlus portal, agent-driven remote sessions, RDP clipboard, `rdp-lab`, SSH to Windows | [Remote desktop](docs/agent-guide/remote-desktop.md) | `tools/rdp/`; FreeRDP, Xvfb/Xephyr, browser debug port |
+| Power: TLP, power key and menu, resume hook, low-battery notices, dGPU runtime PM, hibernation | [Power](docs/agent-guide/power.md) | `i3-power-rofi`; dotfiles `etc/tlp.d/`, `etc/elogind/`, `BatteryState.qml` |
+| Install/update/remove packages, choose distributions, review AUR, pacman/XLibre/hooks/mirrors, malware scans | [Package installation](docs/agent-guide/packages.md) | `aur-malware-check`, local pacman config, current vendor instructions |
 
 For installation, command usage, and dependencies, see [README.md](README.md).
 Names such as `hypr/` and `quickshell/` in the table are under

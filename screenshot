@@ -1,18 +1,46 @@
 #!/usr/bin/env bash
 # screenshot — Wayland/Hyprland screen capture with optional tensaku annotation.
 #
-# Usage: screenshot <region|full|clipboard> [--annotate]
+# Usage: screenshot <region|full|clipboard|text|qr> [--annotate]
 #   region     drag-select a region (screen frozen during selection if
 #              hyprpicker is present, so you capture exactly what you saw)
 #   full       the active monitor
 #   clipboard  annotate whatever image is currently on the clipboard
 #              (always annotates; result goes back to the clipboard)
+#   text       drag-select a region and copy its text (OCR with tesseract)
+#   qr         drag-select a region and copy the QR code it holds (zbarimg)
 #
 # region/full: capture -> save to ~/Pictures AND copy to the clipboard; with
 # --annotate, hand off to tensaku (annotate -> back to the clipboard).
+# text/qr save nothing: the image stays in memory and only the decoded result
+# reaches the clipboard. --annotate does not apply to them.
 #
-# Bound from dotfiles/.config/hypr/hyprland-desktop.lua (the Print family);
-# flameshot stays on Super+Print as the fallback.
+# Bound from dotfiles/.config/hypr/bindings.lua (the Print family); bare Print
+# opens flameshot.
+#
+# The text and qr modes are adapted from Omarchy's omarchy-capture-text and
+# omarchy-capture-qr, under their license:
+#
+# Copyright (c) David Heinemeier Hansson
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+# LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 set -euo pipefail
 
 mode="${1:-region}"
@@ -37,6 +65,19 @@ freeze() {
 unfreeze() { [[ -n "$FREEZE_PID" ]] && kill "$FREEZE_PID" 2>/dev/null || true; FREEZE_PID=""; }
 trap unfreeze EXIT
 
+# text/qr: select a region and keep its PNG in memory as base64 (a Bash variable
+# cannot hold NUL bytes). The freeze ends as soon as grim has the image.
+png=""
+grab_region() {
+    _need slurp
+    freeze
+    local geom
+    geom=$(slurp 2>/dev/null) || exit 0   # selection cancelled
+    [[ -z "$geom" ]] && exit 0
+    png=$(grim -g "$geom" - | base64 -w0)
+    unfreeze
+}
+
 case "$mode" in
     clipboard)
         _need tensaku-edit
@@ -59,8 +100,41 @@ case "$mode" in
         mon=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.monitor // empty') || mon=""
         if [[ -n "$mon" ]]; then grim -o "$mon" "$FILE"; else grim "$FILE"; fi
         ;;
+    text)
+        _need tesseract
+        grab_region
+        out=$(base64 -d <<<"$png" | tesseract stdin stdout --oem 1 --psm 6 -l eng --dpi 300 \
+                -c preserve_interword_spaces=1 2>/dev/null) || {
+            notify-send -u critical "Text capture" "tesseract failed" 2>/dev/null
+            exit 1
+        }
+        if [[ -z "${out//[[:space:]]/}" ]]; then
+            notify-send "Text capture" "No text found" 2>/dev/null || true
+            exit 1
+        fi
+        printf '%s' "$out" | wl-copy
+        notify-send "Text capture" "Copied $(wc -l <<<"$out") line(s)" 2>/dev/null || true
+        exit 0
+        ;;
+    qr)
+        _need zbarimg
+        grab_region
+        # QR only: with every symbology enabled, dense screen content can decode as
+        # an EAN or Code 39 barcode and take over the clipboard.
+        out=$(base64 -d <<<"$png" | zbarimg -q --raw -Sdisable -Sqrcode.enable - 2>/dev/null) || out=""
+        if [[ -z "$out" ]]; then
+            notify-send "QR capture" "No QR code found" 2>/dev/null || true
+            exit 1
+        fi
+        # QR codes often carry secrets, such as otpauth:// 2FA URIs, so the value
+        # goes only to the clipboard, marked sensitive so a clipboard history
+        # skips it; it is never printed or shown in the notification.
+        printf '%s' "$out" | wl-copy --sensitive
+        notify-send "QR capture" "Copied to the clipboard" 2>/dev/null || true
+        exit 0
+        ;;
     *)
-        echo "usage: screenshot <region|full|clipboard> [--annotate]" >&2
+        echo "usage: screenshot <region|full|clipboard|text|qr> [--annotate]" >&2
         exit 2
         ;;
 esac
