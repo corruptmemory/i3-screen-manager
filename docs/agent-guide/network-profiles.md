@@ -21,7 +21,7 @@ never executed:
 Adding a profile is adding a file; it appears in the menu with no code change. The
 staged copies live in dotfiles, which is private, so client names stay out of this
 public repository. That privacy is about names only: credentials never go in any
-repository, private or public.
+repository.
 
 Every profile keeps UFW enabled and denying incoming traffic, including on VPN
 interfaces, which carry another network to the machine wherever it is. Switching
@@ -98,9 +98,9 @@ before approval is harmless and lists the node as a join request: `listnetworks`
 `ACCESS_DENIED` until the admin approves, then `OK` and an address. For any VPN the bar's
 `ok` means only that its service is running, not that the network admitted the machine.
 
-Docker publishes ports through its own firewall rules, which reportedly bypass UFW; this
-was not tested, and the service is not enabled at boot. The real `rbw` path and a real
-network were tested end to end: a join request, the admin's approval, then traffic.
+Docker publishes ports through its own firewall rules, reportedly bypassing UFW (untested);
+it is not enabled at boot. The `rbw` path was tested end to end on a real network: a join
+request, the admin's approval, then traffic.
 
 ## On Omarchy
 
@@ -110,7 +110,7 @@ its own port of the helper (`config/net-profile/net-profile`, where a profile's
 `net-profile-zerotier-one.service` in place of `etc/init.d/zerotier-one`, the package's
 `zerotier-one.service` masked, and this repository's profiles, runner and sudoers rule
 copied in. Omarchy's own `22/tcp LIMIT` SSH rule is removed, so the profile decides who
-reaches SSH. Its bar shows the same shields. The steps below are Artix's.
+reaches SSH. The steps below are Artix's.
 
 ## Setting up a machine
 
@@ -152,12 +152,11 @@ other. Testing from the same machine proves nothing, because loopback traffic is
 allowed. To check guest networking without booting a guest, attach a network namespace to
 `virbr0` through a veth pair, give it an address, and test DNS to the bridge address and TCP
 out. A DHCP probe needs a raw socket, and a new bridge port takes about 8 seconds to settle,
-so an earlier miss means nothing. This was checked that way; a real guest has not been
-booted behind UFW. A VPN must run only in its own profile. With a VPN profile active, kill the
-daemon, kill the runner, and stop the service in turn: each must leave no daemon and no
-`/run/net-profile/SERVICE`, or a red bar until a profile is chosen. Search disk, logs,
-and process arguments for the key afterward, reading the search term from a file so the
-search does not match itself.
+so an earlier miss means nothing. A real guest has not been booted behind UFW. A VPN must run
+only in its own profile. With a VPN profile active, kill the daemon, kill the runner, and stop
+the service in turn: each must leave no daemon and no `/run/net-profile/SERVICE`, or a red bar
+until a profile is chosen. Search disk, logs, and process arguments for the key afterward,
+reading the search term from a file so the search does not match itself.
 
 After a reboot, `i3-net-profile status` must report the chosen profile as `ok`, or as
 `vpn-down` for a VPN profile until it is chosen again. `sudo ufw status` must show its rules,
@@ -166,8 +165,7 @@ probed from the other machine. No VPN daemon and no `/run/net-profile` may remai
 
 ## Captive Portals
 
-Only the laptop runs NetworkManager; the desktop runs netifrc, so this section applies to
-`nomad-artix` alone.
+This section applies to the laptop alone; the Artix desktop runs netifrc.
 
 Its Wi-Fi backend is wpa_supplicant, NetworkManager's default, set by dotfiles'
 `90-wifi-backend.conf`; NetworkManager.conf(5) calls iwd experimental, and Omarchy left it too.
@@ -191,7 +189,7 @@ Dotfiles' `.config/quickshell/Connectivity.qml` reads NetworkManager's state thr
 Quickshell's `Networking`. It is a singleton, so every bar shares one re-check and one
 notification. It looks for `/run/NetworkManager` once at bar start and touches `Networking`
 only when that exists, because the first use without NetworkManager logs an ERROR ("Could not
-find an available backend"). Without it, as on the desktop, the `Network` widget shows only the
+find an available backend"). Without it the `Network` widget shows only the
 link. On the laptop `Widgets/Network.qml` turns white on red with
 `sign in` for Portal, where a click runs `captive-portal`, and yellow for Limited. While either
 holds, the singleton asks NetworkManager to re-check every 10 seconds instead of its own 300.
@@ -211,9 +209,9 @@ so each run also leaves `last-run.log` beside the profile, recording the connect
 they change, each page the window visits (read from that CDP port), and how the run ended, and
 `brave.log` with the browser's output; the next run replaces both. A new Origin profile ignores
 `--app` and shows Origin's free-tier splash, so before each launch the script sets
-`brave.origin.free_tier_accepted` to `true` in the profile's `Local State`, the choice Jim's
-main profile records. It sets only that key and copies nothing from the main profile: the portal
-profile never signs in or uses one of the Origin purchase's device activations.
+`brave.origin.free_tier_accepted` to `true` in the profile's `Local State`. It sets only that
+key and copies nothing from the main profile: the portal profile never signs in or uses one of
+the Origin purchase's device activations.
 
 Brave names an `--app` window after its URL; for the check URL the class is
 `brave-ping.omacom.io__nm-check.txt-Default`, which dotfiles' `captive-portal` window rule floats
@@ -224,9 +222,8 @@ NetworkManager's last result instead. Once online it closes the window
 through Hyprland's `pid:` selector, falls back to SIGTERM and then SIGKILL, and notifies
 `Online`. Closing the window first ends the wait silently; a browser that exits before Hyprland
 lists its window raises a critical notification. Outside Hyprland the close is a SIGTERM.
-Omarchy's pause of a Tailscale exit node is not ported, because tailscaled doesn't run on the
-laptop. The script and both config files are adapted from Omarchy 4.5 and carry its MIT
-license in full.
+Omarchy's pause of a Tailscale exit node is not ported. The script and both config files are
+adapted from Omarchy 4.5 and carry its MIT license in full.
 
 To set up the laptop, from dotfiles' `etc/` directory:
 
