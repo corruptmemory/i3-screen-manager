@@ -15,12 +15,13 @@ symlinked into `~/.local/bin`. Installing them does not install a desktop config
 |----------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
 | Display CLI and menu       | `i3-screen-manager`, `i3-screen-rofi`                                                                                                |
 | Keyboard and mouse         | `i3-keyboard-rofi`, `i3-mouse-setup`, `i3-mouse-rofi`                                                                                |
-| Hyprland session and sleep | `start-hyprland`, `hyprctl-live`, `hypr-dpms-all`                                                                                    |
+| Hyprland session and sleep | `start-hyprland`, `hyprctl-live`, `hypr-dpms-all`, `hypr-binds-rofi` (keybinding viewer)                                             |
 | Power                      | `i3-power-rofi` (the laptop's power-key menu)                                                                                        |
 | Lid handling               | `laptop-monitor.sh`, `laptop-monitor-x11.sh`                                                                                         |
 | Screenshots                | `screenshot` (grim/slurp/tensaku; OCR and QR), `screenshot.sh` (hyprshot/satty), `flameshot.sh`                                      |
 | Desktop helpers            | `i3-cmos-battery`, `keybase-popup-anchor-x11`, `volumecontrol.sh`, `rbw-sync-check` (Bitwarden sync watch)                           |
 | Network                    | `i3-tailscale-rofi`, `i3-net-profile`, `i3-net-profile-rofi`, `captive-portal` (portal sign-in)                                      |
+| Applications               | `zoom-web` (Zoom's web client as a Brave app window)                                                                                 |
 | Usage records              | `agent-usage`, `agent-usage-claude`, `agent-usage-codex`; `agent-usage-polybar`, `agent-usage-rofi` (i3/Polybar bar item and popout) |
 | System utilities           | `aur-malware-check`, `tool-audit`, `artix-rank-mirrors`, `win11-vm-setup.sh`, `upgrade-ai` (coding-agent CLI updates)                |
 | ArtCraft agent control     | `craft-apps` (with `craft-apps.toml`)                                                                                                |
@@ -37,6 +38,8 @@ Install additional dependencies for the features being used:
 | X11 displays / DPI             | `xrandr`, `xrdb`                                                                                                                                       |
 | Rofi menus                     | `rofi`, the installed shared helper, `notify-send` for notifications                                                                                   |
 | Power menu                     | `rofi`, elogind's `loginctl`; `hyprlock` (Wayland) or `i3lock` (X11)                                                                                   |
+| Keybinding viewer              | `rofi`, `jq`, installed `hyprctl-live`                                                                                                                 |
+| Zoom web app                   | `brave-origin`; a Zoom login in its `Default` profile                                                                                                  |
 | Clamshell                      | `elogind-inhibit`, readable ACPI lid state                                                                                                             |
 | Keyboard / mouse               | `hyprctl` or `setxkbmap`; `solaar` for Logitech DPI                                                                                                    |
 | Session launcher               | gnome-keyring, OpenSSH agent tools, `/usr/bin/start-hyprland`, configured user D-Bus                                                                   |
@@ -207,6 +210,7 @@ The configured Hyprland bindings include:
 | `Super+Alt+Backspace`  | Scale picker (`dpi` alias on desktop)                                |
 | `Super+Alt+M`          | Mouse DPI, where installed                                           |
 | `Super+Shift+B`        | Bitwarden via `rofi-rbw --typer ydotool`                             |
+| `Super+K`              | Keybinding viewer: every bind and its description                    |
 | `Super+1` to `Super+0` | Slot 1-10 on the focused monitor; with Shift, move the window there  |
 | `Super+,` / `Super+.`  | Focus the previous / next monitor; with Shift, move the window there |
 | `Super+L`              | Float or tile the focused workspace's windows                        |
@@ -230,6 +234,8 @@ screenshot full --annotate
 screenshot clipboard
 screenshot text
 screenshot qr
+zoom-web                              # the web client's home
+zoom-web --print 'zoommtg://zoom.us/join?confno=123'
 agent-usage
 agent-usage --limits-only
 agent-usage --force
@@ -241,6 +247,10 @@ i3-cmos-battery quickshell
 captures to the clipboard. Clipboard annotation requires `tensaku-edit`. `text`
 and `qr` save nothing and copy only the decoded result; `qr` marks it sensitive
 so a clipboard history skips it, and never prints it.
+
+`zoom-web` handles the `zoommtg` and `zoomus` links a meeting page hands to the native
+client, through dotfiles' `Zoom.desktop`; `--print` shows the web-client URL it would open.
+`hypr-binds-rofi` lists binds in `bindings.lua` order; it cannot run them.
 
 `agent-usage` prints a merged JSON array and caches successful per-agent records
 under `${XDG_STATE_HOME:-$HOME/.local/state}/agent-usage/`. Collectors use

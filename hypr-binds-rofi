@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+#
+# hypr-binds-rofi — list Hyprland's keybindings and their descriptions in rofi.
+#
+# Reads `hyprctl-live binds -j` in registration order, which follows dotfiles'
+# bindings.lua. Every bind there carries a description; its tests/test_bindings.lua
+# enforces that. Display only: under the Lua config a bind's action is a Lua function
+# or a dispatcher handle, which `hyprctl binds` reports only as a number, so an entry
+# cannot be run from here. Type to filter by chord or description; Escape closes.
+# Bound to Super+K; README.md ("Common Bindings") lists the main chords.
+
+set -euo pipefail
+
+# Silent-failure guard: shared _require helper. See
+# ~/.local/lib/sh/require.sh (symlinked from i3-screen-manager/lib/require.sh)
+# and docs/agent-guide/x11-input.md for dependency diagnostics.
+. "$HOME/.local/lib/sh/require.sh"
+_require rofi jq hyprctl-live
+
+# modmask bits: SHIFT 1, CAPS 2, CTRL 4, ALT 8, MOD2 16, MOD3 32, SUPER 64, MOD5 128.
+# jq has no bitwise operators, so a bit is (mask / bit | floor) % 2.
+rows=$(hyprctl-live binds -j | jq -r '
+    def bit($m; $b): (($m / $b) | floor) % 2 == 1;
+    def keyname:
+        if   . == "mouse:272" then "Left drag"
+        elif . == "mouse:273" then "Right drag"
+        elif . == "switch:on:Lid Switch"  then "Lid close"
+        elif . == "switch:off:Lid Switch" then "Lid open"
+        elif test("^[a-z]$") then ascii_upcase
+        else ({"comma": ",", "period": ".", "minus": "-", "return": "Return",
+               "escape": "Escape", "space": "Space", "left": "Left", "right": "Right",
+               "up": "Up", "down": "Down"}[.] // .)
+        end;
+    .[]
+    | [ (if bit(.modmask; 64) then "Super" else empty end),
+        (if bit(.modmask; 4)  then "Ctrl"  else empty end),
+        (if bit(.modmask; 8)  then "Alt"   else empty end),
+        (if bit(.modmask; 1)  then "Shift" else empty end),
+        (.key | keyname) ] as $parts
+    | (if .submap != "" then "[" + .submap + "] " else "" end) + ($parts | join("+"))
+      + "\t" + (if .description == "" then "(no description)" else .description end)
+')
+
+# Pad the chord column to its widest entry; rofi's font (TX-02) is monospaced.
+width=$(cut -f1 <<<"$rows" | awk '{ if (length > w) w = length } END { print w + 0 }')
+awk -F'\t' -v w="$width" '{ printf "%-*s   %s\n", w, $1, $2 }' <<<"$rows" |
+    rofi -dmenu -i -no-custom -p "Keys" -theme-str 'window {width: 900px;} listview {lines: 20;}' \
+        >/dev/null || true

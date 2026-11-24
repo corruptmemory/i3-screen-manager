@@ -1,7 +1,7 @@
 # Applications
 
 Read this guide for Ghostty/Brave identity and config deployment, chat layout,
-GTK dialogs, the Rex and herdr terminal servers, the ScreenConnect client, or
+GTK dialogs, the Rex and herdr terminal servers, Zoom, the ScreenConnect client, or
 application-specific desktop integration.
 Sources are chiefly dotfiles' launchers, `.desktop` overrides, WM rules, and terminal
 configs. The ArtCraft apps and `craft-apps` have their own
@@ -41,11 +41,9 @@ and local launcher before changing flags.
 
 Native-messaging host manifests and MIME associations are local integration
 points. Recheck their paths when changing browser packages or profiles. For
-broken Gmail link navigation, inspect the new tab's request chain: a redirect
-into an extension resource indicates a different problem from a blocked
-request or a window-manager focus rule. Fix a request-matching extension rule
-at the affected request domain rather than assuming the originating tab's
-domain is the relevant setting.
+broken Gmail link navigation, inspect the new tab's request chain: a redirect into
+an extension resource means an extension rule, to fix at the request's domain, not
+the originating tab's.
 
 ## Chat Layout
 
@@ -114,11 +112,10 @@ At boot the service starts before any login. The server restores `home` from its
 state with a fresh shell, so `start_post` finds it and opens nothing. The log's "PAM
 credentials not established" warning is expected: the policy's auth section is `pam_deny`.
 
-Plain `rex`, the agent skill, and the other machine's host reach that server at the usual path, and the
-session autostarts start no Rex server. A server started any other way, such as by a plain
-`rex` command after `home` was closed, has no login session of its own: a logout deletes
-its socket and leaves it running, unreachable, with its saved sessions locked against the
-next server. Restart the service to bring `home` back.
+A server started any other way, such as by a plain `rex` command after `home` was closed,
+has no login session of its own: a logout deletes its socket and leaves it running,
+unreachable, with its saved sessions locked against the next server. Restart the service
+to bring `home` back.
 
 Always on has costs. The `rex` login session holds `/run/user/1000`, so a logout no longer
 clears it: the keyring stays unlocked, keys loaded in the SSH agent stay loaded, and the
@@ -211,6 +208,14 @@ prints usage. Omacalc opens with `Super+Shift+Q` or the calculator key, and
 floats under both Hyprland and i3. Both apps read colors from Omarchy's
 `~/.local/state/omarchy/current/theme/colors.toml` when it exists and otherwise
 use their own defaults; nothing writes that file here.
+
+## Zoom
+
+`zoom-web [URL]` opens Zoom's web client in Brave's `Default` profile as one `--app`
+window, not the native client's many. It rewrites a `zoommtg://` or `zoomus://` link, or
+`https://…zoom.us/j/ID`, to `app.zoom.us/wc/join/ID`, keeping only a digit ID and a
+URL-safe passcode. Dotfiles' `Zoom.desktop` shadows the package's entry and handles both
+schemes. `/usr/bin/zoom` remains for what the web client lacks.
 
 ## ScreenConnect
 

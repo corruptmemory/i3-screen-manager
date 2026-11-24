@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+#
+# zoom-web — open a Zoom meeting, or Zoom's home page, in Zoom's web client as a
+# Brave app window: one window, tiled like any other, instead of the native
+# client's many.
+#
+#   zoom-web [--print] [--profile DIR] [URL]
+#
+# URL may be a zoommtg:// or zoomus:// link, which a meeting page hands to the
+# native client, or an https://zoom.us/j/ID link on any zoom.us host. Anything
+# else, or no URL, opens the web client's home. --profile picks the Brave profile
+# directory that holds the Zoom login (default: Default). --print writes the
+# web-client URL instead of opening it. Dotfiles'
+# .local/share/applications/Zoom.desktop makes this the zoommtg/zoomus handler.
+# See docs/agent-guide/applications.md ("Zoom").
+#
+# The link rewrite is adapted from Omarchy's omarchy-webapp-handler-zoom, under
+# its license:
+#
+# Copyright (c) David Heinemeier Hansson
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+# LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+set -euo pipefail
+
+print=0
+profile="Default"
+while (( $# )); do
+    case "$1" in
+        --print)   print=1; shift ;;
+        --profile) profile="${2:?--profile needs a directory name}"; shift 2 ;;
+        --)        shift; break ;;
+        -*)        echo "usage: zoom-web [--print] [--profile DIR] [URL]" >&2; exit 2 ;;
+        *)         break ;;
+    esac
+done
+url="${1:-}"
+
+confno="" pwd=""
+case "$url" in
+    zoommtg://*|zoomus://*)
+        confno=$(sed -n 's/.*[?&]confno=\([^&#]*\).*/\1/p' <<<"$url")
+        pwd=$(sed -n 's/.*[?&]pwd=\([^&#]*\).*/\1/p' <<<"$url")
+        ;;
+    https://*)
+        confno=$(sed -n 's|^https://\([a-z0-9-]*\.\)*zoom\.us/j/\([^?#/]*\).*|\2|p' <<<"$url")
+        pwd=$(sed -n 's/.*[?&]pwd=\([^&#]*\).*/\1/p' <<<"$url")
+        ;;
+esac
+# A meeting ID is digits and a passcode token is URL-safe; anything else is dropped
+# rather than carried into the URL (the web client then asks for it).
+[[ "$confno" =~ ^[0-9]+$ ]] || confno=""
+[[ "$pwd" =~ ^[A-Za-z0-9._~-]+$ ]] || pwd=""
+
+web="https://app.zoom.us/wc/home"
+if [[ -n "$confno" ]]; then
+    web="https://app.zoom.us/wc/join/$confno"
+    [[ -n "$pwd" ]] && web+="?pwd=$pwd"
+fi
+
+if (( print )); then
+    printf '%s\n' "$web"
+    exit 0
+fi
+
+# Silent-failure guard: shared _require helper (lib/require.sh).
+. "$HOME/.local/lib/sh/require.sh"
+_require brave-origin
+# Brave adds the window to its running process, if any; the flags file supplies the
+# debug port and WebMCP to a cold start (docs/agent-guide/applications.md).
+setsid -f brave-origin --profile-directory="$profile" --app="$web" >/dev/null 2>&1
