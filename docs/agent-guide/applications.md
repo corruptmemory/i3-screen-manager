@@ -107,8 +107,7 @@ Dotfiles' `etc/init.d/rex-login-server`, adapted from the vendor's Alpine script
 reaches `pam_elogind` through `system-remote-login`) and starts `rex server run
 --exit-empty` as `jim` inside it. elogind counts that session, so a tty logout keeps
 `/run/user/1000` and the server's socket, and plain `rex` reaches the server at the usual
-path. A session started this way ran through a full logout and login with no gap. The
-server stops about 10 seconds after its last session ends, so the script's `start_post`
+path. The server stops about 10 seconds after its last session ends, so the script's `start_post`
 keeps it always on: unless one exists, it opens an idle `home` session (a fish shell)
 through the login server. Restarting the service leaves the server and `home` running.
 At boot the service starts before any login. The server restores `home` from its saved
@@ -136,12 +135,13 @@ leaves in the background ends with that command. Start either kind under Hyprlan
 `hyprctl-live dispatch 'hl.dsp.exec_cmd("...")'`.
 
 Each machine reaches the other as a Rex host over SSH, LAN first: `laptop` is
-`ssh://nomad-artix` then `ssh://jim@100.90.248.89`, `desktop` is `ssh://jim@192.168.1.19`
-then `ssh://jim@100.64.248.76`, each plus `/run/user/1000/rex/server.sock`. Each command
-runs `ssh` anew, so a sleeping laptop breaks nothing. Without the socket path, Rex
-would start a server outside the login session. Its 10-second connect timeout spans all
-endpoints, so each `~/.ssh/config` sets `ConnectTimeout 4` for these addresses, above
-`Host *`; a dead first address then costs 4 seconds.
+`ssh://nomad-artix` then `ssh://jim@100.90.248.89`, `desktop` is
+`ssh://jim@godlike-omarchy` then `ssh://jim@100.64.248.76`, each plus
+`/run/user/1000/rex/server.sock`. Each command runs `ssh` anew, so a sleeping laptop
+breaks nothing. Without the socket path, Rex would start a server outside the login
+session, as `ssh HOST rex ...` does; use `rex -S LABEL`. Its 10-second connect timeout
+spans all endpoints, so each `~/.ssh/config` sets `ConnectTimeout 4` for these
+addresses, above `Host *`; a dead first address then costs 4 seconds.
 
 Rex has no logins; it admits callers by connection: its socket's owner, or whoever SSH
 logs in as `jim`. Its Tailscale node (`rex server tailscale`, off on both) admits its
@@ -149,7 +149,7 @@ owner. Never add `--allow-anonymous`: every caller gets a shell as the account.
 
 `rex terminfo setup` installs `xterm-rex` in `~/.terminfo` and puts an `Include` of Rex's
 guard at the top of the machine-local `~/.ssh/config`. Outside a Rex terminal the guard
-changes nothing; `ssh -G` resolved the usual hosts identically before and after.
+changes nothing.
 `ssh` runs the guard's `Match exec` through `$SHELL -c`, so a shell startup file that sets
 `TERM` defeats it (one reason fish's config sets none), and a server whose `SHELL` is that
 shell gives its terminals `xterm-256color`. `rex terminfo status` run with the server's
@@ -158,13 +158,15 @@ shell gives its terminals `xterm-256color`. `rex terminfo status` run with the s
 the untracked `~/.claude/settings.json` and in `~/.codex/hooks.json`. Outside Rex the hook
 prints nothing and starts no server. Codex runs its hook only after `/hooks` approves it.
 
-Both machines have all of this. To set up another: pull dotfiles, check that `rex.asc`
+The laptop has all of this. On Omarchy (the desktop) the package's user `rex.socket`,
+held from boot by lingering, starts `rex.service` on first use; `rex server stop` saves
+the sessions, and the next connection starts an upgraded server.
+To set up another Artix machine: pull dotfiles, check that `rex.asc`
 matches the key the vendor serves at `https://pkgs.superlogical.com/rex/keys/rex.asc`, and
 install the key, repo, package, login server, and accounts file from dotfiles `etc/` as
 their headers say. Delete any tarball Rex in `/usr/local/bin`, which shadows `/usr/bin/rex`,
-then start the service and run `rex terminfo setup` and `rex skill setup`. The desktop's
-`config.fish` is a local file, not the dotfiles copy, so dotfiles changes to it reach the
-desktop only by hand. Add the hosts as above.
+then start the service and run `rex terminfo setup` and `rex skill setup`. Add the hosts
+as above.
 
 To test a host, create a throwaway session with `rex -S LABEL new`, check that
 `rex -S LABEL run --wait` returns the command's exit status, then `kill` the session.
