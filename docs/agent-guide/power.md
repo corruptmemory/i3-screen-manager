@@ -55,9 +55,14 @@ UPower keeps its own thresholds in `/etc/UPower/UPower.conf`: low 20%, critical 
 - **The dGPU never runtime-suspends.** `/proc/driver/nvidia/gpus/*/power` reports
   `Runtime D3 status: Not supported`, and `01:00.0` stays `active` with no suspended time,
   although `NVreg_DynamicPowerManagement=0x02` (`/etc/modprobe.d/nvidia.conf`) is live and
-  `/etc/udev/rules.d/80-nvidia-pm.rules` sets `power/control=auto`. The audio function
-  `01:00.1` does suspend. Not investigated yet. Read `power/runtime_status` in sysfs:
-  `nvidia-smi` and `lspci` wake the card.
+  `/etc/udev/rules.d/80-nvidia-pm.rules` sets `power/control=auto`. The cause is Linux
+  7.3, which starts kernel threads in an empty root: the driver's `nv-probe-*` thread
+  cannot open `/sys/bus/pci/devices/…/config`, so it turns dynamic power off at probe,
+  with no error logged. The upstream issue is NVIDIA/open-gpu-kernel-modules#1507, with
+  the fix in #1512. Until a driver ships it, the choices are #1512 applied to the DKMS
+  source, a 7.2 or LTS kernel, or a driver unbind and bind from user context, which
+  needs Hyprland stopped. Read `power/runtime_status` in sysfs: `nvidia-smi` and `lspci`
+  wake the card.
 - **The critical battery action cannot save the session.** `Auto` hibernates, but the
   kernel command line has no `resume=` and the initramfs no `resume` hook, so the image is
   never restored and the session is lost as with a power-off.
