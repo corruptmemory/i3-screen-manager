@@ -183,7 +183,7 @@ Verified laptop to desktop over the tailnet.
 
 `herdr integration install NAME` hooks an agent CLI into herdr, so its pane reports the
 agent's session. Both machines have the claude, codex, opencode, cursor, antigravity-cli,
-and grok integrations (`herdr integration status`); Gemini CLI has none. Cursor's adds a
+and grok integrations (`herdr integration status`). Cursor's adds a
 `sessionStart` hook to `~/.cursor/hooks.json`, which the Cursor app's agent reads too; the
 hook does nothing outside a herdr pane. `herdr agent list` shows each detected agent.
 

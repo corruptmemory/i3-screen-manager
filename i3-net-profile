@@ -60,7 +60,7 @@ set_profile() {
     else
         # rbw prompts for the master password if the vault is locked. The output goes
         # straight down the pipe, so the secret never sits in a variable or an argument.
-        rbw=$(command -v rbw || echo "$HOME/.cargo/bin/rbw")
+        rbw=$(command -v rbw || echo "$HOME/.local/share/mise/shims/rbw")
         out=$("$rbw" get --raw "$item" 2>/dev/null | helper set "$1" 2>&1) || rc=$?
     fi
     # A failed switch can still have changed something, so refresh either way.

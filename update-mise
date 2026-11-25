@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# update-mise - upgrade every tool mise manages on this machine.
+#
+# Lists what is outdated, then runs `mise upgrade --global`. That covers the
+# tools in mise's global and system configs (`mise config ls`): dotfiles'
+# ~/.config/mise/config.toml and conf.d/<hostname>.toml, and on Omarchy also
+# /etc/mise/conf.d/omarchy-tools.toml. A project's own mise.toml is left alone,
+# whatever directory this runs from. mise skips releases younger than its
+# minimum release age; for an urgent fix, run
+# `MISE_MINIMUM_RELEASE_AGE=0s update-mise`.
+#
+# Usage:
+#   update-mise             # list outdated tools, then upgrade them
+#   update-mise --dry-run   # list outdated tools; change nothing
+#   update-mise --audit     # afterwards, run tool-audit on what changed
+#
+# Exit status: 0 when every tool is current or upgraded, 1 when mise failed or
+# tool-audit reported a red flag, 2 on a usage error.
+set -uo pipefail
+
+dry_run=0
+audit=0
+for a in "$@"; do
+    case "$a" in
+        -n|--dry-run) dry_run=1 ;;
+        --audit) audit=1 ;;
+        -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
+        *) echo "update-mise: unknown argument: $a" >&2; exit 2 ;;
+    esac
+done
+
+if ! command -v mise >/dev/null 2>&1; then
+    echo "update-mise: mise is not on PATH (pacman -S mise)" >&2
+    exit 1
+fi
+
+if [ -t 1 ]; then bold=$'\e[1m'; off=$'\e[0m'; else bold='' off=''; fi
+
+printf '%s==> mise outdated --global%s\n' "$bold" "$off"
+if ! outdated=$(mise outdated --global); then
+    echo "update-mise: mise outdated failed; nothing upgraded" >&2
+    exit 1
+fi
+# Nothing outdated: stdout is empty and mise says so on stderr.
+[ -n "$outdated" ] && printf '%s\n' "$outdated"
+[ "$dry_run" -eq 1 ] && exit 0
+
+rc=0
+printf '\n%s==> mise upgrade --global%s\n' "$bold" "$off"
+mise upgrade --global || rc=1
+
+if [ "$audit" -eq 1 ]; then
+    if command -v tool-audit >/dev/null 2>&1; then
+        printf '\n%s==> tool-audit%s\n' "$bold" "$off"
+        tool-audit || rc=1
+    else
+        echo "update-mise: --audit needs tool-audit on PATH" >&2
+        rc=1
+    fi
+elif [ "$rc" -eq 0 ] && [ -n "$outdated" ]; then
+    echo
+    echo "Tools changed. Review them with tool-audit, then tool-audit --accept."
+fi
+exit "$rc"

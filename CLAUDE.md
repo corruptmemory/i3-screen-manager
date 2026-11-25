@@ -67,6 +67,7 @@ further references only when relevant. Read source files to confirm behavior.
 | RDP clients, TSPlus portal, agent-driven remote sessions, RDP clipboard, `rdp-lab`, SSH to Windows | [Remote desktop](docs/agent-guide/remote-desktop.md) | `tools/rdp/`; FreeRDP, Xvfb/Xephyr, browser debug port |
 | Power: TLP, power key and menu, resume hook, low-battery notices, dGPU runtime PM, hibernation | [Power](docs/agent-guide/power.md) | `i3-power-rofi`; dotfiles `etc/tlp.d/`, `etc/elogind/`, `BatteryState.qml` |
 | Install/update/remove packages, choose distributions, review AUR, pacman/XLibre/hooks/mirrors, malware scans | [Package installation](docs/agent-guide/packages.md) | `aur-malware-check`, local pacman config, current vendor instructions |
+| Developer tools and coding-agent CLIs from mise, `update-mise`, shell PATH to them | [Developer tools](docs/agent-guide/dev-tools.md) | `update-mise`, `tool-audit`; dotfiles `.config/mise/` |
 
 For installation, command usage, and dependencies, see [README.md](README.md).
 Names such as `hypr/` and `quickshell/` in the table are under

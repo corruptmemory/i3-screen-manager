@@ -23,7 +23,7 @@ symlinked into `~/.local/bin`. Installing them does not install a desktop config
 | Network                    | `i3-tailscale-rofi`, `i3-net-profile`, `i3-net-profile-rofi`, `captive-portal` (portal sign-in)                                      |
 | Applications               | `zoom-web` (Zoom's web client as a Brave app window)                                                                                 |
 | Usage records              | `agent-usage`, `agent-usage-claude`, `agent-usage-codex`; `agent-usage-polybar`, `agent-usage-rofi` (i3/Polybar bar item and popout) |
-| System utilities           | `aur-malware-check`, `tool-audit`, `artix-rank-mirrors`, `win11-vm-setup.sh`, `upgrade-ai` (coding-agent CLI updates)                |
+| System utilities           | `aur-malware-check`, `tool-audit`, `artix-rank-mirrors`, `win11-vm-setup.sh`, `update-mise` (mise-managed tool updates)              |
 | ArtCraft agent control     | `craft-apps` (with `craft-apps.toml`)                                                                                                |
 | Shared dependency guard    | `lib/require.sh`                                                                                                                     |
 
@@ -49,6 +49,7 @@ Install additional dependencies for the features being used:
 | Tailscale menu                 | `tailscale`, Python 3, `jq`, `curl`, `xdg-open`, configured `~/.claude.json`                                                                           |
 | Keybase popup                  | i3, `jq`, `flock`                                                                                                                                      |
 | CMOS monitoring                | it87-family Vbat sensor                                                                                                                                |
+| Tool updates (`update-mise`)   | `mise`; `tool-audit` for `--audit`                                                                                                                     |
 | AUR audit                      | `pacman`, `curl` or a local denylist                                                                                                                   |
 | Mirror ranking                 | Python 3.10+, `vercmp` (pacman), `bsdtar` (libarchive), network access                                                                                 |
 | RDP test bench (`tools/rdp/`)  | `freerdp`, Xvfb or Xephyr, `xdotool`, ImageMagick, `xclip`, `xdpyinfo`, Node 21+                                                                       |
@@ -90,10 +91,11 @@ done
 ```
 
 Link `i3-net-profile`, `i3-net-profile-rofi`, `captive-portal`, `tool-audit`,
-`rbw-sync-check`, and `upgrade-ai` the same way. Their setup, including the
+`rbw-sync-check`, and `update-mise` the same way. Their setup, including the
 root-owned files dotfiles stages for them, is in the
-[network profiles](docs/agent-guide/network-profiles.md) and
-[package](docs/agent-guide/packages.md) guides; Rex's is in the
+[network profiles](docs/agent-guide/network-profiles.md),
+[package](docs/agent-guide/packages.md), and
+[developer tools](docs/agent-guide/dev-tools.md) guides; Rex's is in the
 [applications guide](docs/agent-guide/applications.md#rex).
 
 The dotfiles repo supplies keybindings, autostart hooks, and bar widgets.

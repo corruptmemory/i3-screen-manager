@@ -23,30 +23,21 @@ Avoid sudo-driven global npm installs for project tooling. A vendor URL or
 container namespace must actually belong to the publisher; retain available
 signature/checksum verification. Read installer behavior before executing it.
 
-Rung-5 forks in use on both machines: `odin-git-local`, `cursor-bin-local`,
-`claude-desktop-local`, and `git-wd40` (Git with the WD-40 patchset; it provides and
-conflicts with `git`). The first three rename the package, so the AUR never offers an
-update. `claude-desktop-local`'s `update.sh` pins each `.deb` from Anthropic's signed apt
-index; `cursor-bin-local`'s takes its hash from Cursor's download API. Both machines
-also have `dreamcoder-local` (public repo `corruptmemory/dream-coder`, built from
-DreamCoder's `.deb`); its vendor publishes no checksum or signature, so its
-`update.sh` takes the `.deb` URL from the vendor's `install.sh` and pins the hash
-of that download. `git-wd40`
-keeps the AUR `pkgname`, so `yay -Syu` offers to rebuild it from the AUR, which
-would drop the fork's Artix deltas; exclude it (`--ignore git-wd40`) and sync
-the fork at `~/projects/git-wd40` instead, per that repo's README.
+Rung-5 forks in use on both machines: `cursor-bin-local`, `claude-desktop-local`, and
+`git-wd40` (Git with the WD-40 patchset; it provides and conflicts with `git`). The
+first two rename the package, so the AUR never offers an update.
+`claude-desktop-local`'s `update.sh` pins each `.deb` from Anthropic's signed apt index;
+`cursor-bin-local`'s takes its hash from Cursor's download API. Both machines also have
+`dreamcoder-local` (public repo `corruptmemory/dream-coder`, built from DreamCoder's
+`.deb`); its vendor publishes no checksum or signature, so its `update.sh` takes the
+`.deb` URL from the vendor's `install.sh` and pins the hash of that download. `git-wd40`
+keeps the AUR `pkgname`, so `yay -Syu` offers to rebuild it from the AUR, which would
+drop the fork's Artix deltas; exclude it (`--ignore git-wd40`) and sync the fork at
+`~/projects/git-wd40` instead, per that repo's README.
 
-Gemini CLI and opencode come from `extra`. Cursor's CLI and Grok's both install as
-`~/.local/bin/agent`; here `agent` is Cursor's and Grok runs as `grok`. Cursor's updater
-relinks `agent` on every update. Grok's fish block reads `fish_add_path --path --append
-$HOME/.grok/bin`, so `~/.grok/bin/agent` stays behind `~/.local/bin`. Grok's installer, not
-its updater, relinks `agent` and rewrites that block; after running it, run
-`ln -sfn "$(readlink ~/.local/bin/cursor-agent)" ~/.local/bin/agent` and edit the block back.
-
-A tool that runs `npx -y NAME` downloads `NAME` from npm unless npm's global folder,
-`/usr/lib/node_modules`, where Arch's node packages install, already has it. Cursor's CLI runs
-`npx -y typescript-language-server` in every folder it opens, so both machines install
-`typescript-language-server` from `extra`; with npm's registry unreachable, `npx` still ran it.
+Developer tools that nothing on the system depends on, and the coding-agent CLIs, come
+from mise instead of these rungs: see [Developer Tools](dev-tools.md). On the laptop
+Odin comes from mise; the desktop still builds `odin-git-local`.
 
 ## Pacman and XLibre
 
@@ -214,7 +205,8 @@ files. A changed file in a version folder, a checksum mismatch, or a detection i
 red flag and exits 1. Review the report, then run `tool-audit --accept`; it never
 updates the baseline itself. `--full` scans all tool folders, which took about 20
 minutes on the desktop and over 15 on the laptop. Add tools to `TOOL_ROOTS`; missing
-folders are skipped. Keep a copy of `~/.local/state/tool-audit/baseline.tsv.gz` on
+folders are skipped. mise's real version folders count as version folders
+([Developer Tools](dev-tools.md#updates-and-trust)). Keep a copy of `~/.local/state/tool-audit/baseline.tsv.gz` on
 another machine, because anything running as the user can rewrite the local one. Each
 machine holds the other's beside its own as `peer-HOSTNAME.tsv.gz`; refresh it after
 an `--accept`.
