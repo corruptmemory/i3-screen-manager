@@ -57,7 +57,9 @@ check() {
     local age err
     age=$(copy_age)
     [ -n "$age" ] || return 0
-    err=$(rbw sync 2>&1 >/dev/null) && return 0
+    # 9>&-: a sync can start rbw-agent, which would inherit the watcher's lock
+    # and keep it after the watcher exits, so no watcher could start again.
+    err=$(rbw sync 2>&1 >/dev/null 9>&-) && return 0
     [ -n "$err" ] || err="rbw sync failed without a message"
     case $err in
         *"error sending request"*|*"dns error"*|*"Connection refused"*|*"timed out"*|*"Network is unreachable"*)
