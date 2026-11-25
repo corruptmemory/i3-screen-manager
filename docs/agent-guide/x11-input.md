@@ -87,8 +87,12 @@ logins" (`Alt+s`) runs `rbw sync` and discards its exit status and message, and
 saved login, both machines stayed on months-old copies, missing new entries and
 typing old passwords. `rbw-sync-check --watch`, started by every session
 (Hyprland autostart, both i3 configs, both IceWM xinitrc files), runs `rbw sync`
-two minutes after login and hourly after that. One watcher runs per user. It
-raises a critical notification on any failure, repeated at most every six
+two minutes after login and hourly after that. One watcher runs per user,
+holding a lock in `$XDG_RUNTIME_DIR`. It outlives the session that started it:
+a later session's start exits, and the old watcher keeps its own PATH. After
+moving rbw, kill the watcher and its `sleep` child, then start it again from
+the session (`hyprctl-live dispatch 'hl.dsp.exec_cmd("rbw-sync-check --watch")'`).
+It raises a critical notification on any failure, repeated at most every six
 hours. A network error notifies only once the copy is three days old. A
 rejected login (`missing field access_token`) comes with the fix: `rbw purge`,
 `rbw login`, `rbw sync`. `rbw login` alone does nothing while the rejected
