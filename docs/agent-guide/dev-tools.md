@@ -2,7 +2,7 @@
 
 Read this guide before installing, updating, or removing a developer tool or coding-agent
 CLI, or changing how shells find them. Sources: dotfiles' `.config/mise/` and the
-`storageexplorer.desktop` and `raddbg.desktop` launchers, `update-mise`, `tool-audit`, the
+`storageexplorer.desktop` and `rad-debugger.desktop` launchers, `update-mise`, `tool-audit`, the
 machine-local `~/.config/fish/config.fish`, `~/.bashrc` and `~/.bash_profile`, and
 `mise tool NAME`. Packages that system software depends on stay on pacman; see
 [Package Installation](packages.md).
@@ -25,9 +25,12 @@ or run `mise use -g`, which writes through the link and keeps the comments.
 
 The RAD Debugger is built from source instead, because its releases are Windows-only. On
 the laptop the clone is `~/projects/raddebugger` (upstream master), `~/.local/bin/raddbg`
-links its `build/raddbg`, and dotfiles' `raddbg.desktop` launches it (window class
+links its `build/raddbg`, and dotfiles' `rad-debugger.desktop` launches it (window class
 `RADDBG`; the process renames itself `main_thread`, so `pgrep -x raddbg` misses it).
 Update it with `git pull && ./build.sh raddbg debug`; release builds are unstable on Linux.
+Never name a launcher `raddbg.desktop`: raddbg's "Install To System" setting treats that
+file as its own, and while the setting is off, raddbg deletes it and `~/.local/bin/raddbg`
+at startup.
 
 ## Updates and Trust
 
