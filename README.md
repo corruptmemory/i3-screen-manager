@@ -95,8 +95,8 @@ Link `i3-net-profile`, `i3-net-profile-rofi`, `captive-portal`, `tool-audit`,
 root-owned files dotfiles stages for them, is in the
 [network profiles](docs/agent-guide/network-profiles.md),
 [package](docs/agent-guide/packages.md), and
-[developer tools](docs/agent-guide/dev-tools.md) guides; Rex's is in the
-[applications guide](docs/agent-guide/applications.md#rex).
+[developer tools](docs/agent-guide/dev-tools.md) guides; Rex has its own
+[guide](docs/agent-guide/rex.md).
 
 The dotfiles repo supplies keybindings, autostart hooks, and bar widgets.
 `start-hyprland` is a TTY session launcher, not an in-session autostart command;
