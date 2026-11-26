@@ -1,15 +1,16 @@
 # Rex
 
-Read this guide before changing Rex: its package and repository, the always-on login
-server, the Rex hosts between the machines, its terminfo, or its agent skill and hooks.
-Sources: dotfiles' `etc/pacman.d/rex.conf`, `etc/init.d/rex-login-server` and
+Read this guide before changing Rex: its package and repository, the Rex Rune client, the
+always-on login server, the Rex hosts between the machines, its terminfo, or its agent
+skill and hooks.
+Sources: dotfiles' `etc/pacman.d/rex.conf` and `rex-rune.conf`, `etc/init.d/rex-login-server`,
 `etc/rex/accounts.jsonc`, the machine-local `~/.ssh/config`, and `rex --help`.
 
 Rex, a beta from Superlogical, is a terminal multiplexer. Its server holds sessions,
 windows, and terminal blocks, and the `rex` CLI drives them on this machine or, with
-`-S`, on another. Its apps are for macOS, iOS, and Windows, not Linux, so here agents use
-`rex run`, `send`, `capture`, and `wait`. GoRex is a replica with its own server, not a
-client. Docs:
+`-S`, on another. Superlogical's apps are for macOS, iOS, and Windows; on Linux the
+unofficial [Rex Rune](#rex-rune) client fills that gap. Agents use `rex run`, `send`,
+`capture`, and `wait`. GoRex is a replica with its own server, not a client. Docs:
 `superlogical.com/rex/docs/llms.txt`; changelog: the `rex-community` MCP (Discord login).
 
 ## Package
@@ -21,6 +22,32 @@ the pacman route only when os-release says `arch`, and Artix says `ID=artix` wit
 `pacman-key`). The repo is last in `pacman.conf`. Only its snapshot channel has packages,
 so any `pacman -Syu` may update Rex, through the scan hook. The package's systemd units do
 nothing here; Artix's sysusers hook creates its `rex` account.
+
+## Rex Rune
+
+Rex Rune (`github.com/shuv1337/rex-rune`) is a native Linux client for the Rex server,
+written by a third party, not Superlogical. It connects to the local server like the
+vendor's apps (`rex client list` shows it as kind `app`) and needs the server's
+`api_revision` (`rex whoami --json`) inside the range its release notes state. It opens
+a native Wayland window, class `dev.shuv.rex-rune`; start it from the session with
+`hyprctl-live dispatch 'hl.dsp.exec_cmd("rex-rune")'`. Preferences live in
+`~/.config/rex-rune`.
+
+The package, `rex-rune-bin`, comes from its author's own pacman repository,
+`[rex-linux]` (`https://pkg.shuv.dev/arch/$arch`), the only package there. Dotfiles
+stages `etc/pacman.d/rex-rune.conf` and its signing key `rex-rune.asc` (primary
+`4BC4B85F4AF37FA0D834B0B52B192F3817340BAB`, the value in the project's
+`packaging/keys/README.md`; added and locally signed with `pacman-key`). Its `Include`
+follows `rex.conf`, so it is last and cannot shadow another repository's package. A
+locally signed key is trusted for any package signature, not only this repository's.
+`pacman -Syu` updates it. The package also ships a root helper,
+`/usr/lib/rex-rune/rex-rune-update`, behind the polkit action `dev.shuv.rex-rune.update`
+(an administrator's password every time) for the client's "Update now"; the helper needs
+systemd and refuses on Artix. About 30 seconds after launch, and at most daily, the
+client fetches a signed `latest.json` from GitHub to offer updates; Settings → Updates
+(`updates.check`) turns that off. A good install has `/usr/bin/rex-rune`, `Validated By :
+Signature` in `pacman -Qi rex-rune-bin`, and `channel=pacman` in
+`/usr/share/rex-rune/channel`.
 
 ## Always-On Server
 
