@@ -29,9 +29,28 @@ Rex Rune (`github.com/shuv1337/rex-rune`) is a native Linux client for the Rex s
 written by a third party, not Superlogical. It connects to the local server like the
 vendor's apps (`rex client list` shows it as kind `app`) and needs the server's
 `api_revision` (`rex whoami --json`) inside the range its release notes state. It opens
-a native Wayland window, class `dev.shuv.rex-rune`; start it from the session with
-`hyprctl-live dispatch 'hl.dsp.exec_cmd("rex-rune")'`. Preferences live in
-`~/.config/rex-rune`.
+a native Wayland window, class `dev.shuv.rex-rune`. Where it is installed, dotfiles'
+`bindings.lua` makes Super+Enter focus that window or start it, because a second window
+attaches to the same session and mirrors it; the tiled Ghostty moves to Super+Ctrl+Enter.
+Both the bind and dotfiles' `dev.shuv.rex-rune.desktop` override start it as
+`env FONTCONFIG_FILE=$HOME/.config/rex-rune/fonts.conf rex-rune`; start it the same way
+from an agent shell, through `hyprctl-live dispatch 'hl.dsp.exec_cmd("...")'`.
+
+That fontconfig file, a dotfiles link, hides TX-02's Oblique faces. They mark themselves
+Regular (OS/2 `fsSelection` `0x00c0`, legacy subfamily "Regular"; only `post.italicAngle`
+says otherwise), and Rune can pick one for upright text. Rex Rune then slants italic
+from the Regular face; other programs keep the real Oblique faces.
+
+Preferences live in `~/.config/rex-rune/workspace.json`, which the running client
+rewrites, so edit it only while Rex Rune is closed. They match Ghostty: `font_family`
+`TX-02`, `terminal_theme` `named:dracula-pro` (read from `~/.config/ghostty/themes`),
+cursor `bar`, and the Rosé Pine chrome, the nearest of its four palettes to Dracula Pro's
+background. Sizes differ in unit: Ghostty's points are 1/72 inch at 96 dpi, and Rex
+Rune's are logical pixels, so Ghostty's 13 is Rex Rune's 17.33. Its row height is
+`ceil(1.4 × size)` scaled by the line-height setting, not the font's own 1.2 em, so
+`terminal.font.line_height` −17 gives Ghostty's rows. The file accepts −17 although
+Settings steps by 5. Rex Rune has no sub-pixel (LCD) text setting: Rune has one, and Rex
+Rune leaves it at the grayscale default.
 
 The package, `rex-rune-bin`, comes from its author's own pacman repository,
 `[rex-linux]` (`https://pkg.shuv.dev/arch/$arch`), the only package there. Dotfiles
