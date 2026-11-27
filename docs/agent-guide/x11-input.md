@@ -119,6 +119,21 @@ nothing; test with the X11 app focused. herdr captures the mouse
 Shift+middle-click pastes, because Ghostty keeps Shift+mouse for itself
 (`mouse-shift-capture = false`).
 
+GTK apps paste on a middle-click only while `org.gnome.desktop.interface
+gtk-enable-primary-paste` is true, and `gsettings-desktop-schemas` 51.0 made it
+false by default. Ghostty obeys it as well as its own `middle-click-action`
+(default `primary-paste`): each terminal surface reads the setting once when it
+is created (`src/apprt/gtk/class/surface.zig`), so windows, tabs and splits
+opened before a change keep the old behaviour. Omarchy turns it back on at first
+login (`/usr/share/omarchy/install/user/first-run/gtk-primary-paste.sh`); the
+laptop got the same on 2026-11-27, run inside the Hyprland session so the write
+reaches dconf through the session's D-Bus (over plain SSH, gsettings can fall
+back to a memory store that saves nothing): `hyprctl-live dispatch
+'hl.dsp.exec_cmd("gsettings set org.gnome.desktop.interface
+gtk-enable-primary-paste true")'`. Check it with `dconf read
+/org/gnome/desktop/interface/gtk-enable-primary-paste`. It lives in the
+account's dconf, so only a new account or a reinstall needs it again.
+
 ## Keybase Popup and Application Identity
 
 `keybase-popup-anchor-x11` subscribes to i3 window events. It matches a small
