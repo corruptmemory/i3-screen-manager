@@ -35,6 +35,19 @@ attaches to the same session and mirrors it; the tiled Ghostty moves to Super+Ct
 Both the bind and dotfiles' `dev.shuv.rex-rune.desktop` override start it as
 `env FONTCONFIG_FILE=$HOME/.config/rex-rune/fonts.conf rex-rune`; start it the same way
 from an agent shell, through `hyprctl-live dispatch 'hl.dsp.exec_cmd("...")'`.
+On the desktop (Omarchy), omarchy-tweaks' `config/hypr/bindings.lua` does the same with
+Omarchy's focus-or-launch bind, and the terminal moves to Super+Alt+Enter instead.
+
+Rex Rune finds listening ports but does not forward them (0.13.1, tested 2026-11-27).
+**Show listening ports…** in Commands lists a session's TCP listeners; for an SSH host,
+Ctrl+Enter only copies an `ssh -N -L` command, which Rune never runs, and no setting
+forwards. Superlogical's Mac app forwards on ⌘-click of a localhost link (Mac preview 31),
+through Rex's own tunnel. Until Rune does, `rex -S HOST forward open -s SESSION --port N N`
+listens on this machine's `localhost:N` and forwards through Rex to the host's, so the
+pane's own `http://localhost:N` link opens here; `-s` names the session the forward
+belongs to (required once the host has more than one), and `rex -S HOST forward close ID`
+ends it. `rex cp` needs a server with the file-transfer block: an older running server
+refuses it ("block flavor not found"), even when the installed package is newer.
 
 That fontconfig file, a dotfiles link, hides TX-02's Oblique faces. They mark themselves
 Regular (OS/2 `fsSelection` `0x00c0`, legacy subfamily "Regular"; only `post.italicAngle`
